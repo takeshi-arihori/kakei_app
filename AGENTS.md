@@ -3,8 +3,8 @@
 ## 正本と読み方
 
 - 利用者の最新の明示指示を最優先する。
-- Project、Epic、Task、仕様、設計、ADRの正本はNotionとする。
-- 実装前に対象Task、関連仕様、Accepted ADR、既存コードを確認する。
+- Project、Epic、Task、仕様、設計の正本はNotionとし、Accepted／Superseded ADRの正本は`docs/adr`とする。
+- 実装前に対象Task、関連仕様、`docs/adr`のAccepted ADR、既存コードを確認する。
 - 詳細ルールの入口は[docs/engineering/README.md](docs/engineering/README.md)とする。必要な文書だけを読む。
 - Notionとコードが矛盾する場合は実装で吸収せず、矛盾と影響を報告して解消する。
 
@@ -16,6 +16,7 @@
 - `packages`: 生成GraphQL契約とBackend非依存の共通基盤
 - `infra`: ローカル・クラウド環境
 - `docs/engineering`: 実装時に使うルールとチェックリスト
+- `docs/adr`: Accepted／Superseded ADRの正本
 - Package Managerはpnpmを使用し、TypeScript strict modeを維持する。
 
 ## アーキテクチャ不変条件
@@ -64,6 +65,7 @@
 ## Git・プルリクエスト
 
 - EpicとTaskの起票・状態管理はNotionだけで行う。
+- `develop`を統合Branchとし、`develop`への直接Pushと`main` Branchの作成・Pushを禁止する。
 - 1 Task／1 Branch／1 PRを基本とする。
 - Conventional Commitsを使用し、Commitをレビュー可能な論理単位にする。
 - PR本文へNotion Task URLを記載する。
@@ -84,3 +86,4 @@
 - Frontend責務: [frontend.md](docs/engineering/frontend.md)
 - TDD・品質保証: [testing.md](docs/engineering/testing.md)
 - Epic／Task／Git／PR前文書更新: [delivery-workflow.md](docs/engineering/delivery-workflow.md)
+- Accepted ADR: [docs/adr/README.md](docs/adr/README.md)

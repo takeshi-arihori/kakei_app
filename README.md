@@ -51,7 +51,7 @@ pnpm build
 ## 開発ガイド
 
 - 実装ルールと文書の入口: [開発ガイド](docs/engineering/README.md)
-- Project／Epic／Task／仕様／設計／ADRの正本はNotionです。
+- Project／Epic／Task／仕様／設計の正本はNotion、Accepted／Superseded ADRの正本は[docs/adr](docs/adr/README.md)です。
 - 実装対象はReadyになったNotion Taskから選び、PR前に関連文書を更新します。
 - Codexでは`$prepare-notion-work`でEpic／Taskを整え、`$implement-notion-task`でReady TaskをTDD実装します。
 
