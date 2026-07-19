@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 家計アプリ
 
-## Getting Started
+pnpm WorkspaceとTurborepoで管理するモノレポです。
 
-First, run the development server:
+## 構成
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```text
+apps/
+  web/       Next.js
+  api/       NestJS API
+  worker/    Outbox・Projection Worker（今後追加）
+infra/
+  docker/    ローカル開発用のContainer設定
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 必要な環境
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Node.js 24以上
+- pnpm 10.15.1
+- Docker DesktopまたはDocker Engine＋Compose
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 初期構築
 
-## Learn More
+```bash
+cp .env.example .env
+pnpm install
+pnpm db:up
+```
 
-To learn more about Next.js, take a look at the following resources:
+PostgreSQLの起動状態を確認します。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+pnpm db:ps
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 開発コマンド
 
-## Deploy on Vercel
+```bash
+pnpm dev
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`pnpm dev`はWebとAPIを並列起動します。
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Web: <http://localhost:3000>
+- API: <http://localhost:3001>
+
+## 開発ガイド
+
+- 実装ルールと文書の入口: [開発ガイド](docs/engineering/README.md)
+- Project／Epic／Task／仕様／設計／ADRの正本はNotionです。
+- 実装対象はReadyになったNotion Taskから選び、PR前に関連文書を更新します。
+- Codexでは`$prepare-notion-work`でEpic／Taskを整え、`$implement-notion-task`でReady TaskをTDD実装します。
+
+## TypeScript
+
+- `tsc`: TypeScript 7 native compiler
+- `tsc6`／`typescript` module: Framework・ESLint互換用のTypeScript 6
+
+TypeScript 7.0にprogrammatic APIがない間は、公式推奨どおり両方を併用します。
+
+## PostgreSQL
+
+- 開発DB: `kakei`
+- テスト用DB: `kakei_test`
+- ポート: `5432`
+
+値は`.env`で上書きできます。Volumeを削除しない限りデータは保持されます。

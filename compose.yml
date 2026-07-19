@@ -1,0 +1,25 @@
+name: kakei-app
+
+services:
+  postgres:
+    image: postgres:17.10-alpine3.23
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kakei}
+      POSTGRES_TEST_DB: ${POSTGRES_TEST_DB:-kakei_test}
+      POSTGRES_USER: ${POSTGRES_USER:-kakei}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kakei_local_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/init-test-db.sh:/docker-entrypoint-initdb.d/10-create-test-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    stop_grace_period: 30s
+
+volumes:
+  postgres_data:
