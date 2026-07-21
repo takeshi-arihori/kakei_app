@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Next.js Web
 
-## Getting Started
+Next.js 16のFrontendです。画面、入力、表示、Browser API、局所UI状態を担当し、業務Rule、認可の最終判断、DB AccessはHono APIのApplication／Domainへ委ねます。
 
-First, run the development server:
+## コマンド
+
+Repository rootから実行します。
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm -C apps/web dev
+pnpm -C apps/web lint
+pnpm -C apps/web typecheck
+pnpm -C apps/web test
+pnpm -C apps/web build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+開発Serverは<http://localhost:3000>で起動します。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## GraphQL
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- API endpoint: Hono＋GraphQL Yogaの`POST /graphql`
+- Operation: `src/shared/graphql/operations.ts`
+- 生成型: `src/shared/graphql/generated.ts`
+- Client: `src/shared/graphql/client.ts`
 
-## Learn More
+GraphQL Operation／Result型を手書きせず、Repository rootで`pnpm codegen`を実行して`apps/api/schema.graphql`から更新します。
 
-To learn more about Next.js, take a look at the following resources:
+## 境界
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Domain Model、Aggregate、Prisma ModelをWebへ共有しない
+- Next.js Route HandlerへDomain LogicやDB Accessを置かない
+- UIの表示制御でServer側の認可を代替しない
+- API、Form、表示状態を分離する
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+詳細は[`AGENTS.md`](AGENTS.md)とRepository rootの[開発ガイド](../../docs/engineering/README.md)を参照してください。

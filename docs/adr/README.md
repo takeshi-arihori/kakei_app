@@ -36,3 +36,4 @@ Accepted／Superseded ADRの正本はこのディレクトリで管理する。N
 - [ADR-0010: 外部明細取込方針（廃止）](0010-external-statement-import-superseded.md)
 - [ADR-0011: Accepted ADRをリポジトリで管理](0011-manage-accepted-adrs-in-repository.md)
 - [ADR-0012: Hono＋GraphQL Yoga Schema First](0012-hono-graphql-yoga-schema-first.md)
+- [ADR-0013: Component／Package DirectoryをTask着手時に作成](0013-just-in-time-component-scaffolding.md)

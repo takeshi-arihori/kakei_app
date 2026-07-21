@@ -12,7 +12,7 @@ infra/
   docker/    ローカル開発用のContainer設定
 ```
 
-`apps/worker`は現時点では存在しません。Outbox／Projection処理のTaskへ着手するときに、必要な責務とRuntimeを決めて追加します。
+`apps/worker`と`packages/*`は現時点では存在しません。空のScaffoldは先行作成せず、対応Taskへ着手するときに責務、所有者、Runtime、最初の利用者を決めて追加します。`pnpm-workspace.yaml`のglobは将来追加を受け入れるために先行定義しています。
 
 ## 必要な環境
 
