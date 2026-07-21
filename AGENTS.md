@@ -12,7 +12,7 @@
 
 - `apps/web`: Next.jsフロントエンド
 - `apps/api`: Hono＋GraphQL Yoga API
-- `apps/worker`: Projection・Outbox・保守Job
+- `apps/worker`（未作成）: Projection・Outbox・保守JobのTaskへ着手するときに追加する
 - `packages`: 生成GraphQL契約とBackend非依存の共通基盤
 - `infra`: ローカル・クラウド環境
 - `docs/engineering`: 実装時に使うルールとチェックリスト

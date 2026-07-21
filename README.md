@@ -8,10 +8,11 @@ pnpm WorkspaceとTurborepoで管理するモノレポです。
 apps/
   web/       Next.js
   api/       Hono＋GraphQL Yoga API
-  worker/    Outbox・Projection Worker（今後追加）
 infra/
   docker/    ローカル開発用のContainer設定
 ```
+
+`apps/worker`は現時点では存在しません。Outbox／Projection処理のTaskへ着手するときに、必要な責務とRuntimeを決めて追加します。
 
 ## 必要な環境
 
