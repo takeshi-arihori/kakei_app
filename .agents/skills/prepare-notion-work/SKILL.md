@@ -23,7 +23,7 @@ description: 家計アプリのNotion Epic・Taskを作成、分割、レビュ�
 1. 指定されたProject、Epic、Task、仕様ページを取得する。
 2. URLがない場合は、1回につき1つの具体的な語句でNotionを検索する。
 3. 複数の候補が残る場合は、対象を勝手に決めず利用者へ確認する。
-4. 親Project、関連Epic、要件、承認済みADR、関連設計ページを辿る。
+4. 親Project、関連Epic、要件、`docs/adr`の承認済みADR、関連設計ページを辿る。
 5. 曖昧な点ごとに次を記録する。
    - 現在の曖昧な記述
    - 確認したい質問
@@ -65,7 +65,7 @@ description: 家計アプリのNotion Epic・Taskを作成、分割、レビュ�
 - RequirementとDone Criteriaが具体的で矛盾していない。
 - Project、Epic、Type、Priority、Area、Milestone、1〜2日のEstimateが設定されている。
 - Dependenciesが完了しているか、着手を妨げない状態である。
-- 関連する要件、画面、DDD、データ設計、アーキテクチャ、セキュリティ設計、承認済みADRへ追跡できる。
+- 関連する要件、画面、DDD、データ設計、アーキテクチャ、セキュリティ設計、`docs/adr`の承認済みADRへ追跡できる。
 - Bounded Context、Data Owner、AggregateまたはUse Case、認可、テスト方針を特定できる。
 - 未決事項が解消済み、または確認・調査・ADRの作業として分離されている。
 

@@ -6,7 +6,8 @@
 Notion Project → Notion Epic → Notion Task → Branch → プルリクエスト
 ```
 
-- NotionをProject、Epic、Task、仕様、設計、ADR、進捗の正本とする。
+- NotionをProject、Epic、Task、仕様、設計、進捗の正本とする。
+- Accepted／Superseded ADRは`docs/adr`を正本とし、NotionはProposalと関連Taskの管理に限定する。
 - EpicとTaskの起票・状態管理はNotionだけで行う。
 - Pull Requestは1つのTaskを検証可能な差分として届ける。
 
@@ -56,7 +57,7 @@ Taskは1人が原則1〜2日で完了できる、独立して検証可能な1 De
 - RequirementとDone Criteriaが具体的で矛盾しない。
 - Project、Epic、Priority、Area、Type、Milestone、Estimateがある。
 - Dependenciesが完了しているか、着手を妨げない状態である。
-- 関連する要求、要件、画面、DDD、ER、Architecture、Security、ADRへTraceできる。
+- 関連する要求、要件、画面、DDD、ER、Architecture、Security、`docs/adr`へTraceできる。
 - Bounded Context、Aggregate、Data Owner、権限、Test方針が判断できる。
 - 未決事項はClarificationまたはADRとして分離されている。
 - 1〜2日、1 Deliverableの粒度である。
@@ -68,7 +69,8 @@ StatusはInbox → 要件整理中 → Ready → Doing → Review → Doneを基
 - 機能追加: `feature/notion-task-id-short-description`
 - 不具合修正: `fix/notion-task-id-short-description`
 - 保守作業: `chore/notion-task-id-short-description`
-- `main`へ直接Pushしない。
+- `develop`を統合Branchとし、Pull Requestを経由する。
+- `develop`への直接Pushと`main` Branchの作成・Pushを禁止する。
 - Conventional Commitsを使う。例: `feat(transaction): add split allocation command`
 - Commitはレビュー可能な論理単位にし、Refactorと無関係な整形を混ぜない。
 - Secret、個人情報、生成された大容量成果物をCommitしない。
@@ -78,7 +80,7 @@ StatusはInbox → 要件整理中 → Ready → Doing → Review → Doneを基
 文書はPR後の後片付けではなく実装の一部である。実装完了後、PR作成前に次の順で整合させる。
 
 1. 変更された業務理解・要求・DecisionをNotionへ反映する。
-2. 採用済みDecisionを変える場合はADRを作成・更新する。
+2. 採用済みDecisionを変える場合は`docs/adr`へ新しいADRを追加し、置き換えるADRをSupersededへ更新する。
 3. NotionのMermaid図、ER、画面遷移、Runbookを必要範囲で更新する。
 4. Repo内の実装契約、Schema、Migration Note、Operation手順を更新する。
 5. TaskのDone Criteriaと文書差分を再確認する。
@@ -110,6 +112,14 @@ Notion変更が権限・承認待ちの場合は、古い仕様のままPRを作
 - Migration、GraphQL、Event、Security、Privacy、Operations、Rollbackへの影響を明示する。
 - 差分が1 Taskの境界を越えたら、TaskとPRを分割する。
 - DoneはDone Criteria、CI、文書、Notion／PR Linkの反映完了後とする。
+
+## ADR
+
+- Notionで判断候補と関連Taskを整理し、採用時に`docs/adr`へMarkdownを追加する。
+- ADRにはContext、Decision、Alternatives、Consequences、Implementation、Review Triggerを記載する。
+- Accepted ADRを直接書き換えて履歴を消さない。変更時は新しいADRを追加し、旧ADRをSupersededへ変更する。
+- ADRの追加・置換は、その判断を採用する実装と同じPull Requestでレビューする。
+- 詳細は[`docs/adr/README.md`](../adr/README.md)に従う。
 
 ## AI運用
 

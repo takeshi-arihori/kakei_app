@@ -17,7 +17,7 @@ Ready済みTaskを1件だけ実装し、コード、テスト、契約、図、�
 
 1. 指定されたNotion Task URLを取得する。
 2. URLがない場合は、一致するTaskを検索する。複数の候補が残る場合は利用者に選択を求める。
-3. 親EpicとProject、関連仕様、承認済みADR、関連設計ページを取得する。
+3. 親EpicとProject、関連仕様、`docs/adr`の承認済みADR、関連設計ページを取得する。
 4. Status、Requirement、Done Criteria、Dependencies、Estimate、Area、Type、Milestone、PR URLを抽出する。
 
 Inboxまたは要件整理中のTaskを実装しない。Readyでない場合は不足しているReady条件を報告し、利用者が改善を望む場合は`$prepare-notion-work`を使う。ほかのStatusから進める場合は、未解決の判断を迂回しないことを確認し、例外的な進め方について利用者の明示確認を得る。
@@ -42,7 +42,7 @@ Taskを次へ対応付ける。
 - 変更予定のFileとLayerを明示する。
 - 最初に失敗させるTestと、Done Criteriaに必要な正常、境界、認可、失敗、競合、再試行のCaseを定義する。
 - PR前に更新すべきNotion文書とRepository文書を特定する。
-- 採用済み判断を維持する。代替案は提案として分離し、プロジェクトルールが求める場合はADRを必須とする。
+- 採用済み判断を維持する。代替案は提案として分離し、プロジェクトルールが求める場合は`docs/adr`へのADR追加を必須とする。
 
 ## TDDを実行する
 
@@ -64,7 +64,7 @@ Bugでは、先に失敗する再現Testを追加する。機械的な変更で�
 Taskを完了扱いにする前に、次を行う。
 
 1. 変更された要件や業務理解をNotionへ反映する。
-2. 採用済みアーキテクチャ判断を変える前にADRを作成または更新する。
+2. 採用済みアーキテクチャ判断を変える前に`docs/adr`へ新しいADRを追加し、旧ADRをSupersededへ更新する。
 3. 影響を受けるMermaid図、DDD・UML、ER、画面遷移、セキュリティ設計、RunbookをNotionで更新する。
 4. GraphQL Schema、Operation型、Migration Note、開発ガイド、運用手順などRepository内の契約を更新する。
 5. すべてのDone Criteriaをコード、テスト、文書へ再対応付けする。

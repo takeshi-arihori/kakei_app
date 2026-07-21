@@ -116,5 +116,5 @@ HouseholdへAccount、Transaction、Settlementを内包しない。Account Balan
 
 - [05 DDD・Context Map・ユビキタス言語](https://app.notion.com/p/39a06467984f81e98cd2d669dc900b43)
 - [06 ドメインモデル・集約・UML](https://app.notion.com/p/39a06467984f81b3b495f6ee2126fac5)
-- [ADR: Transaction・Settlement限定のEvent Sourcing](https://app.notion.com/p/39a06467984f812a9bfcf43cbdb9584f)
-- [ADR: 同期Projection＋Transactional Outbox](https://app.notion.com/p/39a06467984f810e9319c6adafb1b5db)
+- [ADR-0001: Transaction・Settlement限定のEvent Sourcing](../adr/0001-transaction-settlement-event-sourcing.md)
+- [ADR-0004: 同期Projection＋Transactional Outbox](../adr/0004-synchronous-projection-transactional-outbox.md)
