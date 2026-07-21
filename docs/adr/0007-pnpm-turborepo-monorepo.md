@@ -1,6 +1,7 @@
 # ADR-0007: pnpm Workspace＋Turborepoモノレポ
 
 - Status: Accepted
+- Amended by: ADR-0013（Component／Package Directoryの作成時期）
 - Date: 2026-07-11
 - Area: Architecture
 - Related Notion Task: なし（移行済みNotion ADRを参照）

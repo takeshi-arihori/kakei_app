@@ -2,7 +2,7 @@
 
 ## 目的
 
-DDDは、業務上重要なRuleをDB、Prisma、GraphQL、NestJSの都合ではなく、ユビキタス言語とDomain Modelで表現するために使う。EntityやRepositoryを置くこと自体を目的にしない。
+DDDは、業務上重要なRuleをDB、Prisma、GraphQL、Honoの都合ではなく、ユビキタス言語とDomain Modelで表現するために使う。EntityやRepositoryを置くこと自体を目的にしない。
 
 ## 戦略的設計
 

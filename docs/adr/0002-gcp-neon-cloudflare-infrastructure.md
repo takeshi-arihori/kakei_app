@@ -1,6 +1,7 @@
 # ADR-0002: GCP＋Neon＋Cloudflareのインフラ構成
 
 - Status: Accepted
+- Amended by: ADR-0012（API Runtime名のみ。Cloud Run／Neon／Firestore／Cloudflareの構成は継続）
 - Date: 2026-07-11
 - Area: Infra
 - Related Notion Task: なし（移行済みNotion ADRを参照）

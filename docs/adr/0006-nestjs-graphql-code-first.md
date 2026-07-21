@@ -1,6 +1,7 @@
 # ADR-0006: NestJS GraphQL Code First
 
-- Status: Accepted
+- Status: Superseded
+- Superseded by: ADR-0012
 - Date: 2026-07-11
 - Area: Backend
 - Related Notion Task: なし（移行済みNotion ADRを参照）
