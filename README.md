@@ -7,7 +7,7 @@ pnpm WorkspaceとTurborepoで管理するモノレポです。
 ```text
 apps/
   web/       Next.js
-  api/       NestJS API
+  api/       Hono＋GraphQL Yoga API
   worker/    Outbox・Projection Worker（今後追加）
 infra/
   docker/    ローカル開発用のContainer設定
@@ -40,6 +40,7 @@ pnpm dev
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:e2e
 pnpm build
 ```
 
@@ -47,6 +48,8 @@ pnpm build
 
 - Web: <http://localhost:3000>
 - API: <http://localhost:3001>
+
+APIのLivenessは`GET /health`、GraphQL endpointは`POST /graphql`です。`pnpm codegen`でRepository管理のSDLからAPI Resolver型とWeb Operation型を生成します。
 
 ## 開発ガイド
 
@@ -69,3 +72,5 @@ TypeScript 7.0にprogrammatic APIがない間は、公式推奨どおり両方�
 - ポート: `5432`
 
 値は`.env`で上書きできます。Volumeを削除しない限りデータは保持されます。
+
+TASK-92のDB疎通テストは`kakei_test`内の`test_task_92_api_probe` TEMP TABLEだけを使い、Commit時に自動削除します。永続Migrationは作成しません。

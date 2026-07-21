@@ -19,7 +19,7 @@ Bug Fixでは、再現Testを先に追加する。既存Testが誤った仕様�
 
 ### ドメイン単体テスト
 
-- DB、NestJS、GraphQL、Prismaを使わず、業務Ruleを高速・決定的に検証する。
+- DB、Hono、GraphQL、Prismaを使わず、業務Ruleを高速・決定的に検証する。
 - Money、日付、端数、Split、Household人数／Owner、削除・復元、精算上限を対象にする。
 - 時刻、ID、乱数を外から渡し、Testを実時間や実行順に依存させない。
 

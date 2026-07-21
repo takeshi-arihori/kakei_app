@@ -1,8 +1,13 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { serve } from '@hono/node-server';
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  await app.listen(process.env.PORT ?? 3001);
-}
-void bootstrap();
+import { createApp } from './app.js';
+
+const port = Number(process.env.PORT ?? 3001);
+const server = serve({ fetch: createApp().fetch, port });
+
+const shutdown = () => {
+  server.close(() => process.exit(0));
+};
+
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);

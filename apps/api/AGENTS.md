@@ -8,7 +8,7 @@
 - `application`: Use Caseの順序、認可、Transaction境界、Port呼出しを調整する。
 - `domain`: Aggregate、Entity、Value Object、Domain Service、Domain Event、不変条件を持つ。
 - `infrastructure`: Prisma、PostgreSQL、Firestore、KMS、Email、OAuthなどのAdapterを実装する。
-- DomainからNestJS、GraphQL、Prisma、Cloud SDKをImportしない。
+- DomainからHono、GraphQL、Prisma、Cloud SDKをImportしない。
 - ApplicationはPortへ依存し、Infrastructureが内向きにPortを実装する。
 - Resolverへ業務ルール、Repository呼出しの組立、個別の例外変換を散在させない。
 
@@ -33,7 +33,7 @@
 
 ## テスト
 
-- Domain RuleはDBやNestJSを使わない高速なUnit Testから始める。
+- Domain RuleはDBやHonoを使わない高速なUnit Testから始める。
 - Event Sourcing AggregateはGiven Event／When Command／Then Event or Errorで検証する。
 - Repository、Event Store、Projection、Outbox、Migration、冪等性は実PostgreSQLのIntegration Testで検証する。
 - GraphQL Testでは認証、認可、Validation、Error契約、Pagination、Complexity、N+1を確認する。

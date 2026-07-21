@@ -5,7 +5,7 @@
 ## 責務
 
 - WebはRoute、Layout、Server Component、画面組立、入力、表示、ブラウザAPI、局所UI状態を担当する。
-- 業務API、認証、認可、永続化、業務不変条件はNestJSを正本とする。
+- 業務API、認証、認可、永続化、業務不変条件はHono APIのApplication／Domainを正本とする。
 - Domain Model、Aggregate、Prisma ModelをWebへ共有しない。
 - API契約には生成されたGraphQL Operation型を使い、Response型を手書きしない。
 - サーバーの認可をUIの表示制御で代替しない。

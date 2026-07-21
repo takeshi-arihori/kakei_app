@@ -11,7 +11,7 @@
 ## プロジェクト構成
 
 - `apps/web`: Next.jsフロントエンド
-- `apps/api`: NestJS GraphQL API
+- `apps/api`: Hono＋GraphQL Yoga API
 - `apps/worker`: Projection・Outbox・保守Job
 - `packages`: 生成GraphQL契約とBackend非依存の共通基盤
 - `infra`: ローカル・クラウド環境
@@ -21,8 +21,8 @@
 
 ## アーキテクチャ不変条件
 
-- Next.jsにDomain LogicやDB Accessを実装しない。業務API、認証、認可の正本はNestJSとする。
-- NestJSはPresentation → Application → Domainの依存方向を守る。
+- Next.jsにDomain LogicやDB Accessを実装しない。業務API、認証、認可の正本はHono APIのApplication／Domainとする。
+- Honoは薄いPresentation Adapterとし、Presentation → Application → Domainの依存方向を守る。
 - InfrastructureはDomainまたはApplicationが定義したPortを実装する。
 - Prisma Model、DTO、GraphQL Type、Domain Modelを同一型として共有しない。
 - Contextを跨ぐ直接参照を避け、IDまたは明示的なPort・公開契約を使用する。
