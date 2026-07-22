@@ -84,6 +84,27 @@ Taskを完了扱いにする前に、次を行う。
 
 失敗した検証を無視しない。変更による失敗、既存の失敗、環境による失敗を証拠とともに切り分ける。最終差分を、範囲、Layer、Security、暗黙のデータ変更、Test不足、古い文書、無関係な変更の観点で自己レビューする。
 
+## 独立Evaluator Loopを実行する
+
+最終検証と自己レビュー後、各評価Cycleで新しい`task_evaluator` Subagentを1つ起動する。同じEvaluator Threadを再利用しない。親Agentだけがコードと文書を変更し、Evaluatorには実装させない。
+
+Evaluatorへ次のReviewInputを渡す。
+
+- Task URL、Requirement、Done Criteria
+- 対象Bounded Context、Layer、Data Owner
+- 比較対象Branchと現在の差分
+- 実行したCommand、その結果、未実行の検証と理由
+- Notion、ADR、Repository文書、Schema、図、Runbookの更新結果
+- 既知のRisk、未確認事項、利用者が承認した例外
+
+EvaluatorのJSON応答を次のように扱う。
+
+- `fail`: 指摘の根拠を確認し、親Agentが必要な修正を行う。影響する検証と最終Checkを再実行し、新しいEvaluatorで再評価する。
+- `blocked`: 仕様矛盾、権限不足、破壊的変更、新しい本番依存関係、外部Service障害、証拠不足などの阻害事項を、証拠、影響、選択肢とともに利用者へ報告してLoopを停止する。
+- `pass`: すべてのDone Criteriaがコード、Test、文書へTraceでき、必要なCheckが成功し、`findings`と`missingEvidence`が空の場合だけ完了報告へ進む。
+
+進捗や仕様を複製するJSON Fileは作らず、Notionを正本とする。同じTaskの途中でModel、Tool、Sandbox、Approval、作業Directoryを不用意に変更しない。変更が必要な場合は理由と検証への影響を記録する。
+
 ## 完了報告を行う
 
 次を報告する。
