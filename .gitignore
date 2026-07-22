@@ -30,6 +30,7 @@ report.*.json
 !.codex/agents/
 .codex/agents/*
 !.codex/agents/task-evaluator.toml
+!.codex/agents/work-planning-evaluator.toml
 .idea/
 .vscode/*
 !.vscode/settings.json
