@@ -22,6 +22,23 @@ Ready済みTaskを1件だけ実装し、コード、テスト、契約、図、�
 
 Inboxまたは要件整理中のTaskを実装しない。Readyでない場合は不足しているReady条件を報告し、利用者が改善を望む場合は`$prepare-notion-work`を使う。ほかのStatusから進める場合は、未解決の判断を迂回しないことを確認し、例外的な進め方について利用者の明示確認を得る。
 
+## Task専用Branchを準備する
+
+Ready Taskの実装依頼には、Task専用Branchの作成または再利用、Commit、Push、Draft PR作成または更新を標準工程として含める。利用者がLocalのみまたはPR不要を明示した場合だけ公開工程を省略する。既存Branchの使用指定はBranch作成だけを省略し、Commit以降の公開工程は省略しない。
+
+コードを変更する前に、現在のBranch、作業Tree、Remote、`develop`との差分、同じTaskの既存BranchとPRを確認する。
+
+- 同じTask専用Branchにいる場合は、新しいBranchを重複作成せず継続する。
+- 別Branchにいるが、同じTask IDを持つLocal Branchがある場合は、Branchの所有者、Base、差分、作業Treeを確認する。今回の継続作業で、作業TreeがCleanまたは安全に切替可能だと確認できる場合は、そのLocal Branchへ切り替える。未Push、複数候補、所有者不明、競合する差分がある場合は、新しいBranchを作らず利用者へ確認する。
+- 別Branchにいるが、同じTask IDまたはNotion Task URLを持つOpen PRがある場合は、PRのHead Branch、Base、Remote、作業Treeを確認する。作業TreeがCleanで、Headが同じRepositoryにあり、Baseが`develop`なら、そのRemote Branchを取得して追跡するLocal Branchへ切り替え、既存PRを継続する。
+- 同じTaskのRemote BranchだけがありOpen PRがない場合は、Branchの所有者と差分を確認する。今回の継続作業だと確認できる場合だけ追跡Branchへ切り替える。ClosedまたはMerged PR、所有者不明のBranch、複数候補がある場合は勝手に再利用せず利用者へ確認する。
+- `develop`、既定Branch、別TaskのBranchにいる場合は、最新の`origin/develop`を基点に1 Task／1 Branchを作成する。
+- Branch名は`delivery-workflow.md`のType、Notion Task ID、短い説明と、実行環境が要求するPrefixに従う。
+- 未Commitの変更がある場合は、今回のTaskに属するか確認する。無関係または所有者不明の変更を移動、破棄、Commitせず、分離方法を利用者へ確認する。
+- 同じTaskのOpen PRを継続する場合は、そのPRを更新対象として記録し、新しいPRを作成しない。
+
+`develop`へ直接CommitまたはPushしない。Branch作成、Remote同期、認証に失敗した場合は、証拠と必要な利用者操作を報告して停止する。
+
 ## 変更範囲を確定する
 
 Taskを次へ対応付ける。
@@ -88,11 +105,13 @@ Taskを完了扱いにする前に、次を行う。
 
 最終検証と自己レビュー後、各評価Cycleで新しい`task_evaluator` Subagentを1つ起動する。同じEvaluator Threadを再利用しない。親Agentだけがコードと文書を変更し、Evaluatorには実装させない。
 
+評価前に今回のTaskに属するFileだけをStageし、Taskに必要な未Stage・未追跡Fileが残っていないことと、Indexに無関係な変更がないことを確認する。比較対象のBase SHAを固定し、`git diff --cached --binary --full-index <base-sha>`のChecksumと変更File一覧を、Evaluatorが承認する差分の識別子として記録する。
+
 Evaluatorへ次のReviewInputを渡す。
 
 - Task URL、Requirement、Done Criteria
 - 対象Bounded Context、Layer、Data Owner
-- 比較対象Branchと現在の差分
+- 比較対象BranchとBase SHA、Stage済みの累積差分、Patch Checksum、変更File一覧、作業Treeの状態
 - 実行したCommand、その結果、未実行の検証と理由
 - Notion、ADR、Repository文書、Schema、図、Runbookの更新結果
 - 既知のRisk、未確認事項、利用者が承認した例外
@@ -105,6 +124,20 @@ EvaluatorのJSON応答を次のように扱う。
 
 進捗や仕様を複製するJSON Fileは作らず、Notionを正本とする。同じTaskの途中でModel、Tool、Sandbox、Approval、作業Directoryを不用意に変更しない。変更が必要な場合は理由と検証への影響を記録する。
 
+## Draft PRまで公開する
+
+Evaluatorが`pass`を返した後だけ、次を行う。
+
+1. Stage済み差分と作業Treeを再確認し、Secret、個人情報、生成物、無関係な変更が含まれないことを確認する。
+2. Conventional Commitsでレビュー可能な論理単位をCommitする。
+3. Task所有Fileの未Commit差分がないことを確認し、固定したBase SHAからLocal Commitまでの`git diff --binary --full-index`のChecksumと変更File一覧が、Evaluator承認時の値と一致することを確認する。Commit Hook、Stage漏れ、追加変更による不一致があればPushせず、最終検証と新しいEvaluator Cycleへ戻る。
+4. Task専用Branchを`origin`へPushし、追跡Branchを設定する。
+5. 同じTaskのOpen PRがない場合だけ、`develop`向けDraft PRを作成する。既存Open PRを継続する場合は、そのPRのTitleと本文を現在の実装へ更新する。PR本文へNotion Task URL、RequirementとDone Criteria、変更範囲、Test結果、文書・Schema・Migration・Security・Operations・Rollbackへの影響、未実行Checkと残Riskを記載する。
+6. PRのURL、Head SHA、Base、Draft状態、変更File、Title、本文を再取得する。Local CommitとHead SHAが一致し、本文の必須項目と正しいNotion Task URLが永続化されていることを確認する。
+7. Notion TaskのPR URLを更新し、PR準備が完了した場合だけStatusをReviewへ進める。Pageを再取得して永続化を確認する。
+
+Commit、Push、PR作成、Notion更新のいずれかが失敗した場合は完了扱いにせず、成功済みの外部状態、失敗した操作、再開方法を報告する。PRをReady化、Merge、`develop`へ直接Pushしない。
+
 ## 完了報告を行う
 
 次を報告する。
@@ -116,6 +149,6 @@ EvaluatorのJSON応答を次のように扱う。
 - 文書とSchemaの更新
 - 実行したCommandと結果
 - 残るRiskまたは阻害事項
-- PRの準備状況
+- Branch、Commit、Draft PR、Notion PR URLとStatusの確認結果
 
-依頼にそのWorkflowが含まれる場合だけNotionのStatusやURLを更新する。利用者から依頼されていないPRを作成しない。
+利用者がReady Taskの実装を明示依頼した場合、このSkillのWorkflowにはTask専用BranchからDraft PRとNotion追跡情報の更新までを含む。それ以外の分析、レビュー、診断依頼では外部状態を変更しない。
