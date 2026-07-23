@@ -1,6 +1,6 @@
 ---
 name: prepare-notion-work
-description: 家計アプリのNotion Epic・Taskを作成、分割、レビュー、改善し、必須項目、1〜2日の粒度、依存関係、受入条件、状態遷移、Ready判定を整える。Epicの計画、チケット起票・改善、実装可能性のレビューを依頼されたときに使用する。Ready済みTaskの実装には使用せず、implement-notion-taskを使用する。
+description: 家計アプリのNotion Epic・Taskを作成、分割、レビュー、改善し、Decision Check、必要なADR Proposal、必須項目、1〜2日の粒度、依存関係、受入条件、状態遷移、Ready判定を整える。Epicの計画、チケット起票・改善、実装可能性のレビューを依頼されたときに使用する。Ready済みTaskの実装には使用せず、implement-notion-taskを使用する。
 ---
 
 # Notion作業項目の準備
@@ -9,7 +9,7 @@ description: 家計アプリのNotion Epic・Taskを作成、分割、レビュ�
 
 ## プロジェクトルールを読む
 
-`docs/engineering/delivery-workflow.md`と`docs/engineering/README.md`を読む。要求の変更種別に従って、DDD、Frontend、Data、Security、Test、運用の関連文書と`docs/adr`のAccepted ADRを読む。非公開のプロジェクト情報にはNotion接続を使い、Web検索で代用しない。
+`docs/engineering/delivery-workflow.md`と`docs/engineering/README.md`を読む。要求の変更種別に従って、DDD、Frontend、Data、Security、Test、運用の関連文書とNotionのAccepted ADRを読む。非公開のプロジェクト情報にはNotion接続を使い、Web検索で代用しない。
 
 ## 操作を選ぶ
 
@@ -23,7 +23,7 @@ description: 家計アプリのNotion Epic・Taskを作成、分割、レビュ�
 1. 指定されたProject、Epic、Task、仕様ページを取得する。
 2. URLがない場合は、1回につき1つの具体的な語句でNotionを検索する。
 3. 複数の候補が残る場合は、対象を勝手に決めず利用者へ確認する。
-4. 親Project、関連Epic、要件、`docs/adr`の承認済みADR、関連設計ページを辿る。
+4. 親Project、関連Epic、要件、Notionの承認済みADR、関連設計ページを辿る。
 5. 曖昧な点ごとに次を記録する。
    - 現在の曖昧な記述
    - 確認したい質問
@@ -42,6 +42,18 @@ EpicやTaskを設計する前に、ソフトウェア要求を利用者または
 - Accepted ADRとの整合性と、新しいDecisionまたはADR Proposalの要否
 
 コードの見た目だけで要求や作業項目を考案しない。確認したNotion URL、Repository文書、コードPathを、後続の評価で再確認できる証拠として保持する。
+
+## Decision CheckとADR Proposal
+
+Epic／Taskの作成またはRequirement変更ごとに、`Decision Check` Propertyを`未確認`／`方針変更なし`／`方針変更あり`から設定し、根拠を本文またはNotesへ記録する。
+
+- `方針変更なし`: 参照したAccepted ADRまたは現行仕様と、その範囲内である根拠を示す。
+- `方針変更あり`: 変更するDecision、影響範囲、既存ADR、代替案を特定する。
+- 判定できない場合: `方針変更あり`として扱い、不明点と実装への影響を記録する。
+
+`方針変更あり`または不明の場合は、同じDecisionを扱う既存ADRをNotionで検索し、Epic／Taskの`Related ADR` Propertyへ設定する。未決ならNotion ADRデータベースへStatus `Proposed`のADRを起票し、Projectと関連Taskを紐付ける。ADRにはContext、Decision、Alternatives、Consequences、Implementation、Review Triggerを記載する。Accepted ADRを直接変更せず、完全な置換だけ`Supersedes`／`Superseded By` Relationへ記録し、一部修正はAmendsとして区別する。
+
+Accepted ADR、新しいBounded Context、DB、Cloud Service、Runtime／配置構成、Event Sourcing対象、認証・認可・Security／Privacy方式、API Protocol／Schema正本、Context間連携、不可逆または高コストな運用判断の変更はADRを必須とする。現行Decision内の局所実装や、容易に戻せる低影響の変更にはADRを作成しない。
 
 ## 既存EpicとTaskを検索する
 
@@ -71,8 +83,9 @@ EpicやTaskを設計する前に、ソフトウェア要求を利用者または
 - 3日を超える作業や複数の成果を含む作業は分割する。
 - 2時間未満の密接した作業は隣接するTaskへまとめる。
 - 利用者またはSystemの成果、制約、対象外、対象Bounded Contextを記載する。
+- `Decision Check`と、参照するAccepted ADRまたは必要なADR Proposalを`Related ADR`へ設定し、根拠を記載する。
 - 正常、境界、認可、失敗、競合、再試行、Schema、文書、運用から必要な条件を、観測可能なDone Criteriaとして記載する。
-- Type、Project、Epic、Priority、Area、Milestone、Estimate Days、Dependencies、Statusを設定する。
+- Type、Project、Epic、Priority、Area、Milestone、Estimate Days、Dependencies、Decision Check、Related ADR、Statusを設定する。
 - PR URLは、実体が作成されるまで空欄にする。
 - Notesは状態遷移の履歴、明示した仮定、ほかのPropertyで表せない情報だけに使う。
 
@@ -85,9 +98,10 @@ EpicやTaskを設計する前に、ソフトウェア要求を利用者または
 - RequirementとDone Criteriaが具体的で矛盾していない。
 - Project、Epic、Type、Priority、Area、Milestone、1〜2日のEstimateが設定されている。
 - Dependenciesが完了しているか、着手を妨げない状態である。
-- 関連する要件、画面、DDD、データ設計、アーキテクチャ、セキュリティ設計、`docs/adr`の承認済みADRへ追跡できる。
+- 関連する要件、画面、DDD、データ設計、アーキテクチャ、セキュリティ設計、Notionの承認済みADRへ追跡できる。
 - Bounded Context、Data Owner、AggregateまたはUse Case、認可、テスト方針を特定できる。
 - 未決事項が解消済み、または確認・調査・ADRの作業として分離されている。
+- `Decision Check`が空欄または`未確認`ではない。`方針変更あり`の場合は`Related ADR`が設定され、すべてProject OwnerによりAcceptedとなり、Taskが採用Decisionへ整合している。Proposed ADRに依存するTaskはReadyへ移さない。Rejectedの場合は現行DecisionへRequirementとDone Criteriaを戻し、Decision Checkをやり直す。
 
 状態はInbox → 要件整理中 → Ready → Doing → Review → Doneを基本とする。状態を飛ばす場合はNotesへ理由を記録する。
 
@@ -99,11 +113,11 @@ EpicやTaskを設計する前に、ソフトウェア要求を利用者または
 
 - `phase: proposal`
 - 元のソフトウェア要求、期待成果、制約、対象外
-- 確認したNotion URL、Repository文書、コードPath、Accepted ADR
+- 確認したNotion URL、Repository文書、コードPath、NotionのAccepted ADR
 - 現状とGap、対象Bounded Context、Data Owner、AggregateまたはUse Case、影響範囲
 - 既存Project／Epic／Taskの検索語、候補、重複比較、選択理由
 - 作成または更新するEpicとTaskの全Property、Requirement、Done Criteria、依存関係、順序、Ready判定
-- 未決事項、Working Assumption、Clarification／調査Task／ADR Proposalへの分離結果
+- 未決事項、Working Assumption、Decision Check、Clarification／調査Task／ADR Proposalへの分離結果
 
 EvaluatorのJSON応答を次のように扱う。
 
