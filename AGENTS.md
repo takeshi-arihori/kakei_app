@@ -3,8 +3,8 @@
 ## 正本と読み方
 
 - 利用者の最新の明示指示を最優先する。
-- Project、Epic、Task、仕様、設計の正本はNotionとし、Accepted／Superseded ADRの正本は`docs/adr`とする。
-- 実装前に対象Task、関連仕様、`docs/adr`のAccepted ADR、既存コードを確認する。
+- Project、Epic、Task、仕様、設計、ADRの正本はNotionとする。
+- 実装前に対象Task、関連仕様、NotionのAccepted ADR、既存コードを確認する。
 - 詳細ルールの入口は[docs/engineering/README.md](docs/engineering/README.md)とする。必要な文書だけを読む。
 - Notionとコードが矛盾する場合は実装で吸収せず、矛盾と影響を報告して解消する。
 
@@ -16,7 +16,6 @@
 - `packages`（未作成）: 生成GraphQL契約またはBackend非依存基盤の最初の利用Taskへ着手するときに追加する
 - `infra`: ローカル・クラウド環境
 - `docs/engineering`: 実装時に使うルールとチェックリスト
-- `docs/adr`: Accepted／Superseded ADRの正本
 - Package Managerはpnpmを使用し、TypeScript strict modeを維持する。
 
 ## アーキテクチャ不変条件
@@ -43,19 +42,21 @@
 
 ## 実装手順
 
-1. 対象TaskのStatus、Requirement、Done Criteria、依存関係、Estimateを確認する。
+1. 対象TaskのStatus、Requirement、Done Criteria、依存関係、Estimate、Decision Check、Related ADRを確認する。
 2. 変更をBounded Context、Aggregate、画面、GraphQL、Data、Security、運用へ対応付ける。
-3. 仕様の不足や矛盾を解消し、TaskがReadyであることを確認する。
-4. 失敗するTestを先に作り、最小実装、Refactorの順で進める。
-5. 実装と同じ変更内で関連文書、図、Schema、ADR、Runbookを更新する。
-6. package.jsonに存在するlint、typecheck、test、buildを実行する。
-7. Done Criteriaと差分を自己レビューしてからPR準備へ進む。
+3. Epic／Taskの起票・変更では`Decision Check` Propertyを設定し、文書変更でも`方針変更なし／あり`を判定する。`方針変更あり`または不明なら`Related ADR`を設定し、未決ならNotionへADR Proposalを起票する。Project OwnerがAcceptedを明示し、TaskがそのDecisionへ整合するまでReadyまたは実装へ進めない。Rejectedの場合は現行DecisionへRequirementとDone Criteriaを戻し、Decision Checkをやり直す。
+4. 仕様の不足や矛盾を解消し、TaskがReadyであることを確認する。
+5. 失敗するTestを先に作り、最小実装、Refactorの順で進める。
+6. 実装と同じ変更内で関連するNotion文書、図、Schema、ADR、Runbookを更新する。
+7. package.jsonに存在するlint、typecheck、test、buildを実行する。
+8. Done Criteriaと差分を自己レビューしてからPR準備へ進む。
 
 ## 変更ルール
 
 - 新しい本番依存関係を追加する前に確認を取る。
 - MigrationやSchemaの破壊的変更を無断で行わない。
-- 新しいBounded Context、DB、Cloud Service、Event Sourcing対象、認証方式はADRを必須とする。
+- Accepted ADR、新しいBounded Context、DB、Cloud Service、Runtime／配置構成、Event Sourcing対象、認証・認可・Security／Privacy方式、API Protocol／Schema正本、Context間連携、不可逆または高コストな運用判断を変える場合はNotion ADRを必須とする。
+- 現行Decision内の局所実装や、容易に戻せる低影響の変更にはADRを作成しない。
 - GraphQL、Event Schema、Migrationの変更には互換性・移行・RollbackまたはForward-fix計画を持たせる。
 - 金額にfloating pointを使わない。MVPではJPYの1円単位整数として扱う。
 - 内部TimestampはUTC、業務上の月次判定はAsia/Tokyoで行う。
@@ -64,7 +65,7 @@
 
 ## Git・プルリクエスト
 
-- EpicとTaskの起票・状態管理はNotionだけで行う。
+- Epic、Task、ADRの起票・状態管理はNotionだけで行う。
 - `develop`を統合Branchとし、`develop`への直接Pushと`main` Branchの作成・Pushを禁止する。
 - 1 Task／1 Branch／1 PRを基本とする。
 - Conventional Commitsを使用し、Commitをレビュー可能な論理単位にする。
@@ -76,7 +77,7 @@
 - 正常系だけでなく、境界値、権限、失敗、競合、再試行を検証する。
 - 新しいDomain RuleにはDomain Unit Testがある。
 - テスト失敗や未確認事項を無視して完了扱いにしない。
-- 関連するNotion文書、Repo文書、Schema、ADR、Runbookの更新要否が説明できる。
+- 関連するNotion文書、Repo文書、Schema、Notion ADR、Runbookの更新要否が説明できる。
 - 実行しなかった検証がある場合は、理由と残リスクを明示する。
 
 ## 詳細ルール
@@ -86,4 +87,4 @@
 - Frontend責務: [frontend.md](docs/engineering/frontend.md)
 - TDD・品質保証: [testing.md](docs/engineering/testing.md)
 - Epic／Task／Git／PR前文書更新: [delivery-workflow.md](docs/engineering/delivery-workflow.md)
-- Accepted ADR: [docs/adr/README.md](docs/adr/README.md)
+- ADR: [Notion ADRデータベース](https://app.notion.com/p/ee7f69fb97de41a6976a2f5ea4b3d0c6)

@@ -17,8 +17,8 @@ Ready済みTaskを1件だけ実装し、コード、テスト、契約、図、�
 
 1. 指定されたNotion Task URLを取得する。
 2. URLがない場合は、一致するTaskを検索する。複数の候補が残る場合は利用者に選択を求める。
-3. 親EpicとProject、関連仕様、`docs/adr`の承認済みADR、関連設計ページを取得する。
-4. Status、Requirement、Done Criteria、Dependencies、Estimate、Area、Type、Milestone、PR URLを抽出する。
+3. 親EpicとProject、関連仕様、Notionの承認済みADR、関連設計ページを取得する。
+4. Status、Requirement、Done Criteria、Dependencies、Estimate、Area、Type、Milestone、Decision Check、Related ADR、PR URLを抽出する。
 
 Inboxまたは要件整理中のTaskを実装しない。Readyでない場合は不足しているReady条件を報告し、利用者が改善を望む場合は`$prepare-notion-work`を使う。ほかのStatusから進める場合は、未解決の判断を迂回しないことを確認し、例外的な進め方について利用者の明示確認を得る。
 
@@ -59,7 +59,8 @@ Taskを次へ対応付ける。
 - 変更予定のFileとLayerを明示する。
 - 最初に失敗させるTestと、Done Criteriaに必要な正常、境界、認可、失敗、競合、再試行のCaseを定義する。
 - PR前に更新すべきNotion文書とRepository文書を特定する。
-- 採用済み判断を維持する。代替案は提案として分離し、プロジェクトルールが求める場合は`docs/adr`へのADR追加を必須とする。
+- Taskの`Decision Check`が空欄または`未確認`でないことを確認し、変更予定文書について`方針変更なし／あり`を判定して根拠を記録する。
+- 採用済み判断を維持する。`方針変更あり`または不明の場合はTaskの`Related ADR`を確認し、未決ならNotionへADR Proposalを起票する。Project OwnerがAcceptedを明示するまで実装を進めない。Rejectedの場合は変更案を取り下げ、Taskを現行Decisionへ整合させてDecision Checkをやり直す。
 
 ## TDDを実行する
 
@@ -81,7 +82,7 @@ Bugでは、先に失敗する再現Testを追加する。機械的な変更で�
 Taskを完了扱いにする前に、次を行う。
 
 1. 変更された要件や業務理解をNotionへ反映する。
-2. 採用済みアーキテクチャ判断を変える前に`docs/adr`へ新しいADRを追加し、旧ADRをSupersededへ更新する。
+2. 変更した仕様、設計、運用文書ごとに`方針変更なし／あり`を確認する。`方針変更あり`または不明の場合はTaskの`Decision Check`と`Related ADR`を更新し、未決ならNotionへ新しいADR Proposalを起票する。Accepted後、完全に置換される旧ADRだけをSupersededへ更新する。
 3. 影響を受けるMermaid図、DDD・UML、ER、画面遷移、セキュリティ設計、RunbookをNotionで更新する。
 4. GraphQL Schema、Operation型、Migration Note、開発ガイド、運用手順などRepository内の契約を更新する。
 5. すべてのDone Criteriaをコード、テスト、文書へ再対応付けする。
@@ -113,7 +114,7 @@ Evaluatorへ次のReviewInputを渡す。
 - 対象Bounded Context、Layer、Data Owner
 - 比較対象BranchとBase SHA、Stage済みの累積差分、Patch Checksum、変更File一覧、作業Treeの状態
 - 実行したCommand、その結果、未実行の検証と理由
-- Notion、ADR、Repository文書、Schema、図、Runbookの更新結果
+- Notion、Notion ADR、Repository文書、Schema、図、Runbookの更新結果
 - 既知のRisk、未確認事項、利用者が承認した例外
 
 EvaluatorのJSON応答を次のように扱う。

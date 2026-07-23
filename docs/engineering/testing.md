@@ -107,7 +107,7 @@ pnpm build
 - 正常、境界、権限、失敗、競合、再試行を必要範囲で検証している。
 - GraphQL、Event、Migrationの契約差分がレビューされている。
 - LogやErrorに禁止Dataが含まれない。
-- 関連文書、図、ADR、Runbookが更新されている。
+- 関連するNotion文書、図、ADR、Runbookが更新されている。
 
 ## 参照元
 

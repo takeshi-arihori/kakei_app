@@ -1,12 +1,12 @@
 # 開発ガイド
 
-このディレクトリは、Notionの承認済み仕様を実装へ落とすためのリポジトリ内ガイドである。Project、Epic、Task、仕様、設計の正本はNotion、Accepted／Superseded ADRの正本は[`docs/adr`](../adr/README.md)とする。
+このディレクトリは、Notionの承認済み仕様を実装へ落とすためのリポジトリ内ガイドである。Project、Epic、Task、仕様、設計、ADRの正本はNotionとする。
 
 ## AIが実装対象を決める順序
 
 1. 利用者が指定したNotion Taskを取得する。
-2. TaskのStatusがReadyで、Requirement、Done Criteria、Dependencies、Estimate、Epic、Projectが揃うことを確認する。
-3. TaskからEpic、要求・要件、`docs/adr`のAccepted ADR、対象設計文書を辿る。
+2. TaskのStatusがReadyで、Requirement、Done Criteria、Dependencies、Estimate、Epic、Project、Decision Check、必要なRelated ADRが揃うことを確認する。
+3. TaskからEpic、要求・要件、[Notion ADRデータベース](https://app.notion.com/p/ee7f69fb97de41a6976a2f5ea4b3d0c6)のAccepted ADR、対象設計文書を辿る。
 4. Bounded Context、Aggregate、画面、GraphQL、Data、Security、Operationsへの影響を整理する。
 5. 仕様の不足・矛盾・未承認Decisionがあれば実装せず、Working Assumptionと影響を示して解消する。
 6. TDDの最初の失敗Testと、PR前に更新する文書を決めてからコードを変更する。
@@ -20,7 +20,7 @@ Taskが指定されていない場合、AIはコードの見た目だけから�
 - [frontend.md](frontend.md): Frontendの責務、構成、状態、Accessibility
 - [testing.md](testing.md): TDD、Test Level、Done Criteria
 - [delivery-workflow.md](delivery-workflow.md): Epic／Task、Git、Issue、PR、文書更新
-- [../adr/README.md](../adr/README.md): ADRの作成・承認・置換ルールと一覧
+- [Notion ADRデータベース](https://app.notion.com/p/ee7f69fb97de41a6976a2f5ea4b3d0c6): ADRのProposal、承認、棄却、置換履歴
 
 ## 変更種別から読む文書
 

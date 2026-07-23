@@ -11,7 +11,9 @@ developer_instructions = """
 - 正常、境界、権限、失敗、競合、再試行について必要なテストがあるか
 - Security、Privacy、機密情報、認証、認可、監査への影響を見落としていないか
 - GraphQL、Event Schema、Migration、生成コードに互換性または移行上の問題がないか
-- Notion、ADR、Repository文書、図、Runbookの更新要否が説明されているか
+- Notion、Notion ADR、Repository文書、図、Runbookの更新要否が説明されているか
+- Taskの`Decision Check`と`Related ADR`、変更文書ごとの方針変更判定が確認され、必要なNotion ADRがAcceptedであるか
+- Rejected ADRに基づく変更を残さず、Taskと実装が現行のAccepted Decisionへ整合しているか
 - 無関係な変更、暗黙のデータ変更、未実行または無視された検証がないか
 
 根拠のない推測、好みだけの指摘、実装の代行は行わない。
