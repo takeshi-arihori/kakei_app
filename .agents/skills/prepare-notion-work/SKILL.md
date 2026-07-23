@@ -9,7 +9,7 @@ description: 家計アプリのNotion Epic・Taskを作成、分割、レビュ�
 
 ## プロジェクトルールを読む
 
-`docs/engineering/delivery-workflow.md`を読む。依頼が実装範囲へ影響する場合は`docs/engineering/README.md`も読む。非公開のプロジェクト情報にはNotion接続を使い、Web検索で代用しない。
+`docs/engineering/delivery-workflow.md`と`docs/engineering/README.md`を読む。要求の変更種別に従って、DDD、Frontend、Data、Security、Test、運用の関連文書と`docs/adr`のAccepted ADRを読む。非公開のプロジェクト情報にはNotion接続を使い、Web検索で代用しない。
 
 ## 操作を選ぶ
 
@@ -31,6 +31,26 @@ description: 家計アプリのNotion Epic・Taskを作成、分割、レビュ�
    - 安全な暫定判断が可能な場合の作業上の仮定
 
 製品、ドメイン、セキュリティ、データ、アーキテクチャの判断を暗黙に補完しない。
+
+## 要求を現状へ対応付ける
+
+EpicやTaskを設計する前に、ソフトウェア要求を利用者またはSystemの成果、制約、対象外へ分解する。Notionの要求・仕様とRepositoryの文書・既存コードを確認し、次を根拠付きで整理する。
+
+- 現在成立している振る舞いと不足している振る舞い
+- 対象Bounded Context、Data Owner、AggregateまたはUse Case、Layer
+- 画面、GraphQL、Data、Security、運用、Test、文書への影響
+- Accepted ADRとの整合性と、新しいDecisionまたはADR Proposalの要否
+
+コードの見た目だけで要求や作業項目を考案しない。確認したNotion URL、Repository文書、コードPathを、後続の評価で再確認できる証拠として保持する。
+
+## 既存EpicとTaskを検索する
+
+要求の中心となる業務語彙、期待成果、関連するBounded Contextを、1回につき1つの具体的な語句でNotion検索する。候補EpicのRequirement、Done Criteria、構成Task、Statusを取得し、重複または包含関係を比較する。
+
+- 既存Epicが要求を包含する場合は、そのEpicへTaskを追加または既存Taskを改善する。
+- 要求が1つの1〜2日Taskで完了する場合は、新しいEpicを作らない。
+- 複数の独立成果が必要で、既存Epicに属さない場合だけ新しいEpicを設計する。
+- 複数候補から一意に選べない場合は、作成せずに候補、差異、影響を示して利用者へ確認する。
 
 ## Epicを設計する
 
@@ -70,6 +90,30 @@ description: 家計アプリのNotion Epic・Taskを作成、分割、レビュ�
 - 未決事項が解消済み、または確認・調査・ADRの作業として分離されている。
 
 状態はInbox → 要件整理中 → Ready → Doing → Review → Doneを基本とする。状態を飛ばす場合はNotesへ理由を記録する。
+
+## 独立Planning Evaluator Loopを実行する
+
+親AgentだけがNotionを作成・更新する。各評価Cycleで新しい`work_planning_evaluator` Subagentを1つ起動し、同じEvaluator Threadを再利用しない。
+
+書き込み前に、次のReviewInputを渡して提案を評価する。
+
+- `phase: proposal`
+- 元のソフトウェア要求、期待成果、制約、対象外
+- 確認したNotion URL、Repository文書、コードPath、Accepted ADR
+- 現状とGap、対象Bounded Context、Data Owner、AggregateまたはUse Case、影響範囲
+- 既存Project／Epic／Taskの検索語、候補、重複比較、選択理由
+- 作成または更新するEpicとTaskの全Property、Requirement、Done Criteria、依存関係、順序、Ready判定
+- 未決事項、Working Assumption、Clarification／調査Task／ADR Proposalへの分離結果
+
+EvaluatorのJSON応答を次のように扱う。
+
+- `fail`: 親Agentが提案を修正し、必要な参照元と検索結果を再取得して、新しいEvaluatorで再評価する。
+- `blocked`: 仕様矛盾、候補を一意に選べない状態、権限不足、利用者判断が必要なDecisionなどを、証拠、影響、選択肢とともに報告してLoopを停止する。
+- `pass`: `findings`と`missingEvidence`が空の場合だけ、依頼されたNotion書き込みへ進む。分析またはレビューだけの依頼では書き込まず、評価済み提案を報告する。
+
+Notionへ書き込む直前にDatabase構造と対象Pageを再取得する。書き込み後は作成・更新したPageをURLから再取得し、`phase: persisted`、実際のProperty、Relation、Status、本文、URLを含むReviewInputを新しいEvaluatorへ渡す。`fail`なら親AgentがNotionを修正して再取得・再評価し、`pass`になるまで反復する。
+
+進捗や仕様を複製するJSON Fileは作らず、Notionを正本とする。無限に反復せず、利用者判断または外部状態の変更が必要な`blocked`では停止する。
 
 ## 結果を報告する
 
