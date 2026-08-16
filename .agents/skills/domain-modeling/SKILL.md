@@ -31,6 +31,10 @@ Notionは要求・業務知識・設計判断の正本、GitHubは実装上の�
 - [references/domain-model-rules.md](references/domain-model-rules.md)
 - [references/output-contract.md](references/output-contract.md)
 
+Diagramの作成・更新を求められた場合は、モデリング完了後に次も読む。
+
+- [references/drawio-integration.md](references/drawio-integration.md)
+
 ## Workflow
 
 ### 1. Problem / Scopeを理解する
@@ -152,6 +156,19 @@ Domain Modelでは次を整理する。
 10. Open Questions / Conflicts
 11. Next Modeling Step
 
+### 10. Diagramを生成・更新する
+
+UserがDiagramを求めている場合だけ、[references/drawio-integration.md](references/drawio-integration.md)へ従う。
+
+1. Diagramの意味へ影響する`Conflict`または`Open Question`がないことを確認する。
+2. Domain Modelからtyped Diagram Specificationを作る。
+3. 利用可能なMCP Toolを確認する。
+4. 新規作成は`drawio_create`、既存更新は先に`drawio_read`してから`drawio_update`を使う。
+5. 最後に`drawio_validate`を実行する。
+6. MCPが利用できない場合はDiagram Specificationまでを成果として返し、`.drawio`生成だけを未実施として報告する。
+
+MCPへDomain判断を委譲しない。Diagram FileをDomainの正本として扱わない。
+
 ## Stop Conditions
 
 次の場合は設計を確定せず停止し、利用者へ影響と必要な判断を示す。
@@ -163,6 +180,14 @@ Domain Modelでは次を整理する。
 - 既存Accepted ADRを変更する必要がある
 - 要求・Scopeの変更が必要になる
 
+Diagramだけ停止する条件:
+
+- Diagramの意味を左右する`Conflict`または`Open Question`が残っている
+- 既存`.drawio`をMCPが安全に読めない
+- draw.io MCPが利用できず、File生成が必要
+
+Diagram停止条件は、Domain Modeling自体の結果を破棄する理由にはしない。
+
 ## Never Do
 
 - Domain Ruleを「一般的だから」という理由で確定しない。
@@ -172,7 +197,9 @@ Domain Modelでは次を整理する。
 - FrameworkやPersistence都合でBounded Contextを決めない。
 - 最初のモデルを最終仕様として固定しない。
 - Userの明示確認なしにAccepted ADRを書き換えない。
+- `.drawio`に存在するElementを根拠にDomain ConceptをConfirmedへ昇格しない。
+- 既存Diagramを読まずに上書きしない。
 
 ## Diagram
 
-このSkillの責務はモデリングまでとする。draw.ioへの描画・編集はdraw.io MCP連携が利用可能な場合のみ別Toolへ委譲し、MCP側へDomain判断を移さない。
+Domain Modeling Skillは「何を描くか」を決め、draw.io MCPは「どう`.drawio`へ保存するか」を担当する。この境界を維持する。
