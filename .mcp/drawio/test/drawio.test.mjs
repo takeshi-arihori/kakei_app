@@ -27,6 +27,17 @@ const diagram = {
   ]
 };
 
+function modernParams(extra = {}) {
+  return {
+    ...extra,
+    _meta: {
+      'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+      'io.modelcontextprotocol/clientCapabilities': {},
+      'io.modelcontextprotocol/clientInfo': { name: 'test-client', version: '1.0.0' }
+    }
+  };
+}
+
 async function withTempRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'drawio-mcp-'));
   try {
@@ -100,25 +111,72 @@ test('validate reports a supported diagram as valid', async () => {
   });
 });
 
-test('modern discovery and legacy initialize are both supported', async () => {
+test('modern discovery advertises required cache fields and legacy initialize remains available', async () => {
   await withTempRoot(async (root) => {
-    const modern = await handleMcpMessage({ jsonrpc: '2.0', id: 1, method: 'server/discover', params: {} }, { rootDirectory: root });
+    const modernContext = { rootDirectory: root, protocolEra: null, legacyInitialized: false };
+    const modern = await handleMcpMessage({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'server/discover',
+      params: modernParams()
+    }, modernContext);
     assert.equal(modern.result.resultType, 'complete');
+    assert.equal(modern.result.ttlMs, 0);
+    assert.equal(modern.result.cacheScope, 'private');
     assert.deepEqual(modern.result.supportedVersions, ['2026-07-28']);
+    assert.deepEqual(modern.result._meta['io.modelcontextprotocol/serverInfo'], { name: 'kakei-drawio-mcp', version: '0.1.0' });
 
+    const legacyContext = { rootDirectory: root, protocolEra: null, legacyInitialized: false };
     const legacy = await handleMcpMessage({
       jsonrpc: '2.0',
       id: 2,
       method: 'initialize',
       params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'test', version: '1' } }
-    }, { rootDirectory: root });
+    }, legacyContext);
     assert.equal(legacy.result.protocolVersion, '2025-11-25');
+    assert.equal(legacyContext.protocolEra, 'legacy');
   });
 });
 
-test('tools/list exposes only diagram operations', async () => {
+test('modern requests reject a missing per-request envelope', async () => {
   await withTempRoot(async (root) => {
-    const result = await handleMcpMessage({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }, { rootDirectory: root });
+    const context = { rootDirectory: root, protocolEra: null, legacyInitialized: false };
+    const result = await handleMcpMessage({ jsonrpc: '2.0', id: 1, method: 'server/discover', params: {} }, context);
+    assert.equal(result.error.code, -32602);
+  });
+});
+
+test('modern requests reject an unsupported protocol version', async () => {
+  await withTempRoot(async (root) => {
+    const context = { rootDirectory: root, protocolEra: null, legacyInitialized: false };
+    const result = await handleMcpMessage({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'server/discover',
+      params: {
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2099-01-01',
+          'io.modelcontextprotocol/clientCapabilities': {}
+        }
+      }
+    }, context);
+    assert.equal(result.error.code, -32022);
+    assert.deepEqual(result.error.data.supported, ['2026-07-28']);
+  });
+});
+
+test('tools/list exposes only diagram operations with modern result metadata', async () => {
+  await withTempRoot(async (root) => {
+    const context = { rootDirectory: root, protocolEra: null, legacyInitialized: false };
+    const result = await handleMcpMessage({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/list',
+      params: modernParams()
+    }, context);
+    assert.equal(result.result.resultType, 'complete');
+    assert.equal(result.result.ttlMs, 0);
+    assert.equal(result.result.cacheScope, 'private');
     assert.deepEqual(result.result.tools.map((tool) => tool.name), [
       'drawio_create',
       'drawio_read',
@@ -130,12 +188,14 @@ test('tools/list exposes only diagram operations', async () => {
 
 test('tool operational errors are returned as MCP tool errors', async () => {
   await withTempRoot(async (root) => {
+    const context = { rootDirectory: root, protocolEra: null, legacyInitialized: false };
     const result = await handleMcpMessage({
       jsonrpc: '2.0',
       id: 1,
       method: 'tools/call',
-      params: { name: 'drawio_read', arguments: { path: '../outside.drawio' } }
-    }, { rootDirectory: root });
+      params: modernParams({ name: 'drawio_read', arguments: { path: '../outside.drawio' } })
+    }, context);
+    assert.equal(result.result.resultType, 'complete');
     assert.equal(result.result.isError, true);
     assert.equal(result.result.structuredContent.error, 'PATH_OUTSIDE_ROOT');
   });
