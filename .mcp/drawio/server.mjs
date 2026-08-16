@@ -6,7 +6,11 @@ import { handleMcpMessage } from './lib/protocol.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultRoot = path.resolve(here, '../..');
-const rootDirectory = path.resolve(process.env.DRAWIO_MCP_ROOT ?? defaultRoot);
+const context = {
+  rootDirectory: path.resolve(process.env.DRAWIO_MCP_ROOT ?? defaultRoot),
+  protocolEra: null,
+  legacyInitialized: false
+};
 
 function writeMessage(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -38,7 +42,7 @@ input.on('line', async (line) => {
     return;
   }
 
-  const reply = await handleMcpMessage(message, { rootDirectory });
+  const reply = await handleMcpMessage(message, context);
   if (reply) writeMessage(reply);
 });
 
