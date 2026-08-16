@@ -1,0 +1,178 @@
+---
+name: domain-modeling
+description: 家計アプリの要求・業務知識から、System Context、Use Case、Object、Domain Model、ユビキタス言語、業務ルール、不変条件、未確定事項を整理・検証する。ドメインモデリング、DDD設計の前段整理、モデルレビューを依頼されたときに使用する。DB Schema、GraphQL Type、UI、FrameworkからDomain Modelを逆算する用途には使用しない。
+---
+
+# Domain Modeling
+
+ドメインエキスパートとAIが同じ概念・具体例・業務ルールを参照しながら、問題領域への理解を反復的に深める。
+
+## 正本を確認する
+
+作業開始前に、対象ProjectのNotionとRepositoryの両方を読む。
+
+家計アプリでは少なくとも次を確認する。
+
+- Notion `01. Project・要求`: 目的、対象ユーザー、要求、Scope、対象外
+- Notion `02. 業務・ドメイン`: 業務内容、業務ルール、用語定義、ドメイン設計
+- Notion `08. 設計変更・意思決定`: ADR、未確定事項、Documentation Conflict
+- Repository `AGENTS.md`
+- Repository `docs/engineering/domain-design.md`
+
+Notionは要求・業務知識・設計判断の正本、GitHubは実装上の事実とAI実行ルールの正本として扱う。矛盾した場合は一方を勝手に採用せず、Conflictとして停止する。
+
+## モデリング原則
+
+作業前に次を読む。
+
+- [references/modeling-principles.md](references/modeling-principles.md)
+- [references/sudo-modeling.md](references/sudo-modeling.md)
+- [references/interview-guide.md](references/interview-guide.md)
+- [references/domain-model-rules.md](references/domain-model-rules.md)
+- [references/output-contract.md](references/output-contract.md)
+
+## Workflow
+
+### 1. Problem / Scopeを理解する
+
+EntityやAggregateを考える前に、次を整理する。
+
+- 解決する問題
+- 問題を持つ利用者・Actor
+- Systemが提供する成果
+- 対象範囲と対象外
+- 外部System
+- 現時点の制約
+
+不足している情報は推測で埋めず、`Open Question`へ記録する。
+
+### 2. System Contextを作る
+
+System、Actor、External System、主要Interaction、System Boundaryを整理する。
+
+System ContextにはDB、Framework、Class、Tableを入れない。
+
+### 3. Use Caseを整理する
+
+Actorごとに、業務上のGoalを中心としてUse Caseを抽出する。
+
+各Use Caseについて最低限次を整理する。
+
+- Actor
+- Goal
+- Trigger
+- Preconditions
+- Success Outcome
+- Failure / Boundary
+
+画面一覧やAPI EndpointをそのままUse Caseとして扱わない。
+
+### 4. 具体例を作る
+
+現実的な値を使ったObject Exampleを作る。
+
+最低限次を含める。
+
+- Normal case
+- Boundary case
+- Invalid case
+- Exceptional / Conflict case
+
+抽象モデルを先に確定しない。具体例で説明できない概念は理解不足として扱う。
+
+### 5. ObjectとDomain Modelを往復する
+
+次を反復する。
+
+`Concrete Example → Object Model → Domain Concept → Domain Model → Concrete Example`
+
+Domain Modelでは次を整理する。
+
+- Domain Concept
+- 代表的Attribute
+- Relationship
+- Multiplicity
+- Business Rule
+- Constraint / Invariant候補
+- Lifecycle
+
+この段階でAggregate境界を確定しない。Invariantと整合性要求が十分に確認された後で候補として検討する。
+
+### 6. Ubiquitous Languageを整える
+
+重要語について次を記録する。
+
+- 日本語Canonical Term
+- English Term
+- Definition
+- Valid Context
+- Synonym / Avoided Term
+- Example
+
+同じ言葉がContextごとに違う意味を持つ場合は、共通型へ統合しない。
+
+### 7. RuleとInvariantを検証する
+
+各Ruleについて次を判定する。
+
+- Confirmed: 正本または利用者確認済み
+- Proposed: モデル上の提案
+- Assumption: 作業を進めるための仮定
+- Open Question: 判断に必要な情報不足
+- Conflict: 正本同士が矛盾
+
+`Proposed`や`Assumption`をConfirmedとして扱わない。
+
+### 8. モデルを反証する
+
+正常例だけでなく、境界・競合・取消・再試行・過去変更などの具体例をモデルへ当てる。
+
+次が起きたら前のPhaseへ戻る。
+
+- 概念を具体例にできない
+- Ruleが矛盾する
+- 不可能状態を表現できる
+- Lifecycleを説明できない
+- 同じ語が複数意味を持つ
+- Model Boundaryが技術都合だけで決められている
+
+### 9. 出力する
+
+[references/output-contract.md](references/output-contract.md) に従い、最低限次を返す。
+
+1. Problem / Scope
+2. System Context
+3. Use Cases
+4. Concrete Examples / Object Model
+5. Domain Concepts / Domain Model
+6. Business Rules / Invariants
+7. Ubiquitous Language
+8. Confirmed Decisions
+9. Proposed / Assumptions
+10. Open Questions / Conflicts
+11. Next Modeling Step
+
+## Stop Conditions
+
+次の場合は設計を確定せず停止し、利用者へ影響と必要な判断を示す。
+
+- NotionとGitHubの正本が矛盾する
+- Domain Ruleの根拠がない
+- 重要語の意味が複数存在し、Contextを特定できない
+- Aggregate候補のInvariantが不明
+- 既存Accepted ADRを変更する必要がある
+- 要求・Scopeの変更が必要になる
+
+## Never Do
+
+- Domain Ruleを「一般的だから」という理由で確定しない。
+- UI FormのFieldをそのままValue ObjectやEntityへしない。
+- DB Table、Prisma Model、GraphQL TypeをDomain Modelとして扱わない。
+- Repository、Entity、AggregateなどDDD Patternを置くこと自体を目的にしない。
+- FrameworkやPersistence都合でBounded Contextを決めない。
+- 最初のモデルを最終仕様として固定しない。
+- Userの明示確認なしにAccepted ADRを書き換えない。
+
+## Diagram
+
+このSkillの責務はモデリングまでとする。draw.ioへの描画・編集はdraw.io MCP連携が利用可能な場合のみ別Toolへ委譲し、MCP側へDomain判断を移さない。
