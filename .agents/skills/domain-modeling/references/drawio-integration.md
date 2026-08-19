@@ -120,7 +120,7 @@ Edge:
 - Direction
 - Multiplicity
 
-Object ExampleはDomain Modelと同じFileへ混在させず、必要なら別Diagram/Pageに分ける。
+Object ExampleとDomain Modelは視覚的な境界を分ける。別Diagram/Pageを既定とするが、利用者が1ページを指定した場合は同じPage内の独立Sectionとして配置する。
 
 ## Create Flow
 
