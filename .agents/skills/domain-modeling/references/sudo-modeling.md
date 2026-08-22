@@ -2,6 +2,10 @@
 
 SUDOは、System Context / Use Case / Domain Model / Object Modelの4つの視点を使ってDomain理解を深める。
 
+参考: [DDD×仕様駆動で回す高品質開発のプロセス設計（Speaker Deck、slide 24）](https://speakerdeck.com/littlehands/dddxshi-yang-qu-dong-dehui-sugao-pin-zhi-kai-fa-nopurosesushe-ji?slide=24)
+
+このGuideでは、同資料の「最低限の4図」と「抽象と具体を往復する」という考え方を採用する。業務フロー図、状態遷移図、シーケンス図は、SUDOだけではLifecycleや分岐を検証しにくい場合に補助的に追加する。
+
 ## S: System Context
 
 目的は、開発対象Systemと外部世界の境界を明確にすること。
@@ -80,6 +84,8 @@ Object Example ⇄ Domain Model
 ```
 
 `D → O`の一方向工程にはしない。
+
+成果物の配置も固定しない。利用者が1ページを希望する場合は、S / U / D / Oを同じPage内で明確に区切る。縦方向へ順番に並べる指定は「横長のSectionで上下に区切る」、横方向へ並べる指定は「Columnで左右に区切る」と解釈し、曖昧な場合は既存Diagramと利用者の最新指示を優先する。
 
 ## Validation Questions
 

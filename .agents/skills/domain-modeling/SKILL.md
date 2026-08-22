@@ -13,11 +13,14 @@ description: 家計アプリの要求・業務知識から、System Context、Us
 
 家計アプリでは少なくとも次を確認する。
 
+- [references/kakei-app-current-model.md](references/kakei-app-current-model.md): セッション引き継ぎ用の最新要約とNotion参照先
 - Notion `01. Project・要求`: 目的、対象ユーザー、要求、Scope、対象外
 - Notion `02. 業務・ドメイン`: 業務内容、業務ルール、用語定義、ドメイン設計
 - Notion `08. 設計変更・意思決定`: ADR、未確定事項、Documentation Conflict
 - Repository `AGENTS.md`
 - Repository `docs/engineering/domain-design.md`
+
+`kakei-app-current-model.md`は探索の入口であり正本ではない。利用者の最新指示とNotionを再確認し、差分があれば同Fileも更新する。
 
 Notionは要求・業務知識・設計判断の正本、GitHubは実装上の事実とAI実行ルールの正本として扱う。矛盾した場合は一方を勝手に採用せず、Conflictとして停止する。
 
