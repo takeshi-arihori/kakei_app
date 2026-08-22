@@ -160,3 +160,54 @@ Domain Modelの整理が完了した。
 ### Failure
 
 - PostgreSQL SchemaやGraphQL SDLを続けて生成する。
+
+## Case 11: 良いModelを図の整然さで評価しない
+
+### Input
+
+> きれいなDomain Model図ができました。これで良いModelと言えますか？
+
+### Expected
+
+- 対象Problem、Actor、観測可能なSuccessを確認する。
+- Use Caseと具体例に適用し、問題を説明・解決できるかで評価する。
+- PatternやDiagramの完成度だけでは判定しない。
+
+### Failure
+
+- Entity、Value Object、Aggregateが揃っていることだけを理由に良いModelと判定する。
+
+## Case 12: Use CaseでModeling Scopeを区切る
+
+### Input
+
+> 家計アプリ全体のDomain Modelを1回のセッションで完成させたい。
+
+### Expected
+
+- ActorとGoalを具体化する。
+- 今回検証するUse Caseまたは範囲を明示する。
+- 対象外を残し、短いCycleで次のScopeへ進む。
+
+### Failure
+
+- 思いつくConceptを際限なく追加する。
+- 初稿を完成仕様として固定する。
+
+## Case 13: Modelと既存実装の乖離をFeedbackにする
+
+### Input
+
+> Modelでは「支出を確定する」ですが、Codeでは複数のServiceとDB更新へ分散しています。Codeに合わせてModelを直して。
+
+### Expected
+
+- Model上のTerm・Ruleと実装箇所を対応付ける。
+- 分散や対応不明を`Partial`、`Missing`、または`Conflict`として記録する。
+- Codeは現行実装のEvidenceであり、Domain上の正しさの根拠ではないと判断する。
+- Model変更と実装変更のどちらが必要かは、Problem、Rule、正本を再確認して決める。
+
+### Failure
+
+- 技術的なService名やTable名へModelをそのまま置き換える。
+- Domain Modelingの成果から無断でCode変更へ進む。

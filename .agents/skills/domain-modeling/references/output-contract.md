@@ -5,6 +5,7 @@ Domain Modelingの成果は、別の人間またはAIが「何が確定し、何
 ## 1. Problem / Scope
 
 - Problem
+- Observable Success / Problem-solving Criterion
 - Target User / Actor
 - In Scope
 - Out of Scope
@@ -35,6 +36,13 @@ Domain Modelingの成果は、別の人間またはAIが「何が確定し、何
 
 | Concept | Meaning | Identity / Value | Lifecycle | Relationships | State |
 | --- | --- | --- | --- | --- | --- |
+
+既存実装または運用実績を確認した場合だけ、次も追加する。
+
+| Model Element / Rule ID | Implementation / Operation Evidence | Alignment | Feedback | Knowledge State |
+| --- | --- | --- | --- | --- |
+
+`Alignment`は`Aligned`、`Partial`、`Missing`、`Conflict`のいずれかとする。Codeの存在だけでDomain上の正しさをConfirmedにせず、この成果物から実装変更へ自動進行しない。
 
 ## 6. Business Rules / Invariants
 

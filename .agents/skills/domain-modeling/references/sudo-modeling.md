@@ -29,6 +29,11 @@ SUDOは、System Context / Use Case / Domain Model / Object Modelの4つの視�
 
 ActorがSystemを使って達成したいGoalを整理する。
 
+Use Caseには2つの役割がある。
+
+- ActorとGoalを言語化し、解決する問題を具体化する
+- 今回扱うUse Caseを選び、Domain Model作成のScopeを区切る
+
 Use Caseごとに次を持つ。
 
 - Actor
@@ -55,6 +60,8 @@ Domain上重要なConceptとRuleを抽象化する。
 - Lifecycle
 
 この段階ではMethod一覧や永続化詳細を中心にしない。
+
+初期のDiagramでは代表的なAttributeだけを示し、Business RuleとConstraintを適用先のConceptまたはRelationshipへ注記する。Ruleが多すぎるConceptは、責務の分割を再検討するSignalとして扱う。
 
 ## O: Object Model
 
@@ -84,6 +91,16 @@ Object Example ⇄ Domain Model
 ```
 
 `D → O`の一方向工程にはしない。
+
+既存実装または運用実績がある場合は、そこから得た発見もDomain Modelへ戻す。
+
+```text
+Use Case → Rough Domain Model ⇄ Object Example
+                         ⇅
+            Existing Implementation / Operation
+```
+
+最初のSessionでは完成図を目指さず、書き換えやすい粗い表現で参加者の異なる理解を可視化する。意味が安定してから正本用のDiagramや表へ清書する。
 
 成果物の配置も固定しない。利用者が1ページを希望する場合は、S / U / D / Oを同じPage内で明確に区切る。縦方向へ順番に並べる指定は「横長のSectionで上下に区切る」、横方向へ並べる指定は「Columnで左右に区切る」と解釈し、曖昧な場合は既存Diagramと利用者の最新指示を優先する。
 
