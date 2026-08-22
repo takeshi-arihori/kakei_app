@@ -1,91 +1,256 @@
-<mxfile host="65bd71144e" pages="1">
-  <diagram name="Kakei App Modeling" id="kakei-app-modeling-single-page">
-    <mxGraphModel dx="1800" dy="2200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="2200" math="0" shadow="0">
-      <root>
-        <mxCell id="0"/>
-        <mxCell id="1" parent="0"/>
-        <mxCell id="title" value="家計アプリ — SUDO Modeling（横4区画・1ページ）" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=28;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="30" y="20" width="1300" height="45" as="geometry"/></mxCell>
-        <mxCell id="subtitle" value="Confirmed: Payerが支払完了を申告し、Payeeの受取確認でArchive成立／申請Snapshotは版管理して追跡" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=14;fontColor=#475569;" vertex="1" parent="1"><mxGeometry x="30" y="65" width="1500" height="25" as="geometry"/></mxCell>
-
-        <mxCell id="section-system" value="1. System Context" style="swimlane;html=1;startSize=42;rounded=1;strokeWidth=2;strokeColor=#2563EB;fillColor=#DBEAFE;fontSize=19;fontStyle=1;connectable=0;" vertex="1" parent="1"><mxGeometry x="30" y="100" width="1740" height="420" as="geometry"/></mxCell>
-        <mxCell id="actor-t" value="Tさん" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=14;" vertex="1" parent="1"><mxGeometry x="65" y="205" width="55" height="95" as="geometry"/></mxCell>
-        <mxCell id="actor-y" value="Yさん" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=14;" vertex="1" parent="1"><mxGeometry x="65" y="360" width="55" height="95" as="geometry"/></mxCell>
-        <mxCell id="system-boundary" value="家計アプリ" style="swimlane;html=1;startSize=36;rounded=1;strokeWidth=2;strokeColor=#2563EB;fillColor=#EFF6FF;fontSize=17;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="190" y="155" width="980" height="315" as="geometry"/></mxCell>
-        <mxCell id="cap-transaction" value="取引を記録&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;実支払・負担割当&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0EA5E9;fillColor=#F0F9FF;fontSize=13;" vertex="1" parent="1"><mxGeometry x="220" y="220" width="180" height="75" as="geometry"/></mxCell>
-        <mxCell id="cap-balance" value="精算額を算出&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;実支払−本来負担&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#16A34A;fillColor=#F0FDF4;fontSize=13;" vertex="1" parent="1"><mxGeometry x="430" y="220" width="180" height="75" as="geometry"/></mxCell>
-        <mxCell id="cap-case" value="精算Caseを開始&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;Case ID＋Snapshot&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#16A34A;fillColor=#F0FDF4;fontSize=13;" vertex="1" parent="1"><mxGeometry x="640" y="220" width="180" height="75" as="geometry"/></mxCell>
-        <mxCell id="cap-review" value="申請を確認・却下&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;却下理由は必須&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#F59E0B;fillColor=#FFFBEB;fontSize=13;" vertex="1" parent="1"><mxGeometry x="850" y="220" width="180" height="75" as="geometry"/></mxCell>
-        <mxCell id="cap-payment" value="支払完了を申告&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;PayerのRole&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#DC2626;fillColor=#FEF2F2;fontSize=13;" vertex="1" parent="1"><mxGeometry x="400" y="345" width="210" height="80" as="geometry"/></mxCell>
-        <mxCell id="cap-receipt" value="受取確認・Archive&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;PayeeのRole&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#7C3AED;fillColor=#F5F3FF;fontSize=13;" vertex="1" parent="1"><mxGeometry x="650" y="345" width="210" height="80" as="geometry"/></mxCell>
-        <mxCell id="cap-view" value="月別Archiveを閲覧&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;編集不可&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#7C3AED;fillColor=#F5F3FF;fontSize=13;" vertex="1" parent="1"><mxGeometry x="900" y="345" width="210" height="80" as="geometry"/></mxCell>
-        <mxCell id="external-transfer" value="システム外の振込・送金&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#475569&quot;&gt;アプリは資金移動しない&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#64748B;fillColor=#F8FAFC;fontSize=13;dashed=1;" vertex="1" parent="1"><mxGeometry x="1240" y="205" width="240" height="90" as="geometry"/></mxCell>
-        <mxCell id="system-rules" value="Confirmed Boundary&lt;br&gt;・共有家計はT・Yの2人限定&lt;br&gt;・申請時点のGroup Aを固定&lt;br&gt;・新規取引はGroup Bへ追加&lt;br&gt;・Payerが支払完了を申告&lt;br&gt;・Payeeの受取確認でArchive成立&lt;br&gt;・却下版も削除しない" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#F59E0B;fillColor=#FFFBEB;align=left;verticalAlign=top;spacing=10;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1510" y="175" width="230" height="235" as="geometry"/></mxCell>
-        <mxCell id="edge-t-system" value="記録・申請・確認" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#2563EB;fontSize=11;" edge="1" parent="1" source="actor-t" target="system-boundary"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-y-system" value="記録・申請・確認" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#2563EB;fontSize=11;" edge="1" parent="1" source="actor-y" target="system-boundary"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-system-transfer" value="精算方向・金額を提示" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#64748B;fontSize=11;" edge="1" parent="1" source="cap-payment" target="external-transfer"><mxGeometry relative="1" as="geometry"/></mxCell>
-
-        <mxCell id="section-usecase" value="2. Use Case Model" style="swimlane;html=1;startSize=42;rounded=1;strokeWidth=2;strokeColor=#0EA5E9;fillColor=#E0F2FE;fontSize=19;fontStyle=1;connectable=0;" vertex="1" parent="1"><mxGeometry x="30" y="540" width="1740" height="500" as="geometry"/></mxCell>
-        <mxCell id="uc-actor-member" value="Household Member&lt;br&gt;T / Y" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;" vertex="1" parent="1"><mxGeometry x="65" y="700" width="65" height="105" as="geometry"/></mxCell>
-        <mxCell id="uc-actor-payer" value="Payer" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;" vertex="1" parent="1"><mxGeometry x="65" y="870" width="65" height="105" as="geometry"/></mxCell>
-        <mxCell id="uc-actor-payee" value="Payee" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;" vertex="1" parent="1"><mxGeometry x="1650" y="790" width="65" height="105" as="geometry"/></mxCell>
-        <mxCell id="uc-record" value="取引を記録する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#0EA5E9;fillColor=#F0F9FF;fontSize=13;" vertex="1" parent="1"><mxGeometry x="200" y="610" width="220" height="70" as="geometry"/></mxCell>
-        <mxCell id="uc-balance" value="精算残高・方向を確認する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#16A34A;fillColor=#F0FDF4;fontSize=13;" vertex="1" parent="1"><mxGeometry x="460" y="610" width="240" height="70" as="geometry"/></mxCell>
-        <mxCell id="uc-start" value="精算Caseを開始する&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Group AをSnapshot化&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#2563EB;fillColor=#EFF6FF;fontSize=13;" vertex="1" parent="1"><mxGeometry x="740" y="605" width="260" height="80" as="geometry"/></mxCell>
-        <mxCell id="uc-review" value="相手の申請を確認する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#F59E0B;fillColor=#FFFBEB;fontSize=13;" vertex="1" parent="1"><mxGeometry x="1040" y="610" width="230" height="70" as="geometry"/></mxCell>
-        <mxCell id="uc-reject" value="理由を記載して却下する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#DC2626;fillColor=#FEF2F2;fontSize=13;" vertex="1" parent="1"><mxGeometry x="1310" y="610" width="240" height="70" as="geometry"/></mxCell>
-        <mxCell id="uc-resubmit" value="同じCaseへ新版を再申請する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#16A34A;fillColor=#F0FDF4;fontSize=13;" vertex="1" parent="1"><mxGeometry x="200" y="815" width="260" height="75" as="geometry"/></mxCell>
-        <mxCell id="uc-request-payment" value="相手へ支払いを請求する&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Payee開始時&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#16A34A;fillColor=#F0FDF4;fontSize=13;" vertex="1" parent="1"><mxGeometry x="500" y="810" width="260" height="85" as="geometry"/></mxCell>
-        <mxCell id="uc-report-payment" value="外部支払完了を申告する&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Payerの必須Action&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#DC2626;fillColor=#FEF2F2;fontSize=13;" vertex="1" parent="1"><mxGeometry x="800" y="810" width="270" height="85" as="geometry"/></mxCell>
-        <mxCell id="uc-confirm-receipt" value="受取確認してArchiveする&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Payeeの必須Action&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#7C3AED;fillColor=#F5F3FF;fontSize=13;" vertex="1" parent="1"><mxGeometry x="1110" y="805" width="280" height="90" as="geometry"/></mxCell>
-        <mxCell id="uc-add-group-b" value="申請中も新しい取引を記録する&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Group Bへ追加&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#F59E0B;fillColor=#FFFBEB;fontSize=13;" vertex="1" parent="1"><mxGeometry x="1430" y="800" width="270" height="90" as="geometry"/></mxCell>
-        <mxCell id="uc-view-archive" value="月別Archiveを閲覧する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#7C3AED;fillColor=#F5F3FF;fontSize=13;" vertex="1" parent="1"><mxGeometry x="700" y="940" width="250" height="70" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-member-record" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#2563EB;" edge="1" parent="1" source="uc-actor-member" target="uc-record"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-member-balance" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#2563EB;" edge="1" parent="1" source="uc-actor-member" target="uc-balance"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-member-start" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#2563EB;" edge="1" parent="1" source="uc-actor-member" target="uc-start"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-member-review" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#2563EB;" edge="1" parent="1" source="uc-actor-member" target="uc-review"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-review-reject" value="&amp;lt;&amp;lt;extend&amp;gt;&amp;gt;" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;dashed=1;strokeColor=#DC2626;fontSize=11;" edge="1" parent="1" source="uc-reject" target="uc-review"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-reject-resubmit" value="理由を解消" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#16A34A;fontSize=11;" edge="1" parent="1" source="uc-reject" target="uc-resubmit"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1580" y="720"/><mxPoint x="330" y="720"/></Array></mxGeometry></mxCell>
-        <mxCell id="uc-edge-payee-request" value="請求" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#16A34A;fontSize=11;" edge="1" parent="1" source="uc-actor-payee" target="uc-request-payment"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-payer-report" value="支払申告" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#DC2626;fontSize=11;" edge="1" parent="1" source="uc-actor-payer" target="uc-report-payment"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-report-confirm" value="支払申告後" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#7C3AED;fontSize=11;" edge="1" parent="1" source="uc-report-payment" target="uc-confirm-receipt"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-payee-confirm" value="受取確認" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#7C3AED;fontSize=11;" edge="1" parent="1" source="uc-actor-payee" target="uc-confirm-receipt"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-member-group-b" value="並行入力" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#F59E0B;fontSize=11;" edge="1" parent="1" source="uc-actor-member" target="uc-add-group-b"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="uc-edge-member-view" value="閲覧" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#7C3AED;fontSize=11;" edge="1" parent="1" source="uc-actor-member" target="uc-view-archive"><mxGeometry relative="1" as="geometry"/></mxCell>
-
-        <mxCell id="section-domain" value="3. Domain Model" style="swimlane;html=1;startSize=42;rounded=1;strokeWidth=2;strokeColor=#16A34A;fillColor=#DCFCE7;fontSize=19;fontStyle=1;connectable=0;" vertex="1" parent="1"><mxGeometry x="30" y="1060" width="1740" height="620" as="geometry"/></mxCell>
-        <mxCell id="concept-household" value="&lt;b&gt;Household&lt;/b&gt;&lt;hr&gt;Member: T・Y&lt;br&gt;最大2人" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#2563EB;fillColor=#EFF6FF;fontSize=11;" vertex="1" parent="1"><mxGeometry x="60" y="1130" width="170" height="95" as="geometry"/></mxCell>
-        <mxCell id="concept-transaction" value="&lt;b&gt;Transaction&lt;/b&gt;&lt;hr&gt;支出額・実支払者&lt;br&gt;申請前はActive" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeColor=#0EA5E9;fillColor=#F0F9FF;fontSize=11;" vertex="1" parent="1"><mxGeometry x="280" y="1130" width="180" height="95" as="geometry"/></mxCell>
-        <mxCell id="concept-allocation" value="&lt;b&gt;Allocation&lt;/b&gt;&lt;hr&gt;負担するMember&lt;br&gt;合計＝支出額" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeColor=#0EA5E9;fillColor=#F0F9FF;fontSize=11;" vertex="1" parent="1"><mxGeometry x="510" y="1130" width="180" height="95" as="geometry"/></mxCell>
-        <mxCell id="concept-balance" value="&lt;b&gt;Settlement Balance&lt;/b&gt;&lt;hr&gt;実支払−本来負担&lt;br&gt;負数: Payer／正数: Payee&lt;br&gt;T＋Y＝0円" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#16A34A;fillColor=#F0FDF4;fontSize=11;" vertex="1" parent="1"><mxGeometry x="740" y="1120" width="220" height="110" as="geometry"/></mxCell>
-        <mxCell id="concept-case" value="&lt;b&gt;Settlement Case&lt;/b&gt;&lt;hr&gt;settlementCaseId&lt;br&gt;Transaction Group A&lt;br&gt;Payer・Payee・精算額&lt;br&gt;Group Aは変更不可" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#2563EB;fillColor=#EFF6FF;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1010" y="1110" width="260" height="125" as="geometry"/></mxCell>
-        <mxCell id="concept-snapshot" value="&lt;b&gt;Request Snapshot&lt;/b&gt;&lt;hr&gt;version: 1..*&lt;br&gt;requestedBy・requestedAt&lt;br&gt;取引集合・精算額&lt;br&gt;作成後は不変" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#16A34A;fillColor=#F0FDF4;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1320" y="1110" width="220" height="125" as="geometry"/></mxCell>
-        <mxCell id="concept-member" value="&lt;b&gt;Member Role&lt;/b&gt;&lt;hr&gt;Requester&lt;br&gt;Payer&lt;br&gt;Payee&lt;br&gt;Caseごとに決定" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeColor=#2563EB;fillColor=#EFF6FF;fontSize=11;" vertex="1" parent="1"><mxGeometry x="60" y="1330" width="170" height="115" as="geometry"/></mxCell>
-        <mxCell id="concept-group-b" value="&lt;b&gt;Active Group B&lt;/b&gt;&lt;hr&gt;Case後の新規取引&lt;br&gt;次回精算候補" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeColor=#F59E0B;fillColor=#FFFBEB;fontSize=11;" vertex="1" parent="1"><mxGeometry x="280" y="1335" width="180" height="95" as="geometry"/></mxCell>
-        <mxCell id="concept-decision" value="&lt;b&gt;Review Decision&lt;/b&gt;&lt;hr&gt;Approved / Rejected&lt;br&gt;却下理由は必須&lt;br&gt;却下版も保持" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeColor=#F59E0B;fillColor=#FFFBEB;fontSize=11;" vertex="1" parent="1"><mxGeometry x="510" y="1325" width="190" height="115" as="geometry"/></mxCell>
-        <mxCell id="concept-payment-request" value="&lt;b&gt;Payment Request&lt;/b&gt;&lt;hr&gt;Payeeが支払いを請求&lt;br&gt;Payee開始時に作成" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeColor=#16A34A;fillColor=#F0FDF4;fontSize=11;" vertex="1" parent="1"><mxGeometry x="750" y="1330" width="200" height="105" as="geometry"/></mxCell>
-        <mxCell id="concept-payment-report" value="&lt;b&gt;Payment Report&lt;/b&gt;&lt;hr&gt;Payerが外部支払完了を申告&lt;br&gt;Archive前に必須" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#DC2626;fillColor=#FEF2F2;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1000" y="1325" width="220" height="115" as="geometry"/></mxCell>
-        <mxCell id="concept-receipt" value="&lt;b&gt;Receipt Confirmation&lt;/b&gt;&lt;hr&gt;Payeeが受取を確認&lt;br&gt;確認Member・時刻&lt;br&gt;Archive成立条件" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#7C3AED;fillColor=#F5F3FF;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1270" y="1320" width="230" height="120" as="geometry"/></mxCell>
-        <mxCell id="concept-archive" value="&lt;b&gt;Archive&lt;/b&gt;&lt;hr&gt;Case ID＋Version&lt;br&gt;Payment Report＋Receipt Confirmation&lt;br&gt;月別閲覧／編集不可" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#7C3AED;fillColor=#F5F3FF;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1540" y="1315" width="200" height="125" as="geometry"/></mxCell>
-        <mxCell id="domain-invariants" value="Invariants: RequesterとPayer / Payeeは別Role｜Case IDは再申請でも同一｜Snapshotは不変で新版追加｜Payerの支払完了申告＋Payeeの受取確認でArchive成立" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#F59E0B;fillColor=#FFFBEB;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="240" y="1530" width="1320" height="70" as="geometry"/></mxCell>
-        <mxCell id="edge-household-member" value="1 : 2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;fontSize=10;" edge="1" parent="1" source="concept-household" target="concept-member"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-household-transaction" value="1 : 0..*" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;fontSize=10;" edge="1" parent="1" source="concept-household" target="concept-transaction"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-transaction-allocation" value="負担割当" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;fontSize=10;" edge="1" parent="1" source="concept-transaction" target="concept-allocation"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-allocation-balance" value="本来負担" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#16A34A;fontSize=10;" edge="1" parent="1" source="concept-allocation" target="concept-balance"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-balance-case" value="方向・金額" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeWidth=2;strokeColor=#2563EB;fontSize=10;" edge="1" parent="1" source="concept-balance" target="concept-case"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-case-snapshot" value="1 : 1..*" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#16A34A;fontSize=10;" edge="1" parent="1" source="concept-case" target="concept-snapshot"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-snapshot-decision" value="確認・却下" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#F59E0B;fontSize=10;" edge="1" parent="1" source="concept-snapshot" target="concept-decision"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1430" y="1270"/><mxPoint x="605" y="1270"/></Array></mxGeometry></mxCell>
-        <mxCell id="edge-snapshot-request" value="Payee開始" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#16A34A;fontSize=10;" edge="1" parent="1" source="concept-snapshot" target="concept-payment-request"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-request-report" value="Payerが支払う" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#DC2626;fontSize=10;" edge="1" parent="1" source="concept-payment-request" target="concept-payment-report"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-report-receipt" value="支払完了後" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeWidth=2;strokeColor=#7C3AED;fontSize=10;" edge="1" parent="1" source="concept-payment-report" target="concept-receipt"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-receipt-archive" value="受取確認で成立" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeWidth=2;strokeColor=#7C3AED;fontSize=10;" edge="1" parent="1" source="concept-receipt" target="concept-archive"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="edge-case-group-b" value="Case作成後" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#F59E0B;dashed=1;fontSize=10;" edge="1" parent="1" source="concept-case" target="concept-group-b"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1140" y="1480"/><mxPoint x="370" y="1480"/></Array></mxGeometry></mxCell>
-
-        <mxCell id="section-object" value="4. Object Examples" style="swimlane;html=1;startSize=42;rounded=1;strokeWidth=2;strokeColor=#7C3AED;fillColor=#EDE9FE;fontSize=19;fontStyle=1;connectable=0;" vertex="1" parent="1"><mxGeometry x="30" y="1700" width="1740" height="450" as="geometry"/></mxCell>
-        <mxCell id="obj1" value="&lt;b&gt;Case 1 — Tが支払側から開始&lt;/b&gt;&lt;hr&gt;T: 実支払60,000／本来負担70,000&lt;br&gt;T Balance −10,000（Requester / Payer）&lt;br&gt;Y Balance ＋10,000（Payee）&lt;br&gt;SC-TY-001 v1: T → Y 10,000円&lt;br&gt;&lt;br&gt;&lt;b&gt;Tが外部支払い・完了申告 → Yが受取確認 → Archive&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;strokeWidth=2;strokeColor=#DC2626;fillColor=#FEF2F2;fontSize=13;" vertex="1" parent="1"><mxGeometry x="60" y="1770" width="510" height="260" as="geometry"/></mxCell>
-        <mxCell id="obj2" value="&lt;b&gt;Case 2 — Tが受取側から開始&lt;/b&gt;&lt;hr&gt;T: 実支払70,000／本来負担60,000&lt;br&gt;T Balance ＋10,000（Requester / Payee）&lt;br&gt;Y Balance −10,000（Payer）&lt;br&gt;SC-TY-002 v1: Y → T 10,000円&lt;br&gt;&lt;br&gt;&lt;b&gt;Tが支払いを請求 → Yが外部支払い・完了申告 → Tが受取確認 → Archive&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;strokeWidth=2;strokeColor=#16A34A;fillColor=#F0FDF4;fontSize=13;" vertex="1" parent="1"><mxGeometry x="640" y="1770" width="530" height="260" as="geometry"/></mxCell>
-        <mxCell id="obj-retry" value="&lt;b&gt;却下・再申請 — Case IDを維持&lt;/b&gt;&lt;hr&gt;SC-TY-002 / v1: Tが請求&lt;br&gt;Rejected: 理由「支払いを確認できない」&lt;br&gt;SC-TY-002 / v2: 同じCaseへ新版を再申請&lt;br&gt;&lt;br&gt;v1は変更・削除しない&lt;br&gt;Yが支払完了を申告 → Tが受取確認 → v2をArchive&lt;br&gt;Case作成後の取引はGroup Bへ並行追加" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;strokeWidth=2;strokeColor=#F59E0B;fillColor=#FFFBEB;fontSize=13;" vertex="1" parent="1"><mxGeometry x="1240" y="1770" width="500" height="260" as="geometry"/></mxCell>
-        <mxCell id="object-common" value="共通: 申請者はCaseを開始するRole。Payer / Payeeは精算残高から決まり、Payerの支払完了申告とPayeeの受取確認が揃ったSnapshot版だけをArchiveする。" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#2563EB;fillColor=#EFF6FF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="190" y="2065" width="1420" height="55" as="geometry"/></mxCell>
-      </root>
-    </mxGraphModel>
-  </diagram>
+<mxfile host="65bd71144e">
+    <diagram id="sudo-warikann-20260822" name="SUDO Modeling">
+        <mxGraphModel dx="1862" dy="925" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1800" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="割り勘アプリ — SUDO Modeling（1ページ）" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=28;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="20" width="1200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="subtitle" value="Confirmed: 個人収支は対象外｜1〜4人・複数Group｜割合割り勘｜選択支出をSnapshot化｜Group全体で相殺｜Receipt ItemをCategory分類" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=13;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="58" width="1680" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="section-system" value="S: System Context" style="swimlane;html=1;startSize=38;rounded=0;strokeWidth=2;strokeColor=#000000;fillColor=#E6E6E6;fontSize=18;fontStyle=1;fontColor=#000000;connectable=0;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="95" width="1740" height="345" as="geometry">
+                        <mxRectangle x="30" y="95" width="190" height="40" as="alternateBounds"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="actor-user" value="利用者" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;strokeColor=#000000;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="205" width="45" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="actor-invitee" value="招待された人" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;strokeColor=#000000;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="330" width="45" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="system-boundary" value="割り勘アプリ" style="swimlane;html=1;startSize=34;rounded=0;strokeWidth=2;strokeColor=#000000;fillColor=#F2F2F2;fontSize=17;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="170" y="150" width="1240" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="cap-group" value="複数Groupを作る&lt;br&gt;1〜4人" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
+                    <mxGeometry x="30" y="58" width="185" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="cap-invite" value="招待・参加・脱退する" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
+                    <mxGeometry x="240" y="58" width="185" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="cap-expense" value="Group支出と&lt;br&gt;割合を記録する" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
+                    <mxGeometry x="450" y="58" width="185" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="cap-settlement" value="Snapshot申請・全員承認&lt;br&gt;Revision・完了月Archive" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
+                    <mxGeometry x="660" y="58" width="195" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="cap-payment" value="支払報告・受取確認&lt;br&gt;差し戻しを記録する" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
+                    <mxGeometry x="880" y="58" width="185" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="cap-receipt" value="OCR・Draft確認・Bundle化&lt;br&gt;全関連精算後に画像削除" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
+                    <mxGeometry x="135" y="148" width="225" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="cap-report" value="Group Category・候補Rule管理&lt;br&gt;購入日基準で月別集計" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
+                    <mxGeometry x="400" y="148" width="225" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="cap-export" value="CSV ZIPを即時生成・非保存&lt;br&gt;Group終了・二段階Retention" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
+                    <mxGeometry x="665" y="148" width="225" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="external-transfer" value="システム外の送金&lt;br&gt;アプリは資金移動しない" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1480" y="225" width="230" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-user-system" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;" parent="1" source="actor-user" target="system-boundary" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-invitee-system" value="招待を受諾" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="actor-invitee" target="system-boundary" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-system-transfer" value="誰が誰へいくら支払うか提示" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="system-boundary" target="external-transfer" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="section-usecase" value="U: Use Case Model" style="swimlane;html=1;startSize=38;rounded=0;strokeWidth=2;strokeColor=#000000;fillColor=#E6E6E6;fontSize=18;fontStyle=1;fontColor=#000000;connectable=0;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="460" width="1740" height="380" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-actor" value="Group Participant" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;strokeColor=#000000;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="600" width="50" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-create-group" value="Groupを作成する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="190" y="520" width="230" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-invite" value="招待する（Owner）&lt;br&gt;参加・脱退する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="470" y="520" width="230" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-expense" value="支出と割り勘率を記録する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="750" y="520" width="250" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-receipt" value="Receipt Draftを確認・修正して確定する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1050" y="520" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-plan" value="精算Snapshotを申請・承認・却下する" style="ellipse;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1380" y="520" width="270" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-pay-status" value="支払報告・受取確認・差し戻しを行う" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="700" width="230" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-monthly" value="購入月のCategory支出と&lt;br&gt;完了月の精算Archiveを確認" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="570" y="700" width="250" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-csv" value="Group DataをZIP・複数CSV出力する（Owner）" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="700" width="250" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-delete" value="精算後にGroupを終了する（Owner）" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1230" y="700" width="230" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-edge-1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#000000;" parent="1" source="uc-actor" target="uc-create-group" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-edge-2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#000000;" parent="1" source="uc-actor" target="uc-expense" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-edge-3" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#000000;" parent="1" source="uc-actor" target="uc-plan" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-edge-4" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#000000;" parent="1" source="uc-actor" target="uc-pay-status" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc-edge-5" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=none;strokeColor=#000000;" parent="1" source="uc-actor" target="uc-monthly" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="section-domain" value="D: Domain Model" style="swimlane;html=1;startSize=38;rounded=0;strokeWidth=2;strokeColor=#000000;fillColor=#E6E6E6;fontSize=18;fontStyle=1;fontColor=#000000;connectable=0;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="860" width="855" height="850" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-rule" value="&lt;b&gt;Confirmed Rules&lt;/b&gt;&lt;br&gt;・GroupにはOwnerが必ず1人。招待・Group終了・全体CSVはOwnerだけ。譲渡前のOwnerは脱退不可。&lt;br&gt;・割合は10%単位・0%可・合計100%。最大剰余方式、同率は実支払者を優先する。&lt;br&gt;・支出登録時の参加者・割合は固定。途中参加は過去支出へ影響せず、脱退後も既存精算責務は残る。&lt;br&gt;・Snapshotは関係者全員承認後に支払指示を有効化。却下理由必須、Rejectedは不変で新版を関連付ける。&lt;br&gt;・Settlement Caseの対象Expense ID集合は初回申請で固定し、新版でも追加・除外しない。新規Expenseは別Caseとする。&lt;br&gt;・Awaiting Approval中は対象ExpenseをLock。Rejected時だけSource Owner／Group Ownerが同じIDを履歴付き訂正し、新版を再計算する。&lt;br&gt;・新版の再申請は元申請者またはGroup Ownerだけ。元申請者が対応不能でもOwnerが同じCaseを引き継ぐ。&lt;br&gt;・Group全体で最少送金回数に相殺し、同数候補は支払側・受取側のGroup参加順で決定する。&lt;br&gt;・支払指示ごとに受取確認する。差し戻し理由と再試行を残し、部分支払は不可。&lt;br&gt;・Category集計はoccurredOn、Settlement Archive表示はarchivedAtの月を使う（Asia/Tokyo）。&lt;br&gt;・全支払指示の受取確認後にSnapshotをArchiveし、編集不可・月別参照可能とする。&lt;br&gt;・Group終了1年後に全業務Dataを削除し、最小削除証跡もさらに1年後にBatch削除する。" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#000000;fillColor=#F2F2F2;fontColor=#000000;fontSize=9;" parent="section-domain" vertex="1">
+                    <mxGeometry x="40" y="675" width="760" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-group" value="&lt;b&gt;Group&lt;/b&gt;&lt;hr&gt;Participant: 1..4 / Owner: 1&lt;br&gt;Active / Archived&lt;br&gt;archivedAt / deleteEligibleAt（1年後）" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="915" width="220" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-membership" value="&lt;b&gt;Membership / Invitation&lt;/b&gt;&lt;hr&gt;Role: Owner / Participant&lt;br&gt;参加順 / 参加・脱退時点&lt;br&gt;Active / Exited" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="930" width="230" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-expense" value="&lt;b&gt;Group Expense&lt;/b&gt;&lt;hr&gt;金額 / 実支払者 / occurredOn&lt;br&gt;Source Owner: 登録者 / Receipt Uploader&lt;br&gt;Rejected時: Source Owner／Group Ownerが訂正" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="610" y="930" width="230" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-allocation" value="&lt;b&gt;Split Allocation&lt;/b&gt;&lt;hr&gt;割合: 0〜100%・10%単位 / 合計100%&lt;br&gt;最大剰余方式&lt;br&gt;同率時: 実支払者 → Group参加順" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="610" y="1090" width="230" height="135" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-balance" value="&lt;b&gt;Participant Balance&lt;/b&gt;&lt;hr&gt;実支払額合計 − 負担額合計&lt;br&gt;Group合計 = 0円" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="1110" width="230" height="105" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-plan" value="&lt;b&gt;Settlement Case / Snapshot Revision&lt;/b&gt;&lt;hr&gt;Case ID / fixed Expense IDs / requester&lt;br&gt;Revision / previousSnapshotId&lt;br&gt;再申請: 元申請者 / Group Owner&lt;br&gt;Awaiting Approval → Rejected / Payment Active → Archived" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="1110" width="220" height="145" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-instruction" value="&lt;b&gt;Payment Instruction&lt;/b&gt;&lt;hr&gt;支払元 / 支払先 / 全額&lt;br&gt;未払い → 報告済み → 受取確認済み" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="1280" width="220" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-payment-attempt" value="&lt;b&gt;Payment Attempt&lt;/b&gt;&lt;hr&gt;支払報告 / 受取判定&lt;br&gt;差し戻し理由 / 再試行履歴" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="1430" width="220" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-receipt" value="&lt;b&gt;Receipt / Adjustment&lt;/b&gt;&lt;hr&gt;Draft / Confirmed / Locked&lt;br&gt;Adjustment: Item指定 / Receipt全体&lt;br&gt;全関連Expense精算後: image deleted" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="1270" width="230" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-item" value="&lt;b&gt;Receipt Item&lt;/b&gt;&lt;hr&gt;品名 / Category&lt;br&gt;調整前額 ± Adjustment = 調整後額" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="610" y="1280" width="230" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-category" value="&lt;b&gt;Category / Monthly Summary&lt;/b&gt;&lt;hr&gt;System標準 / Group専用 / 候補Rule&lt;br&gt;occurredOn（Asia/Tokyo）で月別集計&lt;br&gt;Inactive RuleはSystem分類へFallback" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="610" y="1440" width="230" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-summary" value="&lt;b&gt;Expense Bundle&lt;/b&gt;&lt;hr&gt;調整後Receipt Item: 1..*&lt;br&gt;実支払者 / Split Allocation&lt;br&gt;1 Bundle → 1 Group Expense" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="1425" width="230" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-edge-group-member" value="1 : 1..4" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;exitX=1;exitY=0.82;entryX=0;entryY=0.82;exitPerimeter=1;entryPerimeter=1;" parent="1" source="d-group" target="d-membership" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-edge-group-expense" value="1 : 0..*" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;exitX=0.5;exitY=0;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;" parent="1" source="d-group" target="d-expense" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="170" y="910"/>
+                            <mxPoint x="725" y="910"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="d-edge-expense-allocation" value="1 : 1..4" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="d-expense" target="d-allocation" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-edge-allocation-balance" value="負担額を集計" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="d-allocation" target="d-balance" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-edge-balance-plan" value="残高を固定" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="d-balance" target="d-plan" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-edge-expense-snapshot" value="選択 1..*" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;" parent="1" source="d-expense" target="d-plan" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="725" y="1060"/>
+                            <mxPoint x="170" y="1060"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="d-edge-plan-instruction" value="全必要承認者が承認 → 有効化" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="d-plan" target="d-instruction" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-edge-instruction-attempt" value="1 : 0..*" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="d-instruction" target="d-payment-attempt" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-edge-receipt-item" value="1 : 1..*" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="d-receipt" target="d-item" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-edge-item-category" value="分類" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="d-item" target="d-category" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="d-edge-category-summary" value="各Itemは1 Bundle" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;" parent="1" source="d-item" target="d-summary" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="725" y="1400"/>
+                            <mxPoint x="445" y="1400"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="d-edge-bundle-expense" value="確定 1 : 1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;" parent="1" source="d-summary" target="d-expense" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="585" y="1475"/>
+                            <mxPoint x="585" y="980"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="section-object" value="O: Object Model / Concrete Examples" style="swimlane;html=1;startSize=38;rounded=0;strokeWidth=2;strokeColor=#000000;fillColor=#E6E6E6;fontSize=18;fontStyle=1;fontColor=#000000;connectable=0;" parent="1" vertex="1">
+                    <mxGeometry x="915" y="860" width="855" height="850" as="geometry"/>
+                </mxCell>
+                <mxCell id="o-group" value="&lt;b&gt;Group: 仕事仲間の飲み会&lt;/b&gt;&lt;hr&gt;archivedAt: 2026-08-22 → Group削除: 2027-08-22&lt;br&gt;Tombstone: deletionToken / deletedAt / reason / jobRunId / outcome&lt;br&gt;tombstoneDeleteEligibleAt: 2028-08-22 → 証跡削除" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="950" y="910" width="350" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="o-expenses" value="&lt;b&gt;未精算Expenseから選択&lt;/b&gt;&lt;hr&gt;E1: Aが9,000円支払 / A・B・Cが各1/3負担&lt;br&gt;E2: Bが6,000円支払 / A・B・Cが各1/3負担&lt;br&gt;E3: 開始後に登録 → 今回は対象外" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1350" y="920" width="370" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="o-balances" value="&lt;b&gt;Participant Balance&lt;/b&gt;&lt;hr&gt;A: +4,000円（受取）&lt;br&gt;B: +1,000円（受取）&lt;br&gt;C: −5,000円（支払）&lt;br&gt;合計: 0円" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="950" y="1100" width="350" height="145" as="geometry"/>
+                </mxCell>
+                <mxCell id="o-plan" value="&lt;b&gt;Settlement Case: SC1 / Snapshot Revision&lt;/b&gt;&lt;hr&gt;固定対象: E1・E2&lt;br&gt;R1: requester=A / E1=8,700円。C却下 → Rejected・旧値保持&lt;br&gt;Source Owner AがE1を8,700円→9,000円へ履歴付き訂正&lt;br&gt;R2: requester=AまたはGroup Owner。訂正後に再計算・全員承認&lt;br&gt;→ Payment Active / PI-1 C→A 4,000円 / PI-2 C→B 1,000円&lt;br&gt;全受取確認 archivedAt: 2026-09-02 → 9月Archive&lt;br&gt;Approval待ちに追加されたE3は別Caseで精算" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1350" y="1080" width="370" height="185" as="geometry"/>
+                </mxCell>
+                <mxCell id="o-receipt" value="&lt;b&gt;Receipt: スーパー / Receipt全体値引き −50円&lt;/b&gt;&lt;hr&gt;調整前: レタス110円 / トマト240円 / ペーパー200円&lt;br&gt;値引配賦: −10円 / −22円 / −18円（最大剰余）&lt;br&gt;調整後: 100円 / 218円 / 182円&lt;br&gt;Bundle-1 食費318円 → GE3 / A40%・B30%・C30%&lt;br&gt;Bundle-2 備品182円 → GE4 / A50%・B50%・C0%" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="950" y="1310" width="400" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="o-summary" value="&lt;b&gt;2026-08 Monthly Category Summary&lt;/b&gt;&lt;hr&gt;occurredOn: 2026-08-22（登録・精算月は不使用）&lt;br&gt;標準: 食費 318円 / 備品 182円 / 合計500円&lt;br&gt;Rule: スーパー+レタス → 食費（次回候補・要確認）&lt;br&gt;occurredOnを9月へ修正 → 8月から除外し9月へ再集計" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1410" y="1320" width="310" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="o-open" value="&lt;b&gt;境界Example&lt;/b&gt;&lt;br&gt;端数: 1,001円 × 30% / 30% / 40% → &lt;b&gt;300円 / 300円 / 401円&lt;/b&gt;。同率50%は実支払者Aへ1円 → &lt;b&gt;A 501円 / B 500円&lt;/b&gt;&lt;br&gt;参加: A・BでE0登録 → C参加後もE0は変更しない。B脱退後も既存責務は残し、新しいExpenseから除外する。&lt;br&gt;精算案同数: A・Bが各+5,000円、C・Dが各−5,000円 → 参加順により &lt;b&gt;C→A、D→B&lt;/b&gt;を採用する。&lt;br&gt;CSV ZIP: 8 CSV（Category定義・Suggestion Rule含む）を即時生成。Receipt画像・生成済みZIPは非保存。" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="970" y="1505" width="730" height="135" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend" value="凡例: 実線 = Confirmed Concept / Rule　　破線 = Proposed Term または次工程で詳細化するConcept" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=12;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="970" y="1650" width="730" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="o-edge-group-expenses" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;" parent="1" source="o-group" target="o-expenses" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="o-edge-expenses-balances" value="集計" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;" parent="1" source="o-expenses" target="o-balances" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1535" y="1070"/>
+                            <mxPoint x="1125" y="1070"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="o-edge-balances-plan" value="Group全体で相殺" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="o-balances" target="o-plan" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="o-edge-receipt-summary" value="Category別に月次集計" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="o-receipt" target="o-summary" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
 </mxfile>
