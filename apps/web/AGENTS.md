@@ -40,7 +40,7 @@
 
 - 表示と純粋な変換はUnit／Component Testで検証する。
 - 操作可能な共通UIやDomain WidgetはStorybook＋MSW＋Interaction＋Accessibility Testの対象とする。
-- 認証、世帯切替、取引、割勘、精算、削除・復元の主要利用経路はPlaywright E2Eで検証する。
+- 認証、Group切替、Group Expense、割り勘、Settlement申請・承認、支払報告・受取確認、Archive参照の主要利用経路はPlaywright E2Eで検証する。
 - Frontend TestだけでBackendのDomain Rule検証を代替しない。
 
 <!-- BEGIN:nextjs-agent-rules -->

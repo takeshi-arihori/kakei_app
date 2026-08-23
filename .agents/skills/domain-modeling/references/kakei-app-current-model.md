@@ -257,8 +257,8 @@
 
 ## Known Conflict
 
-- Notionの2026-08-19更新節は2人限定・個人用家計・単一Payer／Payeeを前提としており、2026-08-22の最新指示と矛盾する。
-- `docs/engineering/domain-design.md`の最大4人は人数だけ一致するが、Household／個人収支／既存Settlement Aggregateなどの意味は再検証が必要。
-- Receipt、Receipt Item、画像解析、Item Category分類は既存Notion Scopeに存在せず、新しいProduct／Domain／Privacy Decisionが必要。
-- Accepted Product DecisionとArchive ADR Proposalは複数人精算の結果に応じて更新またはSupersedeする必要がある。
+- Notionの2026-08-19以前の節には2人限定・個人用家計・単一Payer／Payeeの履歴が残るが、各Page先頭の2026-08-23現行節が置き換える。
+- RepositoryのREADME、AGENTS、engineering docsは2026-08-23の共有割り勘Scopeへ同期済み。旧語はDeprecatedな前提を説明する場合だけ使用する。
+- Aggregate境界、Bounded Context、Data Owner、永続化、Event Sourcing／CQRS、Projection境界は未確定であり、関連ADRのAcceptedが必要。
+- Property付きProject／Epic／Task／ADR管理先が未確定のため、Ready判定とTraceabilityは引き続きBlockされる。
 - Conflictを実装で吸収しない。

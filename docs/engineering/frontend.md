@@ -16,7 +16,7 @@ Frontendが担当する:
 Frontendが担当しない:
 
 - Domain Invariant、認可の最終判断、DB Access
-- 残高、Split、Pairwise Debt、月次集計の正本計算
+- Split Allocation、Participant Balance、Payment Instruction、月次Category集計の正本計算
 - SessionやTokenの独自保存・発行
 - Prisma Model、Backend Aggregate、Backend Domain Serviceの共有
 - GraphQL Response型の手書き
@@ -29,9 +29,10 @@ Client側で同じRuleを入力支援として計算する場合も、Server側�
 apps/web/src/
   app/                       Route、Layout、Server Component、画面組立
   features/
-    transactions/            components、graphql、hooks、schemas
+    groups/                  components、graphql、hooks、schemas
+    expenses/
     settlements/
-    households/
+    receipts/
   shared/
     ui/
       primitives/            Button、Input、Dialog
@@ -39,6 +40,8 @@ apps/web/src/
     graphql/
     lib/
 ```
+
+Feature名は責務例であり、TaskのBounded ContextやAggregateを先に確定するものではない。
 
 - Domain固有UIとOperationは該当Featureへ置く。
 - 複数Featureで意味と変更理由が同じUI・基盤だけを`shared`へ置く。
@@ -75,7 +78,7 @@ apps/web/src/
 - Conflict: 最新Versionと再確認
 - Network Error: 入力保持、同一Key再送、Cancel
 
-金額、日付、口座、Category、Member、割勘のClient Validationは即時Feedbackを目的とする。Server ErrorをField Errorへ安全に対応付け、未知Errorを握り潰さない。
+金額、`occurredOn`、Category、Participant、Split AllocationのClient Validationは即時Feedbackを目的とする。Server ErrorをField Errorへ安全に対応付け、未知Errorを握り潰さない。
 
 ## アクセシビリティ・利用体験
 
@@ -85,7 +88,7 @@ apps/web/src/
 - 色だけで収支、Warning、Errorを区別しない。
 - 44px相当のTouch Target、200% Zoom、Reduced Motionを確認する。
 - 破壊的操作は影響、復元可否、猶予、再認証要否を実行前に示す。
-- 世帯種別、端数の割当先、自動計算の根拠を文字でも確認できるようにする。
+- Group Role、端数の割当先、Participant Balance、Payment Instructionの導出根拠を文字でも確認できるようにする。
 
 ## コンポーネントテスト
 
@@ -96,6 +99,7 @@ apps/web/src/
 
 ## 参照元
 
-- [03 画面一覧・画面遷移](https://app.notion.com/p/39a06467984f813aa316f8c58ca83067)
-- [04 UX・UI設計](https://app.notion.com/p/39a06467984f81cfbf6ae95ee9cc9fce)
-- [08 アプリケーション・インフラアーキテクチャ](https://app.notion.com/p/39a06467984f811c9461c0bb6bddbdb9)
+- [ユーザージャーニー・ユースケース](https://app.notion.com/p/3a906467984f817a9a5ac19b4be025bd)
+- [03. UX・情報設計](https://app.notion.com/p/3a906467984f81b7bce7e1ada5416f0f)
+- [ドメイン設計](https://app.notion.com/p/3a906467984f80728058c839a403e6f0)
+- [未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)

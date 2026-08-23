@@ -32,4 +32,6 @@ GraphQL Operation／Result型を手書きせず、Repository rootで`pnpm codege
 - UIの表示制御でServer側の認可を代替しない
 - API、Form、表示状態を分離する
 
+現行Scopeは共有Groupの割り勘です。個人用家計、口座、収入Transaction、日付境界Archiveを現行画面の前提にしません。
+
 詳細は[`AGENTS.md`](AGENTS.md)とRepository rootの[開発ガイド](../../docs/engineering/README.md)を参照してください。

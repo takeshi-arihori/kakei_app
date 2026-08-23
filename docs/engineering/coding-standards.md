@@ -48,7 +48,7 @@
 
 - Password、JWT、Cookie、Refresh Token、OAuth Code、金融Memo、暗号鍵をLog、Sentry、Fixtureへ出さない。
 - Input全体やGraphQL Variablesを安易にLogしない。
-- Household Dataを取得・更新するQueryは`household_id`でScopeし、Application認可とRepository条件の両方で守る。
+- Group Dataを取得・更新するQueryは認可済みGroupの識別子でScopeし、Application認可とRepository条件の両方で守る。永続化上のKey名はAcceptedなData設計に従う。
 - Clientの表示制御、Resolver Guard、Cloudflare通過だけを認可の正本にしない。
 - Random TokenやKeyは暗号学的に安全な生成器を使い、平文保存しない。
 - SecretはEnvironment／Secret Managerから受け取り、RepositoryとContainer Imageへ含めない。
@@ -70,6 +70,7 @@
 
 ## 参照元
 
-- [08 アプリケーション・インフラアーキテクチャ](https://app.notion.com/p/39a06467984f811c9461c0bb6bddbdb9)
-- [09 セキュリティ・プライバシー・監査設計](https://app.notion.com/p/39a06467984f8146bd2ccadf82529e6a)
-- [10 開発ルール・Notion運用](https://app.notion.com/p/39a06467984f81ceadc7c3da95dfed68)
+- [04. アーキテクチャ・非機能](https://app.notion.com/p/3a906467984f809f8332c8a274e0bcc6)
+- [セキュリティ設計](https://app.notion.com/p/3a906467984f80f9b9b6d8b52d8b0f7f)
+- [開発ガバナンス](https://app.notion.com/p/3a906467984f8020a381dbac214c7e7f)
+- [未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)
