@@ -5,7 +5,7 @@ description: 家計アプリの要求・業務知識から、System Context、Us
 
 # Domain Modeling
 
-ドメインエキスパートとAIが同じ概念・具体例・業務ルールを参照しながら、問題領域への理解を反復的に深める。
+ドメインエキスパートとAIが同じ問題・概念・具体例・業務ルールを参照しながら、問題解決に必要な側面を選び、理解を反復的に深める。
 
 ## 正本を確認する
 
@@ -47,6 +47,7 @@ EntityやAggregateを考える前に、次を整理する。
 - 解決する問題
 - 問題を持つ利用者・Actor
 - Systemが提供する成果
+- 問題を解決できたと判断する観測可能な結果
 - 対象範囲と対象外
 - 外部System
 - 現時点の制約
@@ -62,6 +63,8 @@ System ContextにはDB、Framework、Class、Tableを入れない。
 ### 3. Use Caseを整理する
 
 Actorごとに、業務上のGoalを中心としてUse Caseを抽出する。
+
+Use Caseは機能一覧ではなく、解決する問題を具体化し、今回のモデリング範囲を区切るために使う。Sessionでは対象Use Caseまたは対象範囲を明示し、際限なくConceptを広げない。
 
 各Use Caseについて最低限次を整理する。
 
@@ -103,6 +106,8 @@ Domain Modelでは次を整理する。
 - Constraint / Invariant候補
 - Lifecycle
 
+図や表には代表的なAttributeだけを載せ、Method一覧や永続化詳細を中心にしない。Business RuleとConstraintは、どのConceptまたはRelationshipへ適用されるか追跡できる形で結び付ける。
+
 この段階でAggregate境界を確定しない。Invariantと整合性要求が十分に確認された後で候補として検討する。
 
 ### 6. Ubiquitous Languageを整える
@@ -130,9 +135,15 @@ Domain Modelでは次を整理する。
 
 `Proposed`や`Assumption`をConfirmedとして扱わない。
 
-### 8. モデルを反証する
+### 8. モデルを反証し、Feedbackを戻す
 
 正常例だけでなく、境界・競合・取消・再試行・過去変更などの具体例をモデルへ当てる。
+
+既存実装または運用実績がある場合は、Model上のTerm・Rule・Lifecycleがどこへ表現されているかを対応付ける。対応できない、複数箇所へ分散している、技術都合の形へ置換されている場合は、Modelまたは実装へのFeedbackとして記録する。
+
+Repositoryは現行実装のEvidenceであり、Domain上の正しさの根拠ではない。既存実装へ合わせてModelを歪めず、このSkillの中でCode変更へ進まない。
+
+最初から完成を目指さず、小さなScopeを短いCycleで`Model → Example / Existing Implementation → Discovery → Model`と往復する。初稿は素早く書き換えられる粗い表現でよく、意味が安定してから清書する。
 
 次が起きたら前のPhaseへ戻る。
 
@@ -151,7 +162,7 @@ Domain Modelでは次を整理する。
 2. System Context
 3. Use Cases
 4. Concrete Examples / Object Model
-5. Domain Concepts / Domain Model
+5. Domain Concepts / Domain Model（既存実装がある場合は対応・乖離も併記）
 6. Business Rules / Invariants
 7. Ubiquitous Language
 8. Confirmed Decisions

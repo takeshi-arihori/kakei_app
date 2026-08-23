@@ -4,6 +4,8 @@
 
 ドメインモデリングは、Software Patternを当てはめる作業ではなく、対象Domainの問題・概念・Ruleを理解し、変更に耐えられる共通言語を形成する活動とする。
 
+Domain Modelは現実を網羅的に写すものではない。解決する問題に関係する側面を意図的に選んだ抽象であり、良し悪しは図の整然さやPatternの数ではなく、対象の問題を説明・検証・解決できるかで判断する。
+
 ## Concrete First, Abstract Later
 
 抽象概念だけで議論を進めず、必ず具体例へ戻る。
@@ -20,6 +22,19 @@
 Domain Modelは確定仕様ではなく、現時点のDomain理解を表す仮説である。
 
 新しい事実が判明した場合は、Use Case、Object Example、Domain Model、Ubiquitous Languageを同時に見直す。
+
+初稿から清書しない。複数の視点を素早く出して書き換えられる粗いModelから始め、意味が安定した後に正本へ反映する。
+
+## Keep Model, Implementation, and Operation in a Feedback Loop
+
+既存実装または運用実績がある場合は、Modelと双方向に照合する。
+
+- ModelのTerm・Rule・Lifecycleが実装のどこに表現されているか確認する
+- 実装から得た制約や運用上の発見を、Modelの反例またはQuestionとして戻す
+- 対応が不明、分散、または技術語へ置換されている箇所をFeedbackとして記録する
+- 小さなScopeでModelingと検証を短く往復し、失敗を早く発見する
+
+ModelとCodeの形を機械的に同一にすることが目的ではない。Domain上の意味を追跡でき、変更時に相互の影響を説明できることを目指す。Repositoryは現行実装のEvidenceであり、それだけでDomain RuleをConfirmedへ昇格させない。
 
 ## Domain Knowledge Must Have Evidence
 
@@ -83,3 +98,14 @@ Aggregate候補を決める前に、最低限次を確認する。
 - Transactional Consistencyの必要範囲
 
 画面単位、Table単位、API Mutation単位を理由にAggregateを決めない。
+
+## Source Notes
+
+このGuideは次の発表から、問題解決のための抽象、Use CaseによるScope設定、粗い初稿、Modelと実装・運用のFeedback Loopを採用している。
+
+- [DDDオンライン勉強会 #1「モデリング/実装入門」— Modelと良いModel（30:48〜）](https://www.youtube.com/watch?v=19Gbx9jWLdc&t=1848s)
+- [同 — Use CaseとDomain Model図（53:13〜）](https://www.youtube.com/watch?v=19Gbx9jWLdc&t=3193s)
+- [同 — ModelとCodingの反復（2:00:14〜）](https://www.youtube.com/watch?v=19Gbx9jWLdc&t=7214s)
+- [同 — 短いCycleでのModeling（3:07:54〜）](https://www.youtube.com/watch?v=19Gbx9jWLdc&t=11274s)
+
+発表内ではDomain Model図作成時にAggregateも決める方法が紹介されているが、このSkillではInvariantとConsistency RequirementのEvidenceが揃った時点でのみAggregate候補を判断する。
