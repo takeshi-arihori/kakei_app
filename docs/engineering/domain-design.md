@@ -1,120 +1,132 @@
 # ドメイン設計ルール
 
-## 目的
+## 目的とKnowledge State
 
-DDDは、業務上重要なRuleをDB、Prisma、GraphQL、Honoの都合ではなく、ユビキタス言語とDomain Modelで表現するために使う。EntityやRepositoryを置くこと自体を目的にしない。
+DDDは、共有割り勘の業務RuleをDB、Prisma、GraphQL、Honoの都合ではなく、ユビキタス言語とDomain Modelで表現するために使う。EntityやRepositoryを置くこと自体を目的にしない。
 
-## 戦略的設計
+この文書は実装時の設計ルールであり、業務仕様の正本ではない。業務概念と不変条件はNotionの[ドメイン設計](https://app.notion.com/p/3a906467984f80728058c839a403e6f0)先頭にある「現行ドメインモデル（2026-08-23）」を正本とする。
 
-- Core DomainはTransaction、Split Allocation、Settlement、共有家計の追跡可能性とする。
-- Bounded ContextはMVPのModular Monolith内の論理境界であり、Microservice境界ではない。
-- Context内のModelを他Contextへ共有しない。Context間はID、Published Language、Port、Integration Eventで連携する。
-- 同じ言葉がContextごとに異なる意味を持つ場合、共通型へ統合せずContext内の言葉を優先する。
-- 業務理解が変わったら、用語、Context Map、Aggregate、Event、Test、図を同時に見直す。
+- Confirmed: 共有GroupのProduct Scope、主要Concept、Notionで確認済みのBusiness Rule／Invariant
+- Pending Decision: Bounded Context、Aggregate境界、Data Owner、永続化、Event Sourcing／CQRS、Projection境界
+- Deprecated: 個人用Household、Account、収入Transaction、日付境界Archive、2人限定の単一Payer／Payeeモデル
+
+Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repositoryを作らない。関連ADRがAcceptedとなり、NotionとRepositoryが同期されるまで実装Readyへ進めない。
+
+## 現行ScopeとCore Domain
+
+- Productは1〜4人のParticipantで構成するGroup内の共有割り勘を扱う。
+- 個人だけの収入・支出管理、金融口座、アプリ内送金は扱わない。
+- Core Domainは、Group ExpenseへParticipant別の負担割合を定め、Group全体で残高を相殺し、誰が誰へいくら支払うかと支払確認を追跡すること。
+- Receipt ItemのCategory分類と購入月の集計、Settlement Archiveの完了月表示、Group終了後のRetentionを扱う。
+
+## ユビキタス言語
+
+実装、Test、Schema、PRではNotionの[用語定義](https://app.notion.com/p/3a906467984f818b8a84d0b559cb6676)に合わせる。
+
+| Term | 意味 |
+| --- | --- |
+| Group | 共有割り勘Dataの境界。1〜4人で構成し、個人収支を持たない |
+| Participant | Groupへ参加して共有支出・精算を扱う主体 |
+| Group Owner | ActiveなGroupに必ず1人いる管理者 |
+| Group Expense | 実支払者とSplit Allocationを持つ共有支出 |
+| Split Allocation | Participant別の10%単位の負担割合。0%可、合計100% |
+| Participant Balance | 実支払額合計から負担額合計を引いた値。Group合計は0円 |
+| Settlement Case | 同じ対象Expense ID集合を却下・訂正・再申請にわたり追跡する単位 |
+| Snapshot Revision | Expense内容、Balance、Payment Instruction候補、必要承認者を固定した不変の版 |
+| Payment Instruction | 全必要承認者の承認後に有効になる支払指示 |
+| Payment Attempt | 支払報告、受取確認・差し戻し、再試行の履歴 |
+| Settlement Archive | 全受取確認後に月別参照可能かつ編集不可になったSnapshot |
+
+`Household`、`Transaction`、`Member`を現行概念の同義語として機械的に使わない。Migrationや旧履歴を説明する場合は、Deprecatedな旧語であることを明示する。
+
+## 確認済みのRuleとInvariant
+
+- ActiveなGroupは1〜4人で、Ownerを常に1人だけ持つ。
+- Group ExpenseのSplit Allocationは10%単位、0%可、合計100%とする。
+- JPY負担額は最大剰余方式で配賦し、同率時は実支払者、対象外ならGroup参加順で一意に決める。
+- Group Expense登録時のParticipant、実支払者、Split Allocation、負担額を過去事実として保持する。途中参加・脱退で書き換えない。
+- Settlement Caseの対象Expense ID集合は初回申請で固定し、新Revisionで追加・除外しない。
+- Snapshot Revisionは変更・削除しない。必要承認者全員の承認前にPayment Instructionを有効化しない。
+- Rejected時だけ、Source OwnerまたはGroup Ownerが同じExpense IDを変更履歴付きで訂正できる。旧Revisionは訂正前の値を保持する。
+- 新Revisionは元申請者またはGroup Ownerだけが申請し、必要承認者全員が改めて承認する。
+- Payment Instructionは全額の支払報告と受取確認を追跡し、差し戻し理由と再試行を履歴として残す。部分支払は許可しない。
+- 全Payment Instructionの受取確認後だけSnapshotをArchiveでき、Archive後は編集できない。
+- 月別Category集計はAsia/Tokyoの`occurredOn`、Settlement Archiveの所属月はAsia/Tokyoの`archivedAt`で判定する。
+
+未確定Ruleは[GitHub Issue #9](https://github.com/takeshi-arihori/kakei_app/issues/9)と[未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)で追跡する。一般論や旧実装から推測してConfirmedへ昇格させない。
 
 ## Modelの選択
 
-### 値オブジェクト
+### Value Object候補
 
-次を満たす値をValue Objectにする。
+次を満たす値をValue Object候補として検討する。
 
 - 同一性ではなく値の等価性で比較する。
-- Money、OccurredOn、AccountName、IdempotencyKeyのように業務上の名前と制約を持つ。
-- 生成後はImmutableである。
-- FactoryまたはConstructorで常に妥当な状態だけを生成する。
-- Primitiveへ戻す処理は永続化やPresentationなど境界で行う。
+- Money、OccurredOn、Allocation Rate、Idempotency Keyのように業務上の名前と制約を持つ。
+- Immutableとして扱え、生成時に常に妥当な状態だけを作れる。
+- Primitiveへ戻す処理は永続化やPresentationなど境界へ限定できる。
 
-Moneyは整数AmountとCurrencyを持つ。MVPのCurrencyはJPYで、収入・支出・精算は0円より大きく、負数でTransaction Typeを表さない。
+MoneyはJPYの1円単位整数で扱う。割合計算へfloating pointを使わず、最大剰余方式とTie-breakを決定的に実装する。
 
-### エンティティ
+### Entity候補
 
-- Lifecycleを通じた同一性を持つ業務概念に使う。
-- IDだけのData Holderにせず、状態変更を業務語彙のMethodとして表す。
-- Public setterを避け、Invariantを破る中間状態を外へ公開しない。
+- Lifecycleを通じた同一性を追跡する業務概念へ使う。
+- IDだけのData Holderにせず、状態変更を業務語彙の振る舞いとして表す。
 - Prisma ModelやGraphQL TypeをEntityとして再利用しない。
+- Current NotionにConceptがあることだけでEntityまたはAggregateへ確定しない。
 
-### 集約
+### Aggregate候補
 
-- 同一Transactionで必ず守るInvariantの最小境界にする。
-- 外部からの変更入口をAggregate Rootへ限定する。
-- RepositoryはAggregate Root単位で保存・復元する。
-- Aggregate間参照はObjectではなくIDを基本とする。
-- 画面、GraphQL Mutation、Tableのまとまりを理由にAggregateを大きくしない。
+Aggregateは同一TransactionでInvariantを守る必要がある最小境界として、次が揃ってから判断する。
 
-採用済み境界:
+- 対象Invariantと整合性要求
+- Lifecycleと変更単位
+- 同時更新、競合、取消、再試行のRule
+- Failure時に一緒にRollbackすべき範囲
+- 他Conceptとの参照・所有関係
 
-| Aggregate | Persistence | 主なInvariant |
-| --- | --- | --- |
-| Household | State | 共有世帯最大4人、Ownerは常に1人、移譲は受諾後に成立 |
-| FinancialAccount | State | Household所属、Opening BalanceとBalance Dateの組、過去参照維持 |
-| Transaction 1件 | Event Sourcing | JPY整数、Allocation合計、Transfer口座差、削除・復元条件 |
-| Settlement 1件 | Event Sourcing | PayerとPayeeの差、正金額、取消Lifecycle |
+画面、GraphQL Mutation、Table、既存Classを理由にAggregate境界を決めない。現時点で採用済みAggregate一覧はない。
 
-HouseholdへAccount、Transaction、Settlementを内包しない。Account Balance、Monthly Summary、Pairwise Debtは複数Aggregateを跨ぐRead Model／Projectionとする。
+### Bounded Context候補
 
-### Domain ServiceとPolicy
+同一語の意味、Business Capability、Ruleの所有者、変更理由、Data Ownershipが異なる場合に境界候補を検討する。旧Repositoryにある`Household`、`Account`、`Transaction`、`Settlement`等のContext名をそのまま現行モデルへ持ち込まない。MicroserviceやDirectoryを先に作らず、Accepted ADRでContext Mapと連携契約が確定してから反映する。
 
-- 1つのEntityやValue Objectへ自然に属さないStatelessなDomain RuleだけをDomain Serviceへ置く。
-- Application Serviceを「Entityへ置きたくない処理」の退避先にしない。
-- Accountの有効性、Membership、Category、Balance DateなどContext間の検証はApplication層がPortで取得して調整する。
-- Settlement上限はPairwise Debtを参照する集約間Policyであり、Settlement単体のInvariantに偽装しない。
+## Domain ServiceとPolicy
 
-## 単一責任
+- 1つのEntity／Value Objectへ自然に属さないStatelessなDomain RuleだけをDomain Service候補とする。
+- Aggregateを跨ぐRule、認可、Read Model導出、Application Coordinationを1つのDomain Serviceへ集約しない。
+- Group全体の相殺とPayment Instruction導出は、具体例、決定性、計算量、整合性境界を確認して配置を決める。
+- Participant、Category、Receipt、Settlement間の所有権は未確定であり、Application層やPortへ仮置きして既成事実化しない。
 
-責任は「変更理由」で判断する。
+## Eventと永続化
 
-- Aggregate: 業務Invariantが変わる理由
-- Application Handler: Use Caseの順序・認可・Transaction境界が変わる理由
-- Resolver: GraphQL契約やPresentationが変わる理由
-- Repository Adapter: 永続化方式が変わる理由
-- Projector: 1つのRead Modelの導出Ruleが変わる理由
+Event Sourcing、CQRS、Projection、Outbox、Snapshotの適用対象は未確定である。旧ADRの「TransactionとSettlementだけ」を現行モデルへ適用しない。
 
-1つのClassが複数の変更理由を持つ場合は分割する。ただし、行数やMethod数だけを理由に細分化しない。Invariantを守るために一緒に変わる振る舞いはAggregate内へ凝集させる。
+Accepted ADRでEvent Sourcingを採用する場合も、次を守る。
 
-## ドメインイベント
-
-- 既に起きた業務上の事実を過去形で命名する。
-- Immutableで、AggregateのDecisionを再現できる非機密Dataだけを持つ。
-- `event_id`、Aggregate ID／Type／Version、Event Type、Schema Version、Occurred At、Actor、Household、Command、Correlation、CausationをMetadataとして扱う。
-- Timestamp、ID、外部参照値はApplicationからCommandへ渡し、Domain内で暗黙生成しない。
-- 内部Domain EventをそのままIntegration Eventとして公開しない。
-- Audit Logは「誰が何を試み、どう終わったか」、Outboxは配送作業Dataであり、Domain Eventと別概念とする。
-
-## イベントソーシング
-
-適用対象はTransactionとSettlementだけとする。他Contextへ拡張する場合はADRが必要。
-
-基本形:
-
-1. Stored EventまたはSnapshot＋残EventからAggregateを復元する。
-2. Commandを`decide`し、新しいDomain EventまたはDomain Errorを得る。
-3. Eventを`evolve`／`apply`して次状態を得る。
-4. expectedVersion付きでEventをappendする。
-5. 同期Projection更新とOutbox登録を同じPostgreSQL Transactionで確定する。
-
-ルール:
-
-- `decide`は現在状態とCommandだけに依存し、I/Oを行わない。
-- `evolve`はEventだけから決定的に状態を更新する。
-- 同じEvent列は常に同じ状態へ復元される。
-- Event payload変更にはSchema VersionとUpcasterを用意する。
-- Snapshotは正本ではなく、破損時にEventから再生成できる派生Dataとする。
-- 機密平文をEvent、Snapshot、Outbox、Logへ含めない。必要時はRandomなPayload Referenceだけを保持する。
+- Domain Event、Stored Event、Integration Event、Audit Log、Outbox Messageを別概念として扱う。
+- Eventは既に起きた業務上の事実を過去形で表し、Immutableな非機密Dataだけを持つ。
+- `decide`はI/Oを行わず、Event適用は決定的にする。
+- Event Schema変更へVersionと互換性方針を持たせる。
+- 技術的Snapshotを、業務上のSnapshot Revisionと混同しない。
+- Event、Snapshot、Outbox、Logへ機密平文を保存しない。
 
 ## 設計レビュー
 
 実装前に次を答えられること。
 
-- どのBounded ContextとAggregateがData Ownerか。
-- RuleはAggregate内Invariantか、Aggregate間Policyか、表示用Ruleか。
-- EntityとValue Objectの選択理由は何か。
-- Command、Domain Event、Read Model、Portは業務語彙になっているか。
-- 同時更新、二重送信、再試行、削除・復元でInvariantが守られるか。
-- Security、Audit、完全削除、Projection Rebuildへどんな影響があるか。
+- 対象RuleがNotionのどの現行節に根拠を持つか。
+- 旧語・旧Scope・未確定Decisionを現行仕様として混入させていないか。
+- Data Owner、Aggregate、Context、永続化方式はAccepted ADRで確定しているか。
+- RuleはAggregate内Invariant、Aggregate間Policy、認可、Application Coordination、Read Model、Presentationのどれか。
+- 同時更新、二重送信、却下、再申請、差し戻し、再試行、Archive、RetentionでInvariantが守られるか。
+- Security、Audit、物理削除、再構築へどんな影響があるか。
 
 ## 参照元
 
-- [05 DDD・Context Map・ユビキタス言語](https://app.notion.com/p/39a06467984f81e98cd2d669dc900b43)
-- [06 ドメインモデル・集約・UML](https://app.notion.com/p/39a06467984f81b3b495f6ee2126fac5)
-- [ADR-0001: Transaction・Settlement限定のEvent Sourcing](https://app.notion.com/p/39a06467984f812a9bfcf43cbdb9584f)
-- [ADR-0004: 同期Projection＋Transactional Outbox](https://app.notion.com/p/39a06467984f810e9319c6adafb1b5db)
+- [Requirement・Scope](https://app.notion.com/p/3a906467984f8180a7f3e4220eeaa47a)
+- [業務内容・業務ルール](https://app.notion.com/p/3a906467984f8015b763fe95859ea6ec)
+- [用語定義](https://app.notion.com/p/3a906467984f818b8a84d0b559cb6676)
+- [ドメイン設計](https://app.notion.com/p/3a906467984f80728058c839a403e6f0)
+- [Accepted Product Decision](https://app.notion.com/p/3aa06467984f81169fdcc7d5e19c5b02)
+- [未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)

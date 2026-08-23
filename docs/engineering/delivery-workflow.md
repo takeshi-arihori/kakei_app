@@ -7,9 +7,11 @@ Notion Project → Notion Epic → Notion Task → Branch → プルリクエス
 ```
 
 - NotionをProject、Epic、Task、仕様、設計、ADR、進捗の正本とする。
-- Proposed／Accepted／Rejected／Superseded ADRは[Notion ADRデータベース](https://app.notion.com/p/ee7f69fb97de41a6976a2f5ea4b3d0c6)だけで管理する。
+- Proposed／Accepted／Rejected／Superseded ADRはNotionの[ADR](https://app.notion.com/p/3a906467984f81db8dd8d8603a207191)だけで管理する。
 - Epic、Task、ADRの起票・状態管理はNotionだけで行う。
 - Pull Requestは1つのTaskを検証可能な差分として届ける。
+
+Property付きProject／Epic／Task／ADR管理先は再構築中である。[未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)のDC-003／DC-005が解消するまで、削除状態の旧Databaseを現行管理先として使わず、TaskをReadyへ移したことにしない。
 
 ## Epic起票ルール
 
@@ -76,7 +78,7 @@ StatusはInbox → 要件整理中 → Ready → Doing → Review → Doneを基
 - 保守作業: `chore/notion-task-id-short-description`
 - `develop`を統合Branchとし、Pull Requestを経由する。
 - `develop`への直接Pushと`main` Branchの作成・Pushを禁止する。
-- Conventional Commitsを使う。例: `feat(transaction): add split allocation command`
+- Conventional Commitsを使う。例: `feat(group-expense): add split allocation command`
 - Commitはレビュー可能な論理単位にし、Refactorと無関係な整形を混ぜない。
 - Secret、個人情報、生成された大容量成果物をCommitしない。
 
@@ -99,7 +101,7 @@ Notion変更が権限・承認待ちの場合は、古い仕様のままPRを作
 | --- | --- |
 | Requirement／MVP範囲 | 要求整理、要件定義、Epic／Task |
 | Domain Rule／Aggregate | DDD、UML、State／Sequence、Unit Test |
-| Domain／Integration Event | UML、Event Schema、Upcaster、Projection／Rebuild |
+| Domain／Integration Event | UML、Event Schema、互換性、採用時のUpcaster／Projection／Rebuild |
 | GraphQL | 要件、生成Schema、Operation、Error、移行方針 |
 | Prisma／Migration／Index | ER図、Migration、Expand／Contract、Rollback／Forward-fix |
 | 画面／Navigation／Form | 画面一覧・遷移、UX/UI、Accessibility、Story／E2E |
@@ -120,7 +122,7 @@ Notion変更が権限・承認待ちの場合は、古い仕様のままPRを作
 
 ## ADR
 
-- ADRの唯一の正本は[Notion ADRデータベース](https://app.notion.com/p/ee7f69fb97de41a6976a2f5ea4b3d0c6)とし、RepositoryへADR本文を複製しない。
+- ADRの唯一の正本はNotionの[ADR](https://app.notion.com/p/3a906467984f81db8dd8d8603a207191)とし、RepositoryへADR本文を複製しない。
 - Epic／Taskの起票・変更、仕様／設計／Runbookの変更、PR前の文書影響確認で、`方針変更: なし／あり`を必ず判定する。
 - `あり`または不明の場合は、既存ADRで判断済みかを確認し、未決ならStatus `Proposed`のADRを起票してProjectと関連Taskを紐付ける。
 - Accepted ADR、新しいBounded Context、DB、Cloud Service、Runtime／配置構成、Event Sourcing対象、認証・認可・Security／Privacy方式、API Protocol／Schema正本、Context間連携、不可逆または高コストな運用判断の変更はADRを必須とする。
@@ -144,8 +146,8 @@ Notion変更が権限・承認待ちの場合は、古い仕様のままPRを作
 
 ## 参照元
 
-- [10 開発ルール・Notion運用](https://app.notion.com/p/39a06467984f81ceadc7c3da95dfed68)
-- [Projects](https://app.notion.com/p/c82d4f26f61740daa7aac6ea871851d7)
-- [Epics](https://app.notion.com/p/455e474085f8467db95a42575f41073e)
-- [Tasks／Kanban](https://app.notion.com/p/a0f48a55ef7b42e5a629a8e967a1739a)
-- [Architecture Decision Records](https://app.notion.com/p/ee7f69fb97de41a6976a2f5ea4b3d0c6)
+- [開発ガバナンス](https://app.notion.com/p/3a906467984f8020a381dbac214c7e7f)
+- [07. 品質・デリバリー・運用](https://app.notion.com/p/3a906467984f801a8e9bc92116c5cdf6)
+- [08. 設計変更・意思決定](https://app.notion.com/p/3a906467984f810b8ac7d4d416cc5296)
+- [ADR](https://app.notion.com/p/3a906467984f81db8dd8d8603a207191)
+- [未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)

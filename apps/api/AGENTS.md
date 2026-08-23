@@ -21,20 +21,20 @@
 - Domain Serviceは1つのEntity／Value Objectへ自然に属さないStatelessなDomain Ruleだけに使う。
 - Context間のRuleはApplication Policyと明示的なPortで調整し、他ContextのTableやEntityを直接操作しない。
 
-## イベントソーシング
+## Event・永続化
 
-- Event Sourcing対象はTransactionとSettlementだけとする。
-- Aggregateは過去Eventから復元し、Commandに対して新しいEventまたはDomain Errorを返す。
+- Event Sourcing、CQRS、Projection、Outboxの適用対象は未確定であり、旧Transaction／Settlementの範囲を採用済みとして扱わない。
+- Accepted ADRでEvent Sourcingを採用したAggregateだけ、過去Eventから復元し、Commandに対して新しいEventまたはDomain Errorを返す。
 - `decide`と`evolve`／`apply`を分離し、Aggregate内でI/O、現在時刻取得、乱数生成を行わない。
 - Event名は既に起きた業務事実を過去形で表し、Immutableかつ非機密にする。
 - Domain Event、Stored Event、Integration Event、Audit Log、Outbox Messageを同一型にしない。
-- appendはexpectedVersionで競合検知し、同期ProjectionとOutbox登録を同一PostgreSQL Transactionで確定する。
-- Snapshotは派生Dataとし、Event全再生と同じ状態になることをTestする。
+- 採用時はappendをexpectedVersionで競合検知し、Accepted ADRが要求するAtomicityを守る。
+- 技術的Snapshotを業務上のSnapshot Revisionと混同しない。採用時は派生Dataとし、Event全再生と同じ状態になることをTestする。
 
 ## テスト
 
 - Domain RuleはDBやHonoを使わない高速なUnit Testから始める。
-- Event Sourcing AggregateはGiven Event／When Command／Then Event or Errorで検証する。
-- Repository、Event Store、Projection、Outbox、Migration、冪等性は実PostgreSQLのIntegration Testで検証する。
+- Event Sourcingを採用したAggregateはGiven Event／When Command／Then Event or Errorで検証する。
+- 採用済みのRepository、Event Store、Projection、Outbox、Migration、冪等性を実PostgreSQLのIntegration Testで検証する。
 - GraphQL Testでは認証、認可、Validation、Error契約、Pagination、Complexity、N+1を確認する。
-- Money、Split、Transaction／Settlement Aggregate、認可PolicyのCritical Branchは100%を目標とする。
+- Money、Split Allocation、Participant Balance／Payment Instruction導出、Settlement Lifecycle、認可PolicyのCritical Branchは100%を目標とする。

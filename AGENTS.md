@@ -25,20 +25,16 @@
 - InfrastructureはDomainまたはApplicationが定義したPortを実装する。
 - Prisma Model、DTO、GraphQL Type、Domain Modelを同一型として共有しない。
 - Contextを跨ぐ直接参照を避け、IDまたは明示的なPort・公開契約を使用する。
-- Event SourcingとCQRSはTransactionとSettlementだけに適用する。
 - Domain Event、Integration Event、Stored Event、Audit Log、Outbox Messageを区別する。
 - Event、Snapshot、Logへ機密平文を保存しない。
 
-境界づけられたコンテキスト（コード上の識別名）:
+現行Product Scopeと設計Gate:
 
-- 認証・アクセス（`Identity & Access`）
-- 世帯（`Household`）
-- 口座（`Account`）
-- 取引（`Transaction`）
-- 精算（`Settlement`）
-- 集計・参照（`Reporting`）
-- 監査・プライバシー（`Audit & Privacy`）
-- 外部連携（`Integration`、将来）
+- 業務Domainは1〜4人のGroupで行う共有割り勘に限定し、個人収支を扱わない。
+- 現行の主要語はGroup、Participant、Group Expense、Split Allocation、Settlement Case、Snapshot Revision、Payment Instruction、Payment Attempt、Settlement Archiveとする。
+- 個人用Household、Account、収入Transaction、日付境界Archive、単一Payer／Payeeを現行仕様として実装しない。
+- Bounded Context、Aggregate、Data Owner、Event Sourcing／CQRS適用範囲は未確定である。Accepted ADRへ同期されるまで、旧Context一覧や旧Aggregate境界を採用済みDecisionとして扱わない。
+- 未確定の設計判断に依存するTaskをReadyまたは実装へ進めない。
 
 ## 実装手順
 
@@ -87,4 +83,4 @@
 - Frontend責務: [frontend.md](docs/engineering/frontend.md)
 - TDD・品質保証: [testing.md](docs/engineering/testing.md)
 - Epic／Task／Git／PR前文書更新: [delivery-workflow.md](docs/engineering/delivery-workflow.md)
-- ADR: [Notion ADRデータベース](https://app.notion.com/p/ee7f69fb97de41a6976a2f5ea4b3d0c6)
+- ADR・未確定事項: [08. 設計変更・意思決定](https://app.notion.com/p/3a906467984f810b8ac7d4d416cc5296)
