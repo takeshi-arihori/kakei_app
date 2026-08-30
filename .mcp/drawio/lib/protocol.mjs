@@ -89,7 +89,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: 'drawio_update',
     title: 'Update draw.io diagram',
-    description: 'Apply typed operations to a supported uncompressed draw.io file. Removing a node also removes connected edges.',
+    description: 'Apply typed operations while preserving untouched XML structure in a supported uncompressed draw.io file. Removing a node also removes connected edges.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,

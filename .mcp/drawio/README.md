@@ -93,7 +93,7 @@ raw XMLではなく、`name / nodes / edges`のDiagram Specificationとして返
 
 ### `drawio_update`
 
-既存Diagramを読み込んでからtyped operationを適用します。
+既存Diagramを読み込んでからtyped operationを適用します。既存Elementの更新では、対象のtyped fieldだけを書き換え、Page設定、親子関係、未変更Attribute、`alternateBounds`などの未変更XML構造を保持します。
 
 利用可能なoperation:
 
@@ -128,6 +128,7 @@ unsupportedなFileを無理に編集せず、validation errorとして返しま�
 - 書込みはtemporary fileからrenameする
 - Node / Edge IDの重複を拒否する
 - 存在しないNodeへのEdge参照を拒否する
+- 既存Elementの更新で未変更のXML構造を保持する
 - Tool ErrorはMCPの`isError: true`として返す
 
 ## Test
@@ -142,6 +143,7 @@ node --test .mcp/drawio/test/*.test.mjs
 - serialize / parse round trip
 - accidental overwrite防止
 - Node削除時のEdge整合性
+- 既存Page設定、親子関係、`alternateBounds`、未知のGeometry要素の保持
 - modern / legacy handshake
 - tools/list / tools/call
 - MCP Tool Error

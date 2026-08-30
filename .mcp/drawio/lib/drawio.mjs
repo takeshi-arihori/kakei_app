@@ -140,6 +140,155 @@ export function serializeDiagram(diagramInput) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<mxfile host="app.diagrams.net" agent="kakei-drawio-mcp" version="1.0">\n  <diagram name="${escapeXml(diagram.name)}" id="page-1">\n    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0" darkMode="0">\n      <root>\n        <mxCell id="0" />\n        <mxCell id="1" parent="0" />\n${content}${content ? '\n' : ''}      </root>\n    </mxGraphModel>\n  </diagram>\n</mxfile>\n`;
 }
 
+function replaceOrInsertAttribute(tag, name, value) {
+  const escapedValue = escapeXml(value);
+  const pattern = new RegExp(`(\\s${name}=")[^"]*(")`);
+  if (pattern.test(tag)) {
+    return tag.replace(pattern, (_match, before, after) => `${before}${escapedValue}${after}`);
+  }
+
+  const closingLength = tag.endsWith('/>') ? 2 : 1;
+  const insertionPoint = tag.length - closingLength;
+  return `${tag.slice(0, insertionPoint)} ${name}="${escapedValue}"${tag.slice(insertionPoint)}`;
+}
+
+function parseCellRecords(xml) {
+  const records = new Map();
+  const cellPattern = /<mxCell\b([^>]*?)(?:\/>|>([\s\S]*?)<\/mxCell>)/g;
+  for (const match of xml.matchAll(cellPattern)) {
+    const attrs = parseAttributes(match[1]);
+    if (!attrs.id) continue;
+    records.set(attrs.id, {
+      attrs,
+      start: match.index,
+      end: match.index + match[0].length,
+      raw: match[0]
+    });
+  }
+  return records;
+}
+
+function patchCellOpeningTag(raw, attributes) {
+  const openingMatch = raw.match(/^<mxCell\b[^>]*(?:\/>|>)/);
+  if (!openingMatch) throw new DrawioError('UNSUPPORTED_XML', 'mxCell opening tag could not be read');
+
+  let opening = openingMatch[0];
+  for (const [name, value] of Object.entries(attributes)) {
+    opening = replaceOrInsertAttribute(opening, name, value);
+  }
+  return opening + raw.slice(openingMatch[0].length);
+}
+
+function patchNodeCell(raw, node) {
+  const patched = patchCellOpeningTag(raw, { value: node.label, style: node.style });
+  const geometryMatch = patched.match(/<mxGeometry\b[^>]*(?:\/>|>)/);
+  if (!geometryMatch) throw new DrawioError('UNSUPPORTED_XML', `node ${node.id} has no mxGeometry`);
+
+  let geometry = geometryMatch[0];
+  for (const [name, value] of Object.entries({
+    x: node.x,
+    y: node.y,
+    width: node.width,
+    height: node.height
+  })) {
+    geometry = replaceOrInsertAttribute(geometry, name, value);
+  }
+  return patched.slice(0, geometryMatch.index) + geometry + patched.slice(geometryMatch.index + geometryMatch[0].length);
+}
+
+function patchEdgeCell(raw, edge) {
+  return patchCellOpeningTag(raw, {
+    value: edge.label,
+    style: edge.style,
+    source: edge.source,
+    target: edge.target
+  });
+}
+
+function serializeNodeCell(node, indent) {
+  return `${indent}<mxCell id="${escapeXml(node.id)}" value="${escapeXml(node.label)}" style="${escapeXml(node.style)}" vertex="1" parent="1">\n` +
+    `${indent}  <mxGeometry x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" as="geometry" />\n` +
+    `${indent}</mxCell>\n`;
+}
+
+function serializeEdgeCell(edge, indent) {
+  return `${indent}<mxCell id="${escapeXml(edge.id)}" value="${escapeXml(edge.label)}" style="${escapeXml(edge.style)}" edge="1" parent="1" source="${escapeXml(edge.source)}" target="${escapeXml(edge.target)}">\n` +
+    `${indent}  <mxGeometry relative="1" as="geometry" />\n` +
+    `${indent}</mxCell>\n`;
+}
+
+function hasSameFields(left, right, fields) {
+  return fields.every((field) => left[field] === right[field]);
+}
+
+function patchDiagramXml(xml, currentDiagram, updatedDiagram) {
+  const records = parseCellRecords(xml);
+  const currentNodes = new Map(currentDiagram.nodes.map((node) => [node.id, node]));
+  const currentEdges = new Map(currentDiagram.edges.map((edge) => [edge.id, edge]));
+  const updatedNodes = new Map(updatedDiagram.nodes.map((node) => [node.id, node]));
+  const updatedEdges = new Map(updatedDiagram.edges.map((edge) => [edge.id, edge]));
+  const replacements = [];
+
+  const diagramMatch = xml.match(/<diagram\b[^>]*>/);
+  if (!diagramMatch) throw new DrawioError('UNSUPPORTED_XML', 'diagram opening tag could not be read');
+  const patchedDiagramTag = replaceOrInsertAttribute(diagramMatch[0], 'name', updatedDiagram.name);
+  if (patchedDiagramTag !== diagramMatch[0]) {
+    replacements.push({
+      start: diagramMatch.index,
+      end: diagramMatch.index + diagramMatch[0].length,
+      replacement: patchedDiagramTag
+    });
+  }
+
+  for (const [id, current] of currentNodes) {
+    const record = records.get(id);
+    if (!record) throw new DrawioError('UNSUPPORTED_XML', `node cell not found: ${id}`);
+    const updated = updatedNodes.get(id);
+    if (updated && hasSameFields(current, updated, ['label', 'x', 'y', 'width', 'height', 'style'])) continue;
+    replacements.push({
+      start: record.start,
+      end: record.end,
+      replacement: updated ? patchNodeCell(record.raw, updated) : ''
+    });
+  }
+
+  for (const [id, current] of currentEdges) {
+    const record = records.get(id);
+    if (!record) throw new DrawioError('UNSUPPORTED_XML', `edge cell not found: ${id}`);
+    const updated = updatedEdges.get(id);
+    if (updated && hasSameFields(current, updated, ['source', 'target', 'label', 'style'])) continue;
+    replacements.push({
+      start: record.start,
+      end: record.end,
+      replacement: updated ? patchEdgeCell(record.raw, updated) : ''
+    });
+  }
+
+  const newNodes = updatedDiagram.nodes.filter((node) => !currentNodes.has(node.id));
+  const newEdges = updatedDiagram.edges.filter((edge) => !currentEdges.has(edge.id));
+  if (newNodes.length || newEdges.length) {
+    const rootClosingMatch = xml.match(/^(\s*)<\/root>/m);
+    if (!rootClosingMatch) throw new DrawioError('UNSUPPORTED_XML', 'root closing tag could not be read');
+    const cellIndent = `${rootClosingMatch[1]}  `;
+    const additions = [
+      ...newNodes.map((node) => serializeNodeCell(node, cellIndent)),
+      ...newEdges.map((edge) => serializeEdgeCell(edge, cellIndent))
+    ].join('');
+    replacements.push({
+      start: rootClosingMatch.index,
+      end: rootClosingMatch.index,
+      replacement: additions
+    });
+  }
+
+  replacements.sort((left, right) => right.start - left.start);
+  let patched = xml;
+  for (const replacement of replacements) {
+    patched = patched.slice(0, replacement.start) + replacement.replacement + patched.slice(replacement.end);
+  }
+  return patched;
+}
+
 function parseAttributes(text) {
   const attributes = {};
   const pattern = /([A-Za-z_:][A-Za-z0-9_.:-]*)="([^"]*)"/g;
@@ -160,7 +309,7 @@ export function parseDiagram(xml) {
     const attrs = parseAttributes(match[1]);
     if (!attrs.id || attrs.id === '0' || attrs.id === '1') continue;
     const inner = match[2] ?? '';
-    const geometryMatch = inner.match(/<mxGeometry\b([^>]*)\/>/);
+    const geometryMatch = inner.match(/<mxGeometry\b([^>]*?)(?:\/>|>)/);
     const geometry = geometryMatch ? parseAttributes(geometryMatch[1]) : {};
     cells.push({ attrs, geometry });
   }
@@ -316,11 +465,25 @@ export function applyOperations(diagramInput, operations) {
 }
 
 export async function updateDiagramFile({ rootDirectory, requestedPath, operations }) {
-  const current = await readDiagramFile({ rootDirectory, requestedPath });
-  const updated = applyOperations(current.diagram, operations);
   const filePath = resolveSafeDrawioPath(rootDirectory, requestedPath);
-  await atomicWrite(filePath, serializeDiagram(updated));
-  return { path: current.path, diagram: updated, validation: validateDiagramXml(serializeDiagram(updated)) };
+  const xml = await readLimited(filePath);
+  const validation = validateDiagramXml(xml);
+  if (!validation.valid) throw new DrawioError('INVALID_DRAWIO', validation.errors.join('; '));
+
+  const currentDiagram = parseDiagram(xml);
+  const updated = applyOperations(currentDiagram, operations);
+  const patchedXml = patchDiagramXml(xml, currentDiagram, updated);
+  const patchedValidation = validateDiagramXml(patchedXml);
+  if (!patchedValidation.valid) {
+    throw new DrawioError('INVALID_DRAWIO', patchedValidation.errors.join('; '));
+  }
+
+  await atomicWrite(filePath, patchedXml);
+  return {
+    path: path.relative(path.resolve(rootDirectory), filePath),
+    diagram: updated,
+    validation: patchedValidation
+  };
 }
 
 export async function validateDiagramFile({ rootDirectory, requestedPath }) {
