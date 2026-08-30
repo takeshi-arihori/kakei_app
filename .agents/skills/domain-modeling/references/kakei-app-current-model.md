@@ -1,6 +1,6 @@
 # 家計アプリ 現行モデリング引き継ぎ
 
-最終更新: 2026-08-23
+最終更新: 2026-08-29
 
 このFileは、セッションを跨いでモデリングを再開するための探索入口である。要求・業務知識・設計判断の正本はNotion、最新判断は利用者の明示指示である。作業開始時にNotionを読み、差分があればこのFileも更新する。
 
@@ -14,7 +14,7 @@
 - [Accepted Product Decision: 家計履歴アーカイブへサービス方針を変更する](https://app.notion.com/p/3aa06467984f81169fdcc7d5e19c5b02)
 - [未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)
 
-## 2026-08-22 Scope Change（最新の利用者指示）
+## 2026-08-22 Scope Change（現行Scopeの基礎）
 
 - 業務Domainは共有Group内の割り勘に限定し、個人だけの収支管理は扱わない。
 - 1人でGroupを作成でき、招待された利用者が参加すると共有・割り勘を開始できる。
@@ -29,6 +29,37 @@
 この変更は、2026-08-19時点の「T・Yの2人限定」「個人用家計」「2人間の単一Payer／Payee」を置き換える。2026-08-23にNotion各Pageの先頭へ最新確定節を同期済みで、旧節は判断履歴として残している。
 
 ## Confirmed Decisions
+
+### Awaiting Approvalの申請取り下げ（2026-08-29 Confirmed）
+
+- 1〜4人のGroup Scopeを維持する。
+- 必要承認者は、選択Expenseの実支払者またはSplit Allocationが0%より大きいParticipantからSnapshot Revision作成時に導出して固定し、Awaiting Approval中に選び直さない。
+- 最新RevisionがAwaiting ApprovalまたはRejectedのSettlement Caseは、元申請者または現在のGroup Ownerが理由付きでCase全体をWithdrawできる。
+- Withdrawn Caseは終端とし、Snapshot Revision、記録済みApproval、却下、訂正履歴を保持して固定Expense全件を解放する。一部解放、同じCaseの再開・再申請は許可しない。
+- Awaiting ApprovalからのWithdrawは承認成立を意味せず、Payment Instructionを有効化しない。必要なら解放後のExpenseから別Caseを開始する。
+- Approved／Payment Active後はWithdrawの対象外とし、Payment Attempt開始前のCancellation Ruleを適用する。
+
+具体例:
+
+- A・B・Cが必要承認者のR1でAとBが承認し、Cが応答不能になった場合、元申請者または現在のGroup Ownerは理由付きでCase全体をWithdrawできる。R1とA・BのApproval履歴を保持し、対象Expense全件を別Caseへ解放する。Cを必要承認者から外してR1を承認成立させることはできない。
+
+### Issue #9で確定したLifecycle・Retention（2026-08-24 Confirmed）
+
+- Receipt Draftは最終編集から30日後を削除可能時刻とし、閲覧だけでは期限を延長しない。
+- 期限到達後のRetention Batchは、Draft、OCR結果、Receipt Item候補、Receipt画像を再実行可能かつ冪等に削除する。Group終了時の未確定Draftも次回Batchで削除する。
+- 最新RevisionがAwaiting ApprovalまたはRejectedのSettlement Caseは、元申請者または現在のGroup Ownerが理由付きで全体を取り下げられる。CaseはWithdrawnで終了し、Snapshot・承認・却下・訂正履歴を保持したまま、固定Expense全件を別Caseへ解放する。一部だけの解放とWithdrawn Caseの再申請は許可しない。
+- Rejected後のExpense訂正と新Revision再申請は、CaseとExpenseの期待する版が一致する場合だけ成立する。先に成立した操作を採用し、後続操作は部分反映せず競合として失敗させる。同一操作の再送で二重訂正・二重Revisionを作らない。
+- 選択ExpenseのParticipant Balanceが全員0円ならPayment Instructionを作らない。通常と同じ必要承認者が内容を承認し、全員承認時にPayment Activeを経由せず`No Payment Required`として直接Archiveする。申請者だけが必要承認者なら申請時に即時Archiveする。
+- Payment Active後の取消はPayment Attemptが1件もない場合だけ可能とする。元申請者または現在のGroup Ownerが理由付きで申請し、必要承認者全員が同意するまでCancellation Pendingとして新しい支払報告を禁止する。拒否時はPayment Activeへ戻り、全員同意時はCancelledで終了してExpense全件を解放する。
+- Cancelled CaseのSnapshot・承認・取消履歴は保持する。解放後のExpenseはSource OwnerまたはGroup Ownerが履歴付き訂正でき、別Caseへ選択できる。Payment Attemptが1件でも存在するCaseの一部取消・全体取消は許可しない。
+- Settlement Archive成立後はSnapshot、対象Expense、Approval、Payment Instruction、Payment Attemptを再開・取消・訂正しない。MVPではArchive後の補正機能を提供せず、必要になった場合は過去を上書きしない補正記録を別Product Decision／Taskとして設計する。
+
+具体例:
+
+- 2026-08-03に最後に編集したReceipt Draftは2026-09-02以降のBatchで削除対象となる。2026-08-20に閲覧しただけでは期限を延長しない。
+- 3 ExpenseのRejected Caseを1 Expense訂正後にWithdrawすると、3件すべてを訂正後の現行状態で別Caseへ選択できる。
+- 1,000円のExpenseを1,200円へ訂正中に旧版から再申請した場合、訂正が先に成立すれば再申請は競合で失敗する。
+- AとBがそれぞれ1,000円を立て替えて双方50%負担なら両者のBalanceは0円となり、両者承認後に送金なしでArchiveする。
 
 ### Groupと金額
 
@@ -93,6 +124,7 @@
 - 精算申請を追跡する安定したSettlement Case IDを発行し、Case配下へ不変なSettlement Snapshot Revisionを関連付ける。
 - Snapshot作成時に、選択Expense、Expense内容、Participant Balance、Payment Instruction候補、必要承認者を固定する。
 - 必要承認者は、選択Expenseの実支払者またはSplit Allocationが0%より大きいParticipantとする。
+- 必要承認者はSnapshot Revision作成時に固定し、Awaiting Approval中に選び直さない。
 - 申請者が必要承認者でもある場合は、申請操作を本人の承認として記録する。他の必要承認者は算出額と支払先を個別に承認または却下する。
 - Settlement ApprovalにはParticipant、承認／却下、決定時刻を記録し、却下時は理由を必須とする。
 - 1人でも却下したRevisionはRejectedとなり、Payment Instructionを有効化しない。
@@ -241,24 +273,24 @@
 - DとOを往復し、具体例を作れない概念は理解不足としてOpen Questionへ戻す。
 - Lifecycleや分岐が複雑な場合だけ、状態遷移図、業務フロー図、シーケンス図を補助的に使う。
 
-## Open Questions
+## Resolved Questions and Remaining Design Gates
 
-次回は一度に確定せず、具体例を置いて順番に深掘りする。
+Issue #9で扱った5項目は2026-08-24にすべて利用者確認済みとなった。Domain RuleとしてのOpen Questionは残っていない。
 
-1. 未確定のまま放置されたReceipt Draftと画像をいつ削除するか。
-2. Rejectedのまま継続しないSettlement Caseを取り下げられるか。その場合、固定していたExpenseを別Caseへ解放するか。
-3. Source Ownerの訂正と元申請者／Group Ownerの再申請が同時に行われた場合の競合Rule。
-4. 選択Expenseの相殺結果が0円でPayment Instructionが存在しない場合の承認・Archive Flow。
-5. Payment Active後の取消、およびArchive成立後の再開・訂正を許可するか。
+実装Ready前に残る設計Gate:
+
+1. Bounded Context、Aggregate、Data Owner、Event Sourcing／CQRS、Projection境界を新しい共有割り勘Scopeで決める。
+2. 旧「Transaction限定Event Sourcing／日付境界Archive」を前提とするADR ProposalをそのままAcceptedにせず、現行Scopeに対応するADR Proposalを作成する。
+3. Property付きProject／Epic／Task／ADR管理先を確定し、Decision CheckとRelated ADRを追跡可能にする。
 
 継続Tracker: [GitHub Issue #9](https://github.com/takeshi-arihori/kakei_app/issues/9)
 
-2026-08-23時点の判断は、Requirement・Scope、業務内容・業務ルール、用語定義、ユーザージャーニー・ユースケース、ドメイン設計、Accepted Product Decision、未確定事項・Documentation Conflictの各Notion Pageへ同期済み。
+2026-08-29時点の判断は、Requirement・Scope、業務内容・業務ルール、用語定義、ユーザージャーニー・ユースケース、ドメイン設計、Accepted Product Decision、未確定事項・Documentation Conflictの各Notion Pageへ同期済み。
 
 ## Known Conflict
 
 - Notionの2026-08-19以前の節には2人限定・個人用家計・単一Payer／Payeeの履歴が残るが、各Page先頭の2026-08-23現行節が置き換える。
 - RepositoryのREADME、AGENTS、engineering docsは2026-08-23の共有割り勘Scopeへ同期済み。旧語はDeprecatedな前提を説明する場合だけ使用する。
-- Aggregate境界、Bounded Context、Data Owner、永続化、Event Sourcing／CQRS、Projection境界は未確定であり、関連ADRのAcceptedが必要。
+- Issue #9のDomain Ruleは確定したが、Aggregate境界、Bounded Context、Data Owner、永続化、Event Sourcing／CQRS、Projection境界は未確定であり、現行Scopeに対応するADRのAcceptedが必要。
 - Property付きProject／Epic／Task／ADR管理先が未確定のため、Ready判定とTraceabilityは引き続きBlockされる。
 - Conflictを実装で吸収しない。

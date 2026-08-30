@@ -33,7 +33,7 @@
                 <mxCell id="cap-expense" value="Group支出と&lt;br&gt;割合を記録する" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
                     <mxGeometry x="450" y="58" width="185" height="65" as="geometry"/>
                 </mxCell>
-                <mxCell id="cap-settlement" value="Snapshot申請・全員承認&lt;br&gt;Revision・完了月Archive" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
+                <mxCell id="cap-settlement" value="Snapshot申請・承認・取下げ&lt;br&gt;Revision・取消・完了月Archive" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
                     <mxGeometry x="660" y="58" width="195" height="65" as="geometry"/>
                 </mxCell>
                 <mxCell id="cap-payment" value="支払報告・受取確認&lt;br&gt;差し戻しを記録する" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="system-boundary" vertex="1">
@@ -78,7 +78,7 @@
                 <mxCell id="uc-receipt" value="Receipt Draftを確認・修正して確定する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
                     <mxGeometry x="1050" y="520" width="280" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="uc-plan" value="精算Snapshotを申請・承認・却下する" style="ellipse;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                <mxCell id="uc-plan" value="精算Caseを申請・承認・却下・取り下げる" style="ellipse;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
                     <mxGeometry x="1380" y="520" width="270" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="uc-pay-status" value="支払報告・受取確認・差し戻しを行う" style="ellipse;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
@@ -111,7 +111,7 @@
                 <mxCell id="section-domain" value="D: Domain Model" style="swimlane;html=1;startSize=38;rounded=0;strokeWidth=2;strokeColor=#000000;fillColor=#E6E6E6;fontSize=18;fontStyle=1;fontColor=#000000;connectable=0;" parent="1" vertex="1">
                     <mxGeometry x="30" y="860" width="855" height="850" as="geometry"/>
                 </mxCell>
-                <mxCell id="d-rule" value="&lt;b&gt;Confirmed Rules&lt;/b&gt;&lt;br&gt;・GroupにはOwnerが必ず1人。招待・Group終了・全体CSVはOwnerだけ。譲渡前のOwnerは脱退不可。&lt;br&gt;・割合は10%単位・0%可・合計100%。最大剰余方式、同率は実支払者を優先する。&lt;br&gt;・支出登録時の参加者・割合は固定。途中参加は過去支出へ影響せず、脱退後も既存精算責務は残る。&lt;br&gt;・Snapshotは関係者全員承認後に支払指示を有効化。却下理由必須、Rejectedは不変で新版を関連付ける。&lt;br&gt;・Settlement Caseの対象Expense ID集合は初回申請で固定し、新版でも追加・除外しない。新規Expenseは別Caseとする。&lt;br&gt;・Awaiting Approval中は対象ExpenseをLock。Rejected時だけSource Owner／Group Ownerが同じIDを履歴付き訂正し、新版を再計算する。&lt;br&gt;・新版の再申請は元申請者またはGroup Ownerだけ。元申請者が対応不能でもOwnerが同じCaseを引き継ぐ。&lt;br&gt;・Group全体で最少送金回数に相殺し、同数候補は支払側・受取側のGroup参加順で決定する。&lt;br&gt;・支払指示ごとに受取確認する。差し戻し理由と再試行を残し、部分支払は不可。&lt;br&gt;・Category集計はoccurredOn、Settlement Archive表示はarchivedAtの月を使う（Asia/Tokyo）。&lt;br&gt;・全支払指示の受取確認後にSnapshotをArchiveし、編集不可・月別参照可能とする。&lt;br&gt;・Group終了1年後に全業務Dataを削除し、最小削除証跡もさらに1年後にBatch削除する。" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#000000;fillColor=#F2F2F2;fontColor=#000000;fontSize=9;" parent="section-domain" vertex="1">
+                <mxCell id="d-rule" value="&lt;b&gt;Confirmed Rules&lt;/b&gt;&lt;br&gt;・GroupにはOwnerが必ず1人。招待・Group終了・全体CSVはOwnerだけ。譲渡前のOwnerは脱退不可。&lt;br&gt;・割合は10%単位・0%可・合計100%。最大剰余方式、同率は実支払者を優先する。&lt;br&gt;・支出登録時の参加者・割合は固定。途中参加は過去支出へ影響せず、脱退後も既存精算責務は残る。&lt;br&gt;・必要承認者はRevision作成時に固定・再選定不可。全員承認後だけ支払指示を有効化し、却下理由は必須。&lt;br&gt;・Settlement Caseの対象Expense ID集合は初回申請で固定し、新版でも追加・除外しない。新規Expenseは別Caseとする。&lt;br&gt;・Awaiting Approval中は対象ExpenseをLock。Rejectedは不変で、Source Owner／Group Ownerだけが同じIDを履歴付き訂正して新版を再計算する。&lt;br&gt;・Awaiting Approval／Rejectedは元申請者／Group Ownerが理由付きで全体Withdraw可。履歴保持・全Expense解放・再開不可。&lt;br&gt;・Group全体で最少送金回数に相殺し、同数候補は支払側・受取側のGroup参加順で決定する。&lt;br&gt;・支払指示ごとに受取確認する。差し戻し理由と再試行を残し、部分支払は不可。&lt;br&gt;・Category集計はoccurredOn、Settlement Archive表示はarchivedAtの月を使う（Asia/Tokyo）。&lt;br&gt;・全支払指示の受取確認後にSnapshotをArchiveし、編集不可・月別参照可能とする。&lt;br&gt;・Group終了1年後に全業務Dataを削除し、最小削除証跡もさらに1年後にBatch削除する。" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#000000;fillColor=#F2F2F2;fontColor=#000000;fontSize=9;" parent="section-domain" vertex="1">
                     <mxGeometry x="40" y="675" width="760" height="160" as="geometry"/>
                 </mxCell>
                 <mxCell id="d-group" value="&lt;b&gt;Group&lt;/b&gt;&lt;hr&gt;Participant: 1..4 / Owner: 1&lt;br&gt;Active / Archived&lt;br&gt;archivedAt / deleteEligibleAt（1年後）" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
@@ -129,7 +129,7 @@
                 <mxCell id="d-balance" value="&lt;b&gt;Participant Balance&lt;/b&gt;&lt;hr&gt;実支払額合計 − 負担額合計&lt;br&gt;Group合計 = 0円" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
                     <mxGeometry x="330" y="1110" width="230" height="105" as="geometry"/>
                 </mxCell>
-                <mxCell id="d-plan" value="&lt;b&gt;Settlement Case / Snapshot Revision&lt;/b&gt;&lt;hr&gt;Case ID / fixed Expense IDs / requester&lt;br&gt;Revision / previousSnapshotId&lt;br&gt;再申請: 元申請者 / Group Owner&lt;br&gt;Awaiting Approval → Rejected / Payment Active → Archived" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                <mxCell id="d-plan" value="&lt;b&gt;Settlement Case / Snapshot Revision&lt;/b&gt;&lt;hr&gt;Case ID / fixed Expense IDs / requester&lt;br&gt;Required Approvers: Revision作成時に固定&lt;br&gt;再申請・Withdraw: 元申請者 / Group Owner&lt;br&gt;Awaiting Approval / Rejected → Withdrawn&lt;br&gt;全員承認: Payment Active / No Payment Required → Archived&lt;br&gt;Payment Active → Cancellation Pending → Cancelled / Payment Active" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;fontSize=8;" parent="1" vertex="1">
                     <mxGeometry x="60" y="1110" width="220" height="145" as="geometry"/>
                 </mxCell>
                 <mxCell id="d-instruction" value="&lt;b&gt;Payment Instruction&lt;/b&gt;&lt;hr&gt;支払元 / 支払先 / 全額&lt;br&gt;未払い → 報告済み → 受取確認済み" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
@@ -178,7 +178,7 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="d-edge-plan-instruction" value="全必要承認者が承認 → 有効化" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="d-plan" target="d-instruction" edge="1">
+                <mxCell id="d-edge-plan-instruction" value="全必要承認者が承認・残高あり → 有効化" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="d-plan" target="d-instruction" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="d-edge-instruction-attempt" value="1 : 0..*" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#000000;fontColor=#000000;" parent="1" source="d-instruction" target="d-payment-attempt" edge="1">
@@ -218,7 +218,7 @@
                 <mxCell id="o-balances" value="&lt;b&gt;Participant Balance&lt;/b&gt;&lt;hr&gt;A: +4,000円（受取）&lt;br&gt;B: +1,000円（受取）&lt;br&gt;C: −5,000円（支払）&lt;br&gt;合計: 0円" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
                     <mxGeometry x="950" y="1100" width="350" height="145" as="geometry"/>
                 </mxCell>
-                <mxCell id="o-plan" value="&lt;b&gt;Settlement Case: SC1 / Snapshot Revision&lt;/b&gt;&lt;hr&gt;固定対象: E1・E2&lt;br&gt;R1: requester=A / E1=8,700円。C却下 → Rejected・旧値保持&lt;br&gt;Source Owner AがE1を8,700円→9,000円へ履歴付き訂正&lt;br&gt;R2: requester=AまたはGroup Owner。訂正後に再計算・全員承認&lt;br&gt;→ Payment Active / PI-1 C→A 4,000円 / PI-2 C→B 1,000円&lt;br&gt;全受取確認 archivedAt: 2026-09-02 → 9月Archive&lt;br&gt;Approval待ちに追加されたE3は別Caseで精算" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">
+                <mxCell id="o-plan" value="&lt;b&gt;Settlement Case: SC1 / Snapshot Revision&lt;/b&gt;&lt;hr&gt;固定対象: E1・E2 / Required Approvers: A・B・C（R1作成時固定）&lt;br&gt;R1a: C却下 → Rejected・旧値保持&lt;br&gt;Source Owner AがE1訂正 → R2再計算・全員再承認&lt;br&gt;→ Payment Active / PI-1 C→A 4,000円 / PI-2 C→B 1,000円 → 9月Archive&lt;br&gt;R1b: A・B承認後、Cが応答不能&lt;br&gt;→ 元申請者AまたはGroup Ownerが理由付きで全体Withdraw&lt;br&gt;→ R1・Approval保持 / E1・E2全件解放・必要なら別Case / 同Case再開不可&lt;br&gt;Cを必要承認者から外して承認成立させることは不可" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;fontSize=9;" parent="1" vertex="1">
                     <mxGeometry x="1350" y="1080" width="370" height="185" as="geometry"/>
                 </mxCell>
                 <mxCell id="o-receipt" value="&lt;b&gt;Receipt: スーパー / Receipt全体値引き −50円&lt;/b&gt;&lt;hr&gt;調整前: レタス110円 / トマト240円 / ペーパー200円&lt;br&gt;値引配賦: −10円 / −22円 / −18円（最大剰余）&lt;br&gt;調整後: 100円 / 218円 / 182円&lt;br&gt;Bundle-1 食費318円 → GE3 / A40%・B30%・C30%&lt;br&gt;Bundle-2 備品182円 → GE4 / A50%・B50%・C0%" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;strokeWidth=2;strokeColor=#000000;fillColor=#FFFFFF;fontColor=#000000;" parent="1" vertex="1">

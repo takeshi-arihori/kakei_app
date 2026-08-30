@@ -21,7 +21,7 @@ Bug Fixでは、再現Testを先に追加する。既存Testが誤った仕様�
 
 - DB、Hono、GraphQL、Prismaを使わず、業務Ruleを高速・決定的に検証する。
 - Money、10%単位のSplit Allocation、最大剰余方式とTie-break、Group人数／Owner、Participant Balance、SettlementのLifecycleを対象にする。
-- Snapshot Revisionの不変性、全必要承認者、Rejected後の訂正・再申請権限、Payment Attemptの差し戻し・再試行、Archive成立条件を検証する。
+- Snapshot Revisionの不変性、必要承認者の固定、Awaiting Approval／Rejectedからの理由付きWithdraw、Rejected後の訂正・再申請権限、Payment Attemptの差し戻し・再試行、Archive成立条件を検証する。
 - 時刻、ID、乱数を外から渡し、Testを実時間や実行順に依存させない。
 
 ### Event Sourcingを採用する場合
@@ -50,7 +50,7 @@ Given: 過去Event列
 
 - 採用済みのMigration、Repository、永続化Adapterを実PostgreSQLまたは合意した分離環境で検証する。
 - Accepted ADRで採用した場合だけ、Event append、Projection、OutboxのAtomicityとRebuildを検証する。
-- Idempotency、Version競合、同時承認、訂正と再申請の競合、Batch再実行、Retryを確認する。
+- Idempotency、Version競合、同時承認、Withdrawと承認の競合、訂正と再申請の競合、Batch再実行、Retryを確認する。
 - 未採用のPrisma、Firestore、KMS、Workerを前提にTest基盤を作らない。
 
 ### GraphQL API
