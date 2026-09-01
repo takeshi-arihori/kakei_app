@@ -4,7 +4,7 @@
 
 DDDは、共有割り勘の業務RuleをDB、Prisma、GraphQL、Honoの都合ではなく、ユビキタス言語とDomain Modelで表現するために使う。EntityやRepositoryを置くこと自体を目的にしない。
 
-この文書は実装時の設計ルールであり、業務仕様の正本ではない。業務概念と不変条件はNotionの[ドメイン設計](https://app.notion.com/p/3a906467984f80728058c839a403e6f0)先頭にある「現行ドメインモデル（2026-08-23）」を正本とする。
+この文書は実装時の設計ルールであり、業務仕様の正本ではない。業務概念と不変条件はNotionの[ドメイン設計](https://app.notion.com/p/3a906467984f80728058c839a403e6f0)先頭にある「Awaiting Approval取り下げを追加した現行モデル（2026-08-29）」を正本とする。
 
 - Confirmed: 共有GroupのProduct Scope、主要Concept、Notionで確認済みのBusiness Rule／Invariant
 - Pending Decision: Bounded Context、Aggregate境界、Data Owner、永続化、Event Sourcing／CQRS、Projection境界
@@ -36,6 +36,11 @@ Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repos
 | Payment Instruction | 全必要承認者の承認後に有効になる支払指示 |
 | Payment Attempt | 支払報告、受取確認・差し戻し、再試行の履歴 |
 | Settlement Archive | 全受取確認後に月別参照可能かつ編集不可になったSnapshot |
+| Receipt Draft | Uploaderだけが確認・編集でき、確定前は共有・集計・精算へ含めないReceipt候補 |
+| Withdrawn | Awaiting ApprovalまたはRejectedの精算前Caseを理由付きで取り下げ、Expense全件を解放した終端状態 |
+| Cancellation Pending | Payment Attempt開始前の取消について必要承認者の同意を待つ状態 |
+| Cancelled | 必要承認者全員の取消同意によりExpense全件を解放した終端状態 |
+| No Payment Required | Balanceが全員0円で、全員承認後に支払なしでArchiveする結果 |
 
 `Household`、`Transaction`、`Member`を現行概念の同義語として機械的に使わない。Migrationや旧履歴を説明する場合は、Deprecatedな旧語であることを明示する。
 
@@ -47,13 +52,19 @@ Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repos
 - Group Expense登録時のParticipant、実支払者、Split Allocation、負担額を過去事実として保持する。途中参加・脱退で書き換えない。
 - Settlement Caseの対象Expense ID集合は初回申請で固定し、新Revisionで追加・除外しない。
 - Snapshot Revisionは変更・削除しない。必要承認者全員の承認前にPayment Instructionを有効化しない。
+- 必要承認者は選択Expenseの実支払者またはSplit Allocationが0%より大きいParticipantからRevision作成時に導出して固定し、Awaiting Approval中に選び直さない。
 - Rejected時だけ、Source OwnerまたはGroup Ownerが同じExpense IDを変更履歴付きで訂正できる。旧Revisionは訂正前の値を保持する。
 - 新Revisionは元申請者またはGroup Ownerだけが申請し、必要承認者全員が改めて承認する。
+- Awaiting ApprovalまたはRejected Caseの取り下げは元申請者またはGroup Ownerが理由付きでCase全体へ行う。Withdrawは承認成立を意味せず、Payment Instructionを有効化しない。Withdrawn後は同じCaseを再開・再申請せず、Expense全件を別Caseへ解放する。
+- 訂正と再申請は期待するCase／Expenseの版が一致する場合だけ成立させ、先に成立した操作を優先し、後続操作を部分反映しない。
+- Balanceが全員0円ならPayment Instructionを作らず、通常の必要承認者全員の承認後にPayment Activeを経由せずArchiveする。
 - Payment Instructionは全額の支払報告と受取確認を追跡し、差し戻し理由と再試行を履歴として残す。部分支払は許可しない。
-- 全Payment Instructionの受取確認後だけSnapshotをArchiveでき、Archive後は編集できない。
+- Payment Activeの取消はPayment Attemptが1件もない場合だけ開始でき、必要承認者全員の同意まで支払報告を禁止する。取消成立時はCaseをCancelledとしExpense全件を解放する。
+- 全Payment Instructionの受取確認後だけSnapshotをArchiveできる。Archive成立後は取消、再開、訂正を許可せず、MVPでは補正機能を提供しない。
+- Receipt Draftは最終編集から30日後、またはGroup終了後の次回Batchで、Draft、OCR結果、Item候補、画像を冪等に削除する。閲覧だけでは期限を延長しない。
 - 月別Category集計はAsia/Tokyoの`occurredOn`、Settlement Archiveの所属月はAsia/Tokyoの`archivedAt`で判定する。
 
-未確定Ruleは[GitHub Issue #9](https://github.com/takeshi-arihori/kakei_app/issues/9)と[未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)で追跡する。一般論や旧実装から推測してConfirmedへ昇格させない。
+Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。Bounded Context、Aggregate、Data Owner、永続化、Event Sourcing／CQRS、Projection境界は引き続き[未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)で追跡し、現行Scopeに対応するADRがAcceptedになるまで実装Readyへ進めない。
 
 ## Modelの選択
 

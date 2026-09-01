@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -99,6 +99,74 @@ test('update removes connected edges when a node is removed', async () => {
     const persisted = await readFile(path.join(root, 'docs/domain.drawio'), 'utf8');
     assert.doesNotMatch(persisted, /id="transaction"/);
     assert.doesNotMatch(persisted, /id="household-transaction"/);
+  });
+});
+
+test('update preserves existing draw.io structure while patching typed fields', async () => {
+  await withTempRoot(async (root) => {
+    const xml = `<mxfile host="custom-host" agent="draw.io">
+  <diagram id="existing-page" name="Existing Diagram">
+    <mxGraphModel dx="1862" dy="925" pageWidth="1800" pageHeight="1800" customGraphAttribute="keep-me">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="section" value="Section" style="swimlane;" parent="1" vertex="1" customCellAttribute="keep-me">
+          <mxGeometry x="30" y="95" width="1740" height="345" as="geometry">
+            <mxRectangle x="30" y="95" width="190" height="40" as="alternateBounds"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="child" value="Before" style="rounded=0;" parent="section" vertex="1">
+          <mxGeometry x="40" y="50" width="180" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="relation" value="Before edge" style="edgeStyle=orthogonalEdgeStyle;" parent="section" source="section" target="child" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="100" y="200"/></Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+`;
+    const target = path.join(root, 'docs/domain.drawio');
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, xml, 'utf8');
+
+    const current = await readDiagramFile({ rootDirectory: root, requestedPath: 'docs/domain.drawio' });
+    const section = current.diagram.nodes.find((node) => node.id === 'section');
+    assert.deepEqual(
+      { x: section.x, y: section.y, width: section.width, height: section.height },
+      { x: 30, y: 95, width: 1740, height: 345 }
+    );
+
+    await updateDiagramFile({
+      rootDirectory: root,
+      requestedPath: 'docs/domain.drawio',
+      operations: [
+        { type: 'rename_diagram', name: 'Renamed Diagram' },
+        { type: 'upsert_node', node: { ...section, label: 'Updated Section' } },
+        {
+          type: 'upsert_node',
+          node: { id: 'child', label: 'After', x: 40, y: 50, width: 180, height: 100, style: 'rounded=0;' }
+        },
+        {
+          type: 'upsert_edge',
+          edge: { id: 'relation', source: 'section', target: 'child', label: 'After edge', style: 'edgeStyle=orthogonalEdgeStyle;' }
+        }
+      ]
+    });
+
+    const persisted = await readFile(target, 'utf8');
+    assert.equal(persisted, xml
+      .replace('name="Existing Diagram"', 'name="Renamed Diagram"')
+      .replace('value="Section"', 'value="Updated Section"')
+      .replace('value="Before"', 'value="After"')
+      .replace('value="Before edge"', 'value="After edge"'));
+    assert.match(persisted, /parent="section"/);
+    assert.match(persisted, /pageWidth="1800" pageHeight="1800" customGraphAttribute="keep-me"/);
+    assert.match(persisted, /customCellAttribute="keep-me"/);
+    assert.match(persisted, /as="alternateBounds"/);
+    assert.match(persisted, /<Array as="points"><mxPoint x="100" y="200"\/><\/Array>/);
   });
 });
 
