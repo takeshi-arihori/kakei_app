@@ -11,7 +11,7 @@
 5. TestをGreenに保ちながら重複、命名、責務、依存方向を改善する（Refactor）。
 6. 次のCaseへ進み、Done Criteriaを満たすまで繰り返す。
 
-Bug Fixでは、再現Testを先に追加する。既存Testが誤った仕様を固定している場合は、Notion仕様を確認し、Testと実装を同じ変更で直す。
+Bug Fixでは、再現Testを先に追加する。既存Testが誤った仕様を固定している場合は、GitHub仕様を確認し、Testと実装を同じ変更で直す。
 
 機械的なConfig、生成物、文言だけの変更で先行Testが価値を持たない場合は省略できる。その理由と代替検証をPRへ記載する。
 
@@ -111,11 +111,11 @@ pnpm build
 - 正常、境界、権限、失敗、競合、再試行を必要範囲で検証している。
 - GraphQL、Event、Migrationの契約差分がレビューされている。
 - LogやErrorに禁止Dataが含まれない。
-- 関連するNotion文書、図、ADR、Runbookが更新されている。
+- 関連するIssue、Repository文書、図、ADR、Runbookが更新されている。
 
 ## 参照元
 
-- [テスト設計](https://app.notion.com/p/3a906467984f804eadc0e0622e2fcfc4)
-- [ドメイン設計](https://app.notion.com/p/3a906467984f80728058c839a403e6f0)
-- [セキュリティ設計](https://app.notion.com/p/3a906467984f80f9b9b6d8b52d8b0f7f)
-- [未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)
+- [テスト設計](../product/current-model.md)
+- [ドメイン設計](../product/current-model.md)
+- [セキュリティ設計](../product/design-gates.md)
+- [未確定事項・Documentation Conflict](../product/design-gates.md)

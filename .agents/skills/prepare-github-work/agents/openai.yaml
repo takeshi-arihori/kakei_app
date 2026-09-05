@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub作業項目の準備"
+  short_description: "GitHubのエピック・タスクを実装可能な粒度へ整える"
+  default_prompt: "$prepare-github-work を使って、このエピックまたはタスクを改善し、着手可能か確認してください。"

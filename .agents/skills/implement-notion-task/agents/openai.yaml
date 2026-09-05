@@ -1,4 +1,4 @@
 interface:
-  display_name: "Notionタスクの実装"
-  short_description: "準備済みタスクを仕様準拠・TDDで実装し文書まで整える"
-  default_prompt: "$implement-notion-task を使って、この準備済みNotionタスクをテストと文書更新を含めて実装してください。"
+  display_name: "GitHub Task実装（旧名互換）"
+  short_description: "Notionへ接続せずReady済みGitHub Taskを実装する"
+  default_prompt: "$implement-notion-task を互換入口として使い、Ready済みGitHub Taskを実装してください。"

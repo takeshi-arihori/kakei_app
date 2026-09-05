@@ -9,20 +9,13 @@ description: 家計アプリの要求・業務知識から、System Context、Us
 
 ## 正本を確認する
 
-作業開始前に、対象ProjectのNotionとRepositoryの両方を読む。
+Notionは読み書きしない。[正本入口](../../../docs/governance/README.md)から現在の固定Commit、GitHub Issue、Private Projectを確認する。
 
-家計アプリでは少なくとも次を確認する。
+- [現行Product Scope・業務モデル](../../../docs/product/current-model.md)
+- [未確定・未移行Gate](../../../docs/product/design-gates.md)
+- RepositoryのAGENTS.md、docs/engineering/domain-design.md
 
-- [references/kakei-app-current-model.md](references/kakei-app-current-model.md): セッション引き継ぎ用の最新要約とNotion参照先
-- Notion `01. Project・要求`: 目的、対象ユーザー、要求、Scope、対象外
-- Notion `02. 業務・ドメイン`: 業務内容、業務ルール、用語定義、ドメイン設計
-- Notion `08. 設計変更・意思決定`: ADR、未確定事項、Documentation Conflict
-- Repository `AGENTS.md`
-- Repository `docs/engineering/domain-design.md`
-
-`kakei-app-current-model.md`は探索の入口であり正本ではない。利用者の最新指示とNotionを再確認し、差分があれば同Fileも更新する。
-
-Notionは要求・業務知識・設計判断の正本、GitHubは実装上の事実とAI実行ルールの正本として扱う。矛盾した場合は一方を勝手に採用せず、Conflictとして停止する。
+実装は現行動作の証拠であり業務仕様の根拠ではない。GitHub上の現行仕様と実装が矛盾した場合はConflictとして解消する。必要な仕様が未移行なら推測せず対象作業をBlockedにする。
 
 ## モデリング原則
 
@@ -187,7 +180,7 @@ MCPへDomain判断を委譲しない。Diagram FileをDomainの正本として�
 
 次の場合は設計を確定せず停止し、利用者へ影響と必要な判断を示す。
 
-- NotionとGitHubの正本が矛盾する
+- GitHubの現行仕様と実装が矛盾する
 - Domain Ruleの根拠がない
 - 重要語の意味が複数存在し、Contextを特定できない
 - Aggregate候補のInvariantが不明
