@@ -1,0 +1,35 @@
+name: ADR Proposal
+description: Owner判断が必要なDecisionを提案する
+title: "docs(adr): "
+body:
+  - type: markdown
+    attributes:
+      value: "Public Repositoryです。公開安全確認を先に行ってください。初期StatusはProposedで、AIはOwner承認なしにAcceptedにしません。"
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: 問題、制約、関連Project・Task、現行DecisionへのGitHubリンク
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision・Alternatives
+      description: 推奨案、代替案、理由、Trade-off。必要ならAmendsまたはSupersedes対象
+    validations:
+      required: true
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Consequences・Implementation・Review Trigger
+      description: 影響、移行、互換性、検証、Rollbackまたはforward-fix、見直し条件
+    validations:
+      required: true
+  - type: checkboxes
+    id: publication
+    attributes:
+      label: 公開確認
+      options:
+        - label: 本文・添付・参照先の機械検査と手動Reviewを完了し、公開可能と確認した
+          required: true
