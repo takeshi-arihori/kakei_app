@@ -1,0 +1,52 @@
+name: Task
+description: 1〜2日で検証できる単一成果
+title: "task: "
+body:
+  - type: markdown
+    attributes:
+      value: "このRepositoryはPublicです。公開確認済みの情報だけを記入してください。Notionへのアクセスは不要です。"
+  - type: textarea
+    id: requirement
+    attributes:
+      label: Requirement
+      description: 問題、期待結果、制約、対象外
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Done Criteria
+      description: 観測可能な完了条件と検証方法
+    validations:
+      required: true
+  - type: textarea
+    id: planning
+    attributes:
+      label: Planning
+      description: Owner、親Epic、Project、Type、Phase、Area、Priority、Milestone、Estimate人日、Dependencies、影響範囲を記入
+    validations:
+      required: true
+  - type: dropdown
+    id: decision
+    attributes:
+      label: Decision Check
+      options:
+        - 未確認
+        - 方針変更なし
+        - 方針変更あり
+    validations:
+      required: true
+  - type: textarea
+    id: adr
+    attributes:
+      label: Related ADR・根拠
+      description: GitHub上のADR URLと判定理由。未確認・ProposedのままReadyにしない
+    validations:
+      required: true
+  - type: checkboxes
+    id: publication
+    attributes:
+      label: 公開確認
+      options:
+        - label: 本文・添付・参照先の機械検査と手動Reviewを行い、秘密・個人情報・実在金融情報・非公開情報を含まないと確認した
+          required: true

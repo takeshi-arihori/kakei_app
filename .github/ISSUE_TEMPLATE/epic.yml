@@ -1,0 +1,35 @@
+name: Epic
+description: 複数Taskで届ける成果・能力
+title: "epic: "
+body:
+  - type: markdown
+    attributes:
+      value: "Public Repositoryです。未分類・要編集・非公開情報を入力しないでください。単一の1〜2日作業にはTaskを使用します。"
+  - type: textarea
+    id: requirement
+    attributes:
+      label: Requirement・Done Criteria
+      description: なぜ必要か、期待成果、観測可能なEpic完了条件
+    validations:
+      required: true
+  - type: textarea
+    id: planning
+    attributes:
+      label: Planning
+      description: Owner、Project、Phase、Area、Priority、Status、構成TaskのGitHub URL・順序・依存関係
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision Check・Related ADR
+      description: 未確認／方針変更なし／方針変更あり、理由、GitHub ADRへのリンク。必要DecisionがAcceptedになるまでReadyにしない
+    validations:
+      required: true
+  - type: checkboxes
+    id: publication
+    attributes:
+      label: 公開確認
+      options:
+        - label: 本文・添付・参照先の機械検査と手動Reviewを完了し、公開可能と確認した
+          required: true
