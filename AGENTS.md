@@ -3,10 +3,11 @@
 ## 正本と読み方
 
 - 利用者の最新の明示指示を最優先する。
-- Project、Epic、Task、仕様、設計、ADRの正本はNotionとする。
-- 実装前に対象Task、関連仕様、NotionのAccepted ADR、既存コードを確認する。
+- Notionは読み書きしない。GitHub Issueを要件・完了条件、Private Projectを進捗・Sprint、Repositoryを仕様・設計・ADRの正本とする。
+- 正本の参照先とdevelop未同期の扱いは[正本入口](docs/governance/README.md)を確認する。
+- 実装前に対象Task、関連仕様、GitHubのAccepted ADR、既存コードを確認する。
 - 詳細ルールの入口は[docs/engineering/README.md](docs/engineering/README.md)とする。必要な文書だけを読む。
-- Notionとコードが矛盾する場合は実装で吸収せず、矛盾と影響を報告して解消する。
+- GitHubとコードが矛盾する場合は実装で吸収せず、矛盾と影響を報告して解消する。
 
 ## プロジェクト構成
 
@@ -38,12 +39,14 @@
 
 ## 実装手順
 
+Epic／Taskの起票・改善は`prepare-github-work`、Ready済みTaskの実装は`implement-github-task`を使用する。旧Notion名のSkillは互換入口であり、Notionへ接続しない。
+
 1. 対象TaskのStatus、Requirement、Done Criteria、依存関係、Estimate、Decision Check、Related ADRを確認する。
 2. 変更をBounded Context、Aggregate、画面、GraphQL、Data、Security、運用へ対応付ける。
-3. Epic／Taskの起票・変更では`Decision Check` Propertyを設定し、文書変更でも`方針変更なし／あり`を判定する。`方針変更あり`または不明なら`Related ADR`を設定し、未決ならNotionへADR Proposalを起票する。Project OwnerがAcceptedを明示し、TaskがそのDecisionへ整合するまでReadyまたは実装へ進めない。Rejectedの場合は現行DecisionへRequirementとDone Criteriaを戻し、Decision Checkをやり直す。
+3. Epic／Taskの起票・変更では`Decision Check` Propertyを設定し、文書変更でも`方針変更なし／あり`を判定する。`方針変更あり`または不明なら`Related ADR`を設定し、未決ならGitHubへADR Proposalを起票する。Project OwnerがAcceptedを明示し、TaskがそのDecisionへ整合するまでReadyまたは実装へ進めない。Rejectedの場合は現行DecisionへRequirementとDone Criteriaを戻し、Decision Checkをやり直す。
 4. 仕様の不足や矛盾を解消し、TaskがReadyであることを確認する。
 5. 失敗するTestを先に作り、最小実装、Refactorの順で進める。
-6. 実装と同じ変更内で関連するNotion文書、図、Schema、ADR、Runbookを更新する。
+6. 実装と同じ変更内で関連するRepository文書、図、Schema、ADR、Runbookを更新する。
 7. package.jsonに存在するlint、typecheck、test、buildを実行する。
 8. Done Criteriaと差分を自己レビューしてからPR準備へ進む。
 
@@ -51,7 +54,7 @@
 
 - 新しい本番依存関係を追加する前に確認を取る。
 - MigrationやSchemaの破壊的変更を無断で行わない。
-- Accepted ADR、新しいBounded Context、DB、Cloud Service、Runtime／配置構成、Event Sourcing対象、認証・認可・Security／Privacy方式、API Protocol／Schema正本、Context間連携、不可逆または高コストな運用判断を変える場合はNotion ADRを必須とする。
+- Accepted ADR、新しいBounded Context、DB、Cloud Service、Runtime／配置構成、Event Sourcing対象、認証・認可・Security／Privacy方式、API Protocol／Schema正本、Context間連携、不可逆または高コストな運用判断を変える場合はGitHub ADRを必須とする。
 - 現行Decision内の局所実装や、容易に戻せる低影響の変更にはADRを作成しない。
 - GraphQL、Event Schema、Migrationの変更には互換性・移行・RollbackまたはForward-fix計画を持たせる。
 - 金額にfloating pointを使わない。MVPではJPYの1円単位整数として扱う。
@@ -61,11 +64,11 @@
 
 ## Git・プルリクエスト
 
-- Epic、Task、ADRの起票・状態管理はNotionだけで行う。
+- Epic、Task、ADRの起票・状態管理はGitHubだけで行う。
 - `develop`を統合Branchとし、`develop`への直接Pushと`main` Branchの作成・Pushを禁止する。
 - 1 Task／1 Branch／1 PRを基本とする。
 - Conventional Commitsを使用し、Commitをレビュー可能な論理単位にする。
-- PR本文へNotion Task URLを記載する。
+- PR本文へGitHub Task URLを記載する。
 - PR作成前に[delivery-workflow.md](docs/engineering/delivery-workflow.md)の文書影響確認を完了する。
 
 ## 完了条件
@@ -73,7 +76,7 @@
 - 正常系だけでなく、境界値、権限、失敗、競合、再試行を検証する。
 - 新しいDomain RuleにはDomain Unit Testがある。
 - テスト失敗や未確認事項を無視して完了扱いにしない。
-- 関連するNotion文書、Repo文書、Schema、Notion ADR、Runbookの更新要否が説明できる。
+- 関連するIssue、Repository文書、Schema、ADR、Runbookの更新要否が説明できる。
 - 実行しなかった検証がある場合は、理由と残リスクを明示する。
 
 ## 詳細ルール
@@ -83,4 +86,4 @@
 - Frontend責務: [frontend.md](docs/engineering/frontend.md)
 - TDD・品質保証: [testing.md](docs/engineering/testing.md)
 - Epic／Task／Git／PR前文書更新: [delivery-workflow.md](docs/engineering/delivery-workflow.md)
-- ADR・未確定事項: [08. 設計変更・意思決定](https://app.notion.com/p/3a906467984f810b8ac7d4d416cc5296)
+- ADR・未確定事項: [08. 設計変更・意思決定](docs/governance/README.md)

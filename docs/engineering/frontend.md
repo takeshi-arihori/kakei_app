@@ -99,7 +99,7 @@ Feature名は責務例であり、TaskのBounded ContextやAggregateを先に確
 
 ## 参照元
 
-- [ユーザージャーニー・ユースケース](https://app.notion.com/p/3a906467984f817a9a5ac19b4be025bd)
-- [03. UX・情報設計](https://app.notion.com/p/3a906467984f81b7bce7e1ada5416f0f)
-- [ドメイン設計](https://app.notion.com/p/3a906467984f80728058c839a403e6f0)
-- [未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)
+- [ユーザージャーニー・ユースケース](../product/current-model.md)
+- [03. UX・情報設計](../product/current-model.md)
+- [ドメイン設計](../product/current-model.md)
+- [未確定事項・Documentation Conflict](../product/design-gates.md)

@@ -4,13 +4,13 @@
 
 DDDは、共有割り勘の業務RuleをDB、Prisma、GraphQL、Honoの都合ではなく、ユビキタス言語とDomain Modelで表現するために使う。EntityやRepositoryを置くこと自体を目的にしない。
 
-この文書は実装時の設計ルールであり、業務仕様の正本ではない。業務概念と不変条件はNotionの[ドメイン設計](https://app.notion.com/p/3a906467984f80728058c839a403e6f0)先頭にある「Awaiting Approval取り下げを追加した現行モデル（2026-08-29）」を正本とする。
+この文書は実装時の設計ルールであり、業務仕様の正本ではない。業務概念と不変条件は[現行Product Scope・業務モデル](../product/current-model.md)のConfirmed Decisionsを正本とする。
 
-- Confirmed: 共有GroupのProduct Scope、主要Concept、Notionで確認済みのBusiness Rule／Invariant
+- Confirmed: 共有GroupのProduct Scope、主要Concept、GitHubで確認済みのBusiness Rule／Invariant
 - Pending Decision: Bounded Context、Aggregate境界、Data Owner、永続化、Event Sourcing／CQRS、Projection境界
 - Deprecated: 個人用Household、Account、収入Transaction、日付境界Archive、2人限定の単一Payer／Payeeモデル
 
-Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repositoryを作らない。関連ADRがAcceptedとなり、NotionとRepositoryが同期されるまで実装Readyへ進めない。
+Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repositoryを作らない。関連ADRがAcceptedとなり、仕様とRepository実装が整合するまで実装Readyへ進めない。
 
 ## 現行ScopeとCore Domain
 
@@ -21,7 +21,7 @@ Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repos
 
 ## ユビキタス言語
 
-実装、Test、Schema、PRではNotionの[用語定義](https://app.notion.com/p/3a906467984f818b8a84d0b559cb6676)に合わせる。
+実装、Test、Schema、PRではGitHubの[用語定義](../product/current-model.md)に合わせる。
 
 | Term | 意味 |
 | --- | --- |
@@ -64,7 +64,7 @@ Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repos
 - Receipt Draftは最終編集から30日後、またはGroup終了後の次回Batchで、Draft、OCR結果、Item候補、画像を冪等に削除する。閲覧だけでは期限を延長しない。
 - 月別Category集計はAsia/Tokyoの`occurredOn`、Settlement Archiveの所属月はAsia/Tokyoの`archivedAt`で判定する。
 
-Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。Bounded Context、Aggregate、Data Owner、永続化、Event Sourcing／CQRS、Projection境界は引き続き[未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)で追跡し、現行Scopeに対応するADRがAcceptedになるまで実装Readyへ進めない。
+Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。Bounded Context、Aggregate、Data Owner、永続化、Event Sourcing／CQRS、Projection境界は引き続き[未確定事項・Documentation Conflict](../product/design-gates.md)で追跡し、現行Scopeに対応するADRがAcceptedになるまで実装Readyへ進めない。
 
 ## Modelの選択
 
@@ -84,7 +84,7 @@ MoneyはJPYの1円単位整数で扱う。割合計算へfloating pointを使わ
 - Lifecycleを通じた同一性を追跡する業務概念へ使う。
 - IDだけのData Holderにせず、状態変更を業務語彙の振る舞いとして表す。
 - Prisma ModelやGraphQL TypeをEntityとして再利用しない。
-- Current NotionにConceptがあることだけでEntityまたはAggregateへ確定しない。
+- 現行仕様にConceptがあることだけでEntityまたはAggregateへ確定しない。
 
 ### Aggregate候補
 
@@ -126,7 +126,7 @@ Accepted ADRでEvent Sourcingを採用する場合も、次を守る。
 
 実装前に次を答えられること。
 
-- 対象RuleがNotionのどの現行節に根拠を持つか。
+- 対象RuleがRepository仕様のどの現行節に根拠を持つか。
 - 旧語・旧Scope・未確定Decisionを現行仕様として混入させていないか。
 - Data Owner、Aggregate、Context、永続化方式はAccepted ADRで確定しているか。
 - RuleはAggregate内Invariant、Aggregate間Policy、認可、Application Coordination、Read Model、Presentationのどれか。
@@ -135,9 +135,9 @@ Accepted ADRでEvent Sourcingを採用する場合も、次を守る。
 
 ## 参照元
 
-- [Requirement・Scope](https://app.notion.com/p/3a906467984f8180a7f3e4220eeaa47a)
-- [業務内容・業務ルール](https://app.notion.com/p/3a906467984f8015b763fe95859ea6ec)
-- [用語定義](https://app.notion.com/p/3a906467984f818b8a84d0b559cb6676)
-- [ドメイン設計](https://app.notion.com/p/3a906467984f80728058c839a403e6f0)
-- [Accepted Product Decision](https://app.notion.com/p/3aa06467984f81169fdcc7d5e19c5b02)
-- [未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)
+- [Requirement・Scope](../product/current-model.md)
+- [業務内容・業務ルール](../product/current-model.md)
+- [用語定義](../product/current-model.md)
+- [ドメイン設計](../product/current-model.md)
+- [Accepted Product Decision](../governance/README.md)
+- [未確定事項・Documentation Conflict](../product/design-gates.md)

@@ -43,7 +43,7 @@ Domain Ruleには根拠が必要である。
 根拠の優先順位:
 
 1. 利用者の最新の明示指示
-2. NotionのCurrent / Accepted情報
+2. GitHubのCurrent / Accepted情報
 3. Domain Expertへの確認結果
 4. Repositoryに実装されている事実
 5. Working Assumption

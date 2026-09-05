@@ -28,7 +28,7 @@ SkillがDomain Ruleを捏造せず、正本・具体例・Knowledge Stateを使�
 ### Expected
 
 - Schemaは実装上の事実として扱う。
-- Notionの要求・業務・ドメイン設計を確認する。
+- GitHubの要求・業務・ドメイン設計を確認する。
 - TableとDomain Conceptが一致するとは限らないと明示する。
 
 ### Failure
@@ -82,11 +82,11 @@ SkillがDomain Ruleを捏造せず、正本・具体例・Knowledge Stateを使�
 
 - 端数処理を暗黙に四捨五入して確定する。
 
-## Case 6: NotionとGitHubが矛盾したら停止する
+## Case 6: GitHub仕様と実装が矛盾したら停止する
 
 ### Input
 
-Notionでは「Settlement Aggregateを持たない」、Repository文書では「Settlement Aggregateを採用済み」と記載されている。
+現行仕様では「Settlement Aggregateを持たない」、Repository文書では「Settlement Aggregateを採用済み」と記載されている。
 
 ### Expected
 

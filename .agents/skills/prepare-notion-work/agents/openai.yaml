@@ -1,4 +1,4 @@
 interface:
-  display_name: "Notion作業項目の準備"
-  short_description: "Notionのエピック・タスクを実装可能な粒度へ整える"
-  default_prompt: "$prepare-notion-work を使って、このエピックまたはタスクを改善し、着手可能か確認してください。"
+  display_name: "GitHub作業項目準備（旧名互換）"
+  short_description: "Notionへ接続せずGitHubのエピック・タスクを整える"
+  default_prompt: "$prepare-notion-work を互換入口として使い、GitHubのエピックまたはタスクを改善してください。"

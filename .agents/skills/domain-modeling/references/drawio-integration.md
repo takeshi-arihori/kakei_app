@@ -7,7 +7,7 @@ Domain Modelingの判断結果をdraw.io MCPへ渡すときの責務境界と安
 Domain ModelingとDiagram Renderingを分離する。
 
 ```text
-Notion / Domain Expert
+GitHub / Domain Expert
         ↓
 Domain Modeling Skill
         ↓
@@ -81,7 +81,7 @@ Diagram IDは描画上の安定識別子として扱い、Domain IdentityやDB I
 - Domain ModelではTechnical Class名よりDomain Termを優先する。
 - Relationship Labelには必要な場合だけRole、Direction、Multiplicityを記載する。
 - ConfirmedでないBusiness Ruleを確定表現でDiagramへ書かない。
-- 詳細なRule表はtext output / Notionを正本とし、Diagramへ情報を詰め込みすぎない。
+- 詳細なRule表はtext output / GitHubを正本とし、Diagramへ情報を詰め込みすぎない。
 
 ## Mapping
 
@@ -182,7 +182,7 @@ Conflict対象を更新しない。先に正本の整合を解消する。
 
 - MCP Toolへ「適切なAggregateを考えて」のようなDomain判断を委譲しない。
 - `.drawio`に存在する箱を理由にDomain ConceptをConfirmedへ昇格しない。
-- Existing DiagramをNotionより優先する正本として扱わない。
+- Existing DiagramをGitHubより優先する正本として扱わない。
 - Validation前にDiagram作成を完了扱いにしない。
 - Existing Fileを読まずに更新しない。
 - MCP unavailableを理由にDomain Modeling全体を失敗扱いにしない。

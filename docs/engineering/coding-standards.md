@@ -55,7 +55,7 @@
 
 ## 命名・Comment
 
-- DomainのClass、Method、Event、TestはNotionのユビキタス言語を使う。
+- DomainのClass、Method、Event、TestはGitHubのユビキタス言語を使う。
 - Eventは過去形、Commandは命令、Queryは取得意図が分かる名前にする。
 - `Manager`、`Helper`、`Data`のような責務不明な名前を避ける。
 - Commentは「何をしているか」ではなく、理由、制約、Trade-off、外部仕様を説明する。
@@ -70,7 +70,7 @@
 
 ## 参照元
 
-- [04. アーキテクチャ・非機能](https://app.notion.com/p/3a906467984f809f8332c8a274e0bcc6)
-- [セキュリティ設計](https://app.notion.com/p/3a906467984f80f9b9b6d8b52d8b0f7f)
-- [開発ガバナンス](https://app.notion.com/p/3a906467984f8020a381dbac214c7e7f)
-- [未確定事項・Documentation Conflict](https://app.notion.com/p/3a906467984f814ba736c627901ead38)
+- [04. アーキテクチャ・非機能](../product/design-gates.md)
+- [セキュリティ設計](../product/design-gates.md)
+- [開発ガバナンス](../governance/README.md)
+- [未確定事項・Documentation Conflict](../product/design-gates.md)

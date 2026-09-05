@@ -1,4 +1,4 @@
-## Notion
+## GitHub
 
 - Task: <!-- 必須 -->
 - 関連仕様／ADR: <!-- 影響がある場合は必須 -->
@@ -26,7 +26,7 @@
 
 ## 文書への影響
 
-- [ ] Notion Requirement／Task
+- [ ] GitHub Requirement／Task
 - [ ] ADR
 - [ ] DDD／UML／Event Schema
 - [ ] ER／Migration

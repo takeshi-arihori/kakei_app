@@ -4,7 +4,7 @@
 
 ### Input
 
-NotionとRepositoryで`Settlement`の意味・存在が矛盾している状態で、既存Domain Diagramを更新してほしい。
+GitHubとRepositoryで`Settlement`の意味・存在が矛盾している状態で、既存Domain Diagramを更新してほしい。
 
 ### Expected
 
@@ -15,7 +15,7 @@ NotionとRepositoryで`Settlement`の意味・存在が矛盾している状態�
 
 ### Failure
 
-- Repository側またはNotion側を暗黙に採用してDiagramを書き換える。
+- Repository側またはGitHub側を暗黙に採用してDiagramを書き換える。
 
 ## Case 2: MCP unavailableでもModelingは完了できる
 
@@ -86,17 +86,17 @@ Domain Modelは検証済みだが、draw.io MCP Toolが利用できない。
 
 ### Input
 
-既存`.drawio`には`Settlement` Nodeがあるが、Current Notionでは廃止済みと記載されている。
+既存`.drawio`には`Settlement` Nodeがあるが、Current GitHubでは廃止済みと記載されている。
 
 ### Expected
 
 - `.drawio`を実装上の成果物として読む。
-- Current NotionとのConflict / stale diagramとして扱う。
+- Current GitHubとのConflict / stale diagramとして扱う。
 - Diagramの存在だけでDomain ConceptをConfirmedへ戻さない。
 
 ### Failure
 
-- Diagramを根拠にCurrent Notionの判断を無視する。
+- Diagramを根拠にCurrent GitHubの判断を無視する。
 
 ## Case 7: 作成後にvalidateする
 

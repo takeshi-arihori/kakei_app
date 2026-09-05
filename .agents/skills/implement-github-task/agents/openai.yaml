@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Taskの実装"
+  short_description: "Ready済みGitHub Taskを検証しDraft PRまで進める"
+  default_prompt: "$implement-github-task を使って、このReady済みGitHub Taskをテストと文書更新を含めて実装してください。"

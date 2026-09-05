@@ -49,7 +49,7 @@ Domain Modelingの成果は、別の人間またはAIが「何が確定し、何
 | Rule ID | Rule | Applies To | Evidence | State | Counterexample / Boundary |
 | --- | --- | --- | --- | --- | --- |
 
-Rule IDは`RULE-001`のように一時識別子を付けて議論を追跡可能にする。正式なRepository IDやNotion IDを勝手に発行しない。
+Rule IDは`RULE-001`のように一時識別子を付けて議論を追跡可能にする。正式なIssue IDやADR IDを勝手に発行しない。
 
 ## 7. Ubiquitous Language
 
