@@ -1,0 +1,4 @@
+interface:
+  display_name: "PRレビュー証跡の準備"
+  short_description: "Pull Requestに必要な視覚証跡を安全に選択・検証する"
+  default_prompt: "$prepare-pr-evidence を使って、このPull Requestに必要な視覚証跡を選び、公開前Reviewまで準備してください。"
