@@ -1,34 +1,36 @@
 # 共有割り勘の設計境界と永続化方針
 
-- Status: Proposed
+- Status: Accepted
+- Acceptance: 条件付き（C1は未充足）
+- Accepted Date: 2026-09-06
 - Decision Owner: Project Owner
 - Proposed Date: 2026-09-06
-- Owner Decision: 未決
+- Owner Decision: 案Aを条件付きで採用
 - Related Task: [GitHub Issue #9](https://github.com/takeshi-arihori/kakei_app/issues/9)
 - Decision record: [GitHub ADR Issue #24](https://github.com/takeshi-arihori/kakei_app/issues/24)
 - Analysis: [共有割り勘モデルの設計境界検討](../domain/shared-expense-design-boundaries.md)
 
 ## Context
 
-共有割り勘の業務Ruleは[現行Product Scope・業務モデル](../product/current-model.md)でConfirmedになっている。一方、Bounded Context、Aggregate、Data Owner、Context間契約、Event Sourcing／CQRS／Projectionの適用範囲は未確定である。このままDB、API、Directory、Event Schemaを実装すると、実装都合で境界が事実上決まる。
+提案時点では、共有割り勘の業務Ruleは[現行Product Scope・業務モデル](../product/current-model.md)でConfirmedになっている。一方、Bounded Context、Aggregate、Data Owner、Context間契約、Event Sourcing／CQRS／Projectionの適用範囲は未確定である。このままDB、API、Directory、Event Schemaを実装すると、実装都合で境界が事実上決まる。
 
-このADRはOwner判断のためのProposalであり、AcceptedになるまでDecisionではない。現行のHono／Application／Domainの依存方向、JPY整数、Event、Snapshot、Logへ機密平文を保存しない制約を変更しない。業務上のSnapshot Revisionが保存必須とする金額・Participant情報との解釈差は[分析文書のConflict](../domain/shared-expense-design-boundaries.md#conflict)として残し、Persistence実装前に解消する。
+2026-09-06にProject Ownerが案Aの条件付き採用を明示した。以下のDecisionを採用し、未決の詳細と条件C1は後続設計のGateとして維持する。現行のHono／Application／Domainの依存方向、JPY整数、Event、Snapshot、Logへ機密平文を保存しない制約を変更しない。業務上のSnapshot Revisionが保存必須とする金額・Participant情報との解釈差は[分析文書のConflict](../domain/shared-expense-design-boundaries.md#conflict)として残し、Persistence実装前に解消する。
 
-## Proposed Decision
+## Decision
 
-次の組合せを第一候補とする。
+案Aとして次の組合せを採用する。
 
 1. Bounded ContextはOption Aの`Group Management`、`Expense Recording`、`Settlement`という3つのBusiness Capabilityで論理的に分ける。
 2. 物理配置はMVPでModular Monolithを許容し、Bounded ContextをMicroservice境界と同一視しない。
-3. Data OwnerとAggregate候補は[分析文書](../domain/shared-expense-design-boundaries.md)を初期境界とし、Context間はID、Application Port、version付き公開契約だけで連携する。
-4. 永続化はE1のState model + 仕様で必要なimmutable業務履歴を第一候補とする。全面的なEvent Sourcingは採用しない候補とする。
+3. 個別Data OwnerとAggregateは[分析文書](../domain/shared-expense-design-boundaries.md)の候補を検討入力として残し、一括採用しない。Context間はID、Application Port、version付き公開契約だけで連携する。
+4. 永続化の基本方針はE1のState model + 仕様で必要なimmutable業務履歴とする。全面的なEvent Sourcingは初期採用しない。個別の保存設計は条件C1を満たしてから実装する。
 5. CommandとQueryの責務は分けるが、別Storeや非同期Projectionは月別集計、Archive一覧、CSVの測定された要件が必要とする箇所だけ、後続ADRまたは実装Taskで判断する。
 6. Snapshot Revision、Approval、Expense訂正、Payment Attempt、Tombstoneは業務仕様どおり履歴を保持する。これらをStored EventやAudit Logと同一概念にしない。
 7. 技術Snapshotへ機密平文を複製しない。業務上のSnapshot RevisionはConfirmed Ruleの必須項目だけをGroup内認可とRetentionの下で保持する候補とし、暗号化、保管形態、参照契約はConflictを解消する後続Security／Persistence設計のGateとする。
 
 ## Alternatives
 
-### A. 3 Context + State model（第一候補）
+### A. 3 Context + State model（採用）
 
 Membership、Expense、Settlementの異なるInvariantと変更理由を分離しながら、MVPの契約・運用Costを抑える。Category Ownership、Expense予約、RetentionのContext間契約を追加で設計する必要がある。
 
@@ -55,16 +57,36 @@ Receipt、Reporting／Retentionまで分け、SettlementだけEvent Sourcingを�
 
 ## Owner Decision
 
-- Decision: 未決（A／B／C／D、または修正案）
-- Decided by: 未記録
-- Decided at: 未記録
-- Rationale: 未記録
+- Decision: 案Aを条件付きでAccepted
+- Decided by: Project Owner（takeshi-arihori）
+- Decided at: 2026-09-06（Asia/Tokyo、承認時刻は未記録）
+- Evidence: [GitHub ADR Issue #24](https://github.com/takeshi-arihori/kakei_app/issues/24)に会話の明示承認をAIが代理記録する。
+- Owner statement: 「案Aを条件付きでAcceptedにする でお願いしたいと思います。再度確認し、問題なければ続けて。」
+- Rationale: 案Aは責任分離を保ちながら、MVPの契約・運用Costを抑える。履歴は必要な業務記録として保持し、全面Event Sourcingと非同期Projectionの追加Costを初期から負担しない、という提案理由を前提にOwnerが採用を承認した。
 
-Project Ownerが選択肢、Trade-off、影響を確認して明示するまで、このADRは`Proposed`を維持する。Acceptedになるまで関連する実装Task、正式Mermaid図、Schema／Event設計をReadyへ進めない。
+提案作成・比較の履歴は[PR #25](https://github.com/takeshi-arihori/kakei_app/pull/25)に残す。PR #25のMergeはProposal文書の統合であり、採用承認は上記の会話による。
+
+## 承認条件 C1: Snapshot Revisionの保護と保存
+
+- State: 未充足
+- Accountable Owner: Project Owner
+- Due: 依存するPersistence実装TaskのReady判定前
+- Evidence: 未提出。以下の設計文書、Security Decision、評価結果をリンクして追跡する。
+
+1. 必須項目と保存しない項目を列挙し、Confirmed Ruleを満たす最小保存内容を定義する。
+2. 暗号化の対象、方式、鍵の管理、Backupと復元時の保護を決定する。この承認で暗号方式やCloud Serviceを選定しない。
+3. 現役参加者、脱退者、Owner等について、Group内の参照・操作権限と拒否時の振る舞いを明文化する。
+4. Groupの保持期限、業務Data・Backup・Projectionの削除または失効、冪等な再試行と削除証跡を定義する。
+5. 技術Snapshotと業務Snapshot Revisionの区別を含め、既存の「Event、Snapshot、Logへ機密平文を保存しない」と保存必須情報のConflictを解消する。既存禁止条件をこのADRで緩和しない。
+6. 上記のSecurity／Privacy方式は別のADRとOwnerの明示承認で確定し、独立Security Reviewで条件充足を確認する。
+
+条件を満たす証拠が揃うまで、依存するPersistence実装TaskはBacklog／Blocked YesとしReadyへ進めない。設計調査、条件を解消するProposal作成、承認済み3 Contextだけの可視化は、各TaskのReady評価を経て進められる。
+
+Categoryの所属、個別Data Owner、Aggregate境界、Expense予約と競合のTransaction方式、Port契約、非同期Projectionは未決である。案AのAcceptedはこれらの採用、物理配置の製品選定、既存GraphQLやHonoの変更を含まない。
 
 ## Implementation after Acceptance
 
-Accepted後にだけ、次の後続Taskを起票・Ready評価する。
+以下は後続Taskとして個別に起票・Ready評価する。条件C1の存在だけで、すべての設計TaskをBlockedにするわけではない。
 
 1. Accepted境界のContext Mapと正式Mermaid図を作る。
 2. AggregateごとのCommand、Invariant、期待版、Repository Portを具体化する。

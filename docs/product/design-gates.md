@@ -2,14 +2,16 @@
 
 GitHubへの管理先変更は、業務設計の承認や旧情報の全件移行を意味しない。根拠が不足する機能TaskはProjectのBlocked=Yesとし、Issueに不足、影響、解消条件を記録する。Notionへアクセスして補わない。
 
-## 未確定の設計
+## 採用済み方針と残る設計Gate
 
-- 共有割り勘ScopeでのBounded Context、Aggregate、Data Owner。
-- Event Sourcing/CQRS、永続化、Projection、Context間連携。
-- 現行Scopeに対応した上記DecisionのAccepted ADR。旧Transaction限定・日付境界ArchiveのProposalを採用済みとして扱わない。
-- これらに依存するAPI/Schema/認可・運用詳細。既存のHono/Next.jsの責務分離、金額整数、秘密をEvent/Logへ保存しない等の不変条件は維持する。
+[ADR #24](../adr/shared-expense-domain-boundaries.md)は2026-09-06に案Aを条件付きAcceptedとした。3 Context（Group Management、Expense Recording、Settlement）、MVP Modular Monolith、State model＋必要な不変業務履歴、Command／Query責務分離を採用する。全面Event Sourcingと別Store／非同期Projectionは初期採用しない。
 
-[Issue #9](https://github.com/takeshi-arihori/kakei_app/issues/9)で[設計境界の比較](../domain/shared-expense-design-boundaries.md)と[Proposed ADR](../adr/shared-expense-domain-boundaries.md)を準備している。Project Ownerの明示DecisionでADRがAcceptedになるまで、候補を正式Mermaid図、Directory、Schema、Event、後続実装TaskのReady判定へ反映しない。
+- 個別Data Owner、Category所属、Aggregate境界、Expense予約・競合のTransaction方式、Port契約は未決。
+- Persistence、認可、Retention、Backup、Projectionの詳細は必要な後続Decisionを経て確定する。
+- 条件C1は未充足。Snapshot Revisionの最小保存項目、暗号化、Group内認可、保持・削除を文書化し、機密平文禁止とのConflictを解消、Security ADRのOwner承認と独立Security Reviewを得るまで依存Persistence実装はBacklog／Blocked YesでReady不可。
+- 条件追跡の責任者はProject Owner、期限はPersistence TaskのReady前。証拠欄は[ADRの条件C1](../adr/shared-expense-domain-boundaries.md)に保持する。
+
+[設計比較](../domain/shared-expense-design-boundaries.md)に残る候補を一括採用しない。条件に依存しない3 Contextの可視化や設計調査は、別TaskのReady評価を経て進められる。既存のHono／Next.js責務分離、JPY整数、機密平文禁止は維持する。
 
 ## 今回の移行範囲
 

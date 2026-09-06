@@ -9,7 +9,8 @@ DDDは、共有割り勘の業務RuleをDB、Prisma、GraphQL、Honoの都合で
 この文書は実装時の設計ルールであり、業務仕様の正本ではない。業務概念と不変条件は[現行Product Scope・業務モデル](../product/current-model.md)のConfirmed Decisionsを正本とする。
 
 - Confirmed: 共有GroupのProduct Scope、主要Concept、GitHubで確認済みのBusiness Rule／Invariant
-- Pending Decision: Bounded Context、Aggregate境界、Data Owner、永続化、Event Sourcing／CQRS、Projection境界
+- Accepted Architecture: [ADR #24](../adr/shared-expense-domain-boundaries.md)の3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離
+- Pending Decision: Aggregate境界、個別Data Owner、Port契約、Persistence詳細、非同期Projection。条件C1は未充足で依存実装Ready不可
 - Deprecated: 個人用Household、Account、収入Transaction、日付境界Archive、2人限定の単一Payer／Payeeモデル
 
 Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repositoryを作らない。関連ADRがAcceptedとなり、仕様とRepository実装が整合するまで実装Readyへ進めない。
@@ -66,7 +67,7 @@ Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repos
 - Receipt Draftは最終編集から30日後、またはGroup終了後の次回Batchで、Draft、OCR結果、Item候補、画像を冪等に削除する。閲覧だけでは期限を延長しない。
 - 月別Category集計はAsia/Tokyoの`occurredOn`、Settlement Archiveの所属月はAsia/Tokyoの`archivedAt`で判定する。
 
-Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。Bounded Context、Aggregate、Data Owner、永続化、Event Sourcing／CQRS、Projection境界は引き続き[未確定事項・Documentation Conflict](../product/design-gates.md)で追跡し、現行Scopeに対応するADRがAcceptedになるまで実装Readyへ進めない。
+Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。3 Contextと保存の基本方針はADR #24で採用した。個別Data Owner、Aggregate、PersistenceとProjection詳細、条件C1は引き続き[設計Gate](../product/design-gates.md)で追跡し、必要なDecisionと条件が揃うまで依存実装Readyへ進めない。
 
 ## Modelの選択
 
@@ -100,7 +101,9 @@ Aggregateは同一TransactionでInvariantを守る必要がある最小境界と
 
 画面、GraphQL Mutation、Table、既存Classを理由にAggregate境界を決めない。現時点で採用済みAggregate一覧はない。
 
-### Bounded Context候補
+### Bounded Context
+
+採用するContextはGroup Management、Expense Recording、Settlementである。追加・変更する場合は新しいADRを要する。
 
 同一語の意味、Business Capability、Ruleの所有者、変更理由、Data Ownershipが異なる場合に境界候補を検討する。旧Repositoryにある`Household`、`Account`、`Transaction`、`Settlement`等のContext名をそのまま現行モデルへ持ち込まない。MicroserviceやDirectoryを先に作らず、Accepted ADRでContext Mapと連携契約が確定してから反映する。
 
@@ -113,7 +116,7 @@ Aggregateは同一TransactionでInvariantを守る必要がある最小境界と
 
 ## Eventと永続化
 
-Event Sourcing、CQRS、Projection、Outbox、Snapshotの適用対象は未確定である。旧ADRの「TransactionとSettlementだけ」を現行モデルへ適用しない。
+ADR #24ではState model＋必要な不変業務履歴とCommand／Query責務分離を採用し、全面Event Sourcingは初期採用しない。個別のProjection、Outbox、Snapshot保存設計は未決で、条件C1を維持する。旧ADRの「TransactionとSettlementだけ」を現行モデルへ適用しない。
 
 Accepted ADRでEvent Sourcingを採用する場合も、次を守る。
 

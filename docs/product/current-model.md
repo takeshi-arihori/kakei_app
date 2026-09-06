@@ -260,8 +260,8 @@
 
 実装Ready前に残る設計Gate:
 
-1. Bounded Context、Aggregate、Data Owner、Event Sourcing／CQRS、Projection境界を新しい共有割り勘Scopeで決める。
-2. 旧「Transaction限定Event Sourcing／日付境界Archive」を前提とするADR ProposalをそのままAcceptedにせず、現行Scopeに対応するADR Proposalを作成する。
+1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。個別Data Owner、Aggregate、Port、Projection、条件C1は後続設計で解消する。
+2. 旧「Transaction限定Event Sourcing／日付境界Archive」のProposalを現行仕様として扱わない。ADR #24の承認範囲と条件C1を優先する。
 3. 未移行または未確認のDecisionに依存するTaskは、GitHub上に根拠が揃うまでBlockedにする。
 
 現行Ruleは既に公開されていたRepositoryのモデリング記録（2026-08-29版）から引き継いだ。新しい業務判断はこの切替で追加していない。
@@ -270,6 +270,6 @@
 
 - 2人限定・個人用家計・単一Payer／Payeeの旧記述は現行Ruleとして使用しない。
 - RepositoryのREADME、AGENTS、engineering docsは2026-08-23の共有割り勘Scopeへ同期済み。旧語はDeprecatedな前提を説明する場合だけ使用する。
-- 旧Issue #9で確認されたDomain Ruleはこの文書へ統合した。Aggregate境界、Bounded Context、Data Owner、永続化、Event Sourcing／CQRS、Projection境界は未確定であり、現行Scopeに対応するADRのAcceptedが必要。
+- 旧Issue #9で確認されたDomain Ruleはこの文書へ統合した。3 Contextと保存の基本方針はADR #24に従う。Aggregate境界、個別Data Owner、Persistence詳細、ProjectionとSnapshot保護条件C1は未確定であり、依存実装前に解消する。
 - 作業の管理先はPrivate GitHub Project #9とIssue。管理先の切替は未確定の業務設計Gateを解消しない。
 - Conflictを実装で吸収しない。
