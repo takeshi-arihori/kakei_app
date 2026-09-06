@@ -88,7 +88,7 @@ StatusはBacklog → Ready → In Progress → Review → Done。飛ばす場合
 
 1. 変更された業務理解・要求・DecisionをIssueとRepository文書へ反映する。
 2. 仕様、設計、運用文書ごとに`方針変更: なし／あり`を確認する。`あり`または不明ならGitHubへADR Proposalを起票し、Project OwnerがAcceptedを明示するまで関連実装を進めない。Rejectedの場合は変更案を取り下げ、現行Decisionとの整合を再確認する。
-3. RepositoryのMermaid図、ER、画面遷移、Runbookを必要範囲で更新する。
+3. [図の管理ルール](diagram-governance.md)に従い、RepositoryのMermaid図、ER、画面遷移、Runbookを必要範囲で更新する。draw.ioはOwnerの検討用入力であり、AIは変更しない。
 4. Repo内の実装契約、Schema、Migration Note、Operation手順を更新する。
 5. TaskのDone Criteriaと文書差分を再確認する。
 6. PR TemplateのDocument Impactを記入する。

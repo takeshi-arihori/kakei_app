@@ -237,15 +237,12 @@
 
 ## Diagram Convention
 
-- 対象File: `docs/modering/kakei_app.drawio`
-- 利用者は基本的に既存Fileへの上書きを希望している。
-- Pageは1つだけにする。
-- 白背景、黒線、黒文字を基本とする。Knowledge Stateなど意味上必要な場合だけ補助表現を使う。
-- `System Context`、`Use Case Model`を上段から配置する。
-- 下段では`Domain Model`と`Object Model`だけを左右に横並びにする。
-- System、Use Case、Domain、Objectを同じPageへ記載する。
-- Use Case図を省略しない。
-- Confirmedのみを確定表現で描き、未確定事項は本文または検討メモで管理する。
+- 正式な設計図は`docs/diagrams/<name>.mermaid.md`に置き、[図の管理ルール](../engineering/diagram-governance.md)に従う。
+- 文章のAccepted Decision、業務Rule、不変条件を図より優先する。
+- draw.ioはProject Ownerが意図、仮説、希望する方向を伝える検討用入力であり、正本ではない。AIはdraw.ioファイルを変更しない。
+- Project Ownerが明示した場合だけdraw.ioを読み取り専用で参照し、`Confirmed`、`Proposed`、`Open Question`へ分ける。
+- draw.ioとMermaidを自動同期しない。OwnerがProposedの採用を承認した後だけ、関連IssueまたはADRと同じ変更でMermaid正本へ反映する。
+- 既存draw.ioはこの方針の採用によって自動変換、更新、削除しない。その内容だけを根拠にDomain ConceptをConfirmedへ昇格しない。
 
 ## Modeling Method
 
@@ -259,7 +256,7 @@
 
 ## Resolved Questions and Remaining Design Gates
 
-旧Issue #9で扱った5項目は2026-08-24にすべて利用者確認済みとなった。Domain RuleとしてのOpen Questionは残っていない。旧Issue本文の管理先・正本・完了手順は履歴であり、現在の作業手順として使用しない。現行Ruleの正本はこの固定Commitの本文である。
+旧Issue #9で扱った5項目は2026-08-24にすべて利用者確認済みとなった。Domain RuleとしてのOpen Questionは残っていない。旧Issue本文の管理先・正本・完了手順は履歴であり、現在の作業手順として使用しない。現行Ruleの正本は`develop`の本文である。
 
 実装Ready前に残る設計Gate:
 

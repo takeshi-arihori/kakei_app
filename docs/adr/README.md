@@ -5,6 +5,7 @@ Decision本文はこのディレクトリで管理する。Owner承認、関連T
 | Decision | Status | 関係・証拠 |
 | --- | --- | --- |
 | [GitHub正本への切替](github-canonical-cutover.md) | Accepted | [Owner承認・切替実施記録 #17](https://github.com/takeshi-arihori/kakei_app/issues/17) |
+| [Mermaid図をRepository正本とする](mermaid-diagram-source-of-truth.md) | Accepted | [Owner承認 #13](https://github.com/takeshi-arihori/kakei_app/issues/13)、[実装Task #22](https://github.com/takeshi-arihori/kakei_app/issues/22) |
 | 旧ADR-14のNotion正本方針 | Superseded（#17のCutover実施記録発効時） | #17のCutover実施記録が発効点。旧ページは更新しない |
 | 旧ADR-20のPublic Repository / Private Project / 公開Gate | Accepted、部分修正 | 正本・Rollbackの条件を新ADRがAmends。全部置換しない |
 

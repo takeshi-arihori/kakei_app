@@ -233,7 +233,7 @@ test('modern requests reject an unsupported protocol version', async () => {
   });
 });
 
-test('tools/list exposes only diagram operations with modern result metadata', async () => {
+test('tools/list exposes only read-only draw.io access with modern result metadata', async () => {
   await withTempRoot(async (root) => {
     const context = { rootDirectory: root, protocolEra: null, legacyInitialized: false };
     const result = await handleMcpMessage({
@@ -245,12 +245,22 @@ test('tools/list exposes only diagram operations with modern result metadata', a
     assert.equal(result.result.resultType, 'complete');
     assert.equal(result.result.ttlMs, 0);
     assert.equal(result.result.cacheScope, 'private');
-    assert.deepEqual(result.result.tools.map((tool) => tool.name), [
-      'drawio_create',
-      'drawio_read',
-      'drawio_update',
-      'drawio_validate'
-    ]);
+    assert.deepEqual(result.result.tools.map((tool) => tool.name), ['drawio_read']);
+  });
+});
+
+test('MCP rejects former mutation tool names', async () => {
+  await withTempRoot(async (root) => {
+    const context = { rootDirectory: root, protocolEra: null, legacyInitialized: false };
+    for (const name of ['drawio_' + 'create', 'drawio_' + 'update']) {
+      const result = await handleMcpMessage({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: modernParams({ name, arguments: { path: 'docs/domain.drawio' } })
+      }, context);
+      assert.equal(result.error.code, -32601);
+    }
   });
 });
 

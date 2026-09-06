@@ -25,6 +25,8 @@ Notion併用はOwnerの利用停止意向に合わない。Repository全体のPr
 
 Boardと正本切替を別Task、別Branch、別Draft PRに分ける。Board実体検証、公開安全な現行仕様・ルール、独立Evaluatorのpassを確認後、#17とProject READMEへ固定Commitを指すCutover実施記録を保存する。Draft PRはMergeせず、develop未同期を明記する。次担当はその固定Commitを読む。
 
+実施時点では上記の固定CommitをCutover根拠とした。その後、Boardと正本切替のPull Requestは2026-09-06にMergeされ、現在は`develop`を参照する。固定Commitは監査証跡として保持する。
+
 移行漏れを隠さず、未移行・未確定事項を設計Gateとして管理する。旧Epic/Task全件の移行や要編集情報の生コピーはしない。現在の既知の業務Ruleは公開済みRepositoryの記録を整理し、新しい業務判断を加えない。
 
 ## Rollback・Review Trigger

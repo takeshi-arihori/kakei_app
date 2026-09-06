@@ -1,6 +1,6 @@
 # GitHub正本の入口
 
-Notionは読み書きしない。2026-09-05のOwner承認は[ADR #17](https://github.com/takeshi-arihori/kakei_app/issues/17)に記録した。切替の実施結果と、現在使用する**固定Commit URL**も同Issueの「Cutover実施記録」で管理する。
+Notionは読み書きしない。2026-09-05のOwner承認と切替実施結果は[ADR #17](https://github.com/takeshi-arihori/kakei_app/issues/17)に記録した。2026-09-06に切替PRがMergeされ、現在は`develop`を正本として使用する。
 
 ## 何をどこで管理するか
 
@@ -8,20 +8,17 @@ Notionは読み書きしない。2026-09-05のOwner承認は[ADR #17](https://gi
 | --- | --- |
 | Epic・TaskのRequirement、Done Criteria、依存、Owner、PR URL | GitHub Issue本文 |
 | Status、Sprint、Story Points、優先度、分類 | [Private Project #9](https://github.com/users/takeshi-arihori/projects/9)のField |
-| 現行仕様・業務Rule・設計・運用文書 | このRepositoryの指定された固定Commit |
+| 現行仕様・業務Rule・設計・運用文書 | このRepositoryの`develop` |
 | Decision本文・Status・履歴 | docs/adr。承認と切替実行の証跡は関連Issue |
 | 実装のレビューと統合 | develop向けPull Request |
 
 同じ情報を二重に編集しない。Issue本文にProject Fieldの要約を記載した場合は同時更新し、食い違いを再取得で検出する。ProjectだけPrivateにしてもPublic RepositoryのIssue/PRは公開される。
 
-## develop未同期の期間
+## Cutover実施記録
 
-今回のPRはDraftのままで、Mergeしない。したがって、`develop`をそのまま読むと旧運用指示が残る。
-次の担当者は最初にADR #17のCutover実施記録から固定Commitを開き、そのCommitのAGENTS.md、Skill、仕様を使う。切替実施記録がまだなければ切替準備中であり、完了と推測しない。
+[Scrum Board試験構築 PR #20](https://github.com/takeshi-arihori/kakei_app/pull/20)と[GitHub正本切替 PR #21](https://github.com/takeshi-arihori/kakei_app/pull/21)は2026-09-06にMerge済みである。`develop`にはIssue Form、Working Agreement、GitHub中心のSkill、正本入口、公開Gateが揃っている。
 
-Scrum Working AgreementとIssue Formは[PR #20](https://github.com/takeshi-arihori/kakei_app/pull/20)の承認済み[固定Commit](https://github.com/takeshi-arihori/kakei_app/tree/85f3d6205171ab3e28d0ba9a92b87d90eb183a19)を使用する。FormがdevelopにMergeされるまでは通常の新規Issue画面に自動表示されないため、この固定CommitのFormを基にIssue本文を整える。
-
-正本切替Taskは[Issue #19](https://github.com/takeshi-arihori/kakei_app/issues/19)。文書とSkillの固定CommitはそのDraft PR作成後にADR #17へ追記する。Merge後にOwnerが確認して正本参照先をdevelopへ更新する。Branch名だけを正本の識別子にしない。
+PR #20の固定CommitとPR #21の固定Commitは切替過程の監査証跡として保持する。日常作業では固定Commitへ戻らず`develop`を参照する。正本切替Taskは[Issue #19](https://github.com/takeshi-arihori/kakei_app/issues/19)に記録されている。
 
 ## 読む順序
 
@@ -29,7 +26,8 @@ Scrum Working AgreementとIssue Formは[PR #20](https://github.com/takeshi-ariho
 2. [未確定・未移行Gate](../product/design-gates.md)
 3. [ADR一覧](../adr/README.md)
 4. [開発ガイド](../engineering/README.md)と対象Issue
-5. [Scrum Working Agreement](https://github.com/takeshi-arihori/kakei_app/blob/85f3d6205171ab3e28d0ba9a92b87d90eb183a19/docs/engineering/scrum-working-agreement.md)
+5. [Scrum Working Agreement](../engineering/scrum-working-agreement.md)
+6. [図の管理ルール](../engineering/diagram-governance.md)
 
 ## 公開と保留
 

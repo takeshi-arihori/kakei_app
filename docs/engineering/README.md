@@ -22,6 +22,7 @@ Taskが指定されていない場合、AIはコードの見た目だけから�
 - [frontend.md](frontend.md): Frontendの責務、構成、状態、Accessibility
 - [testing.md](testing.md): TDD、Test Level、Done Criteria
 - [delivery-workflow.md](delivery-workflow.md): Epic／Task、Git、PR、文書更新
+- [diagram-governance.md](diagram-governance.md): Mermaid図の正本、Knowledge State、draw.io検討用入力との境界
 - [08. 設計変更・意思決定](../governance/README.md): ADR、未確定事項、文書間Conflict、廃止履歴
 
 ## 変更種別から読む文書
@@ -29,6 +30,7 @@ Taskが指定されていない場合、AIはコードの見た目だけから�
 | 変更 | 必ず読む | 追加確認 |
 | --- | --- | --- |
 | Domain Rule／Aggregate／Event | domain-design、testing | DDD・UML、ADR、Event Schema |
+| Mermaid図／draw.io入力 | diagram-governance、delivery-workflow | 関連Issue、ADR、Owner承認 |
 | GraphQL／Application Use Case | domain-design、coding-standards、testing | 要件定義、Architecture、Schema |
 | Frontend／画面 | frontend、testing | 画面遷移、UX/UI、GraphQL Operation |
 | Prisma／Migration／Read Model | domain-design、coding-standards、testing | ER図、Migration、Rebuild計画 |

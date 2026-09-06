@@ -4,7 +4,7 @@
 
 - 利用者の最新の明示指示を最優先する。
 - Notionは読み書きしない。GitHub Issueを要件・完了条件、Private Projectを進捗・Sprint、Repositoryを仕様・設計・ADRの正本とする。
-- 正本の参照先とdevelop未同期の扱いは[正本入口](docs/governance/README.md)を確認する。
+- 正本の参照先とCutover記録は[正本入口](docs/governance/README.md)を確認する。
 - 実装前に対象Task、関連仕様、GitHubのAccepted ADR、既存コードを確認する。
 - 詳細ルールの入口は[docs/engineering/README.md](docs/engineering/README.md)とする。必要な文書だけを読む。
 - GitHubとコードが矛盾する場合は実装で吸収せず、矛盾と影響を報告して解消する。
@@ -28,6 +28,8 @@
 - Contextを跨ぐ直接参照を避け、IDまたは明示的なPort・公開契約を使用する。
 - Domain Event、Integration Event、Stored Event、Audit Log、Outbox Messageを区別する。
 - Event、Snapshot、Logへ機密平文を保存しない。
+- 正式な設計図は`docs/diagrams/*.mermaid.md`で管理し、文章のAccepted Decisionを優先する。詳細は[図の管理ルール](docs/engineering/diagram-governance.md)に従う。
+- draw.ioはProject Ownerの検討用入力とする。AIはdraw.ioファイルを作成、更新、削除、整形せず、変更を行うToolも使用しない。Ownerが明示した場合だけ読み取り専用で参照する。
 
 現行Product Scopeと設計Gate:
 
@@ -61,6 +63,7 @@ Epic／Taskの起票・改善は`prepare-github-work`、Ready済みTaskの実装
 - 内部TimestampはUTC、業務上の月次判定はAsia/Tokyoで行う。
 - Secret、個人情報、実在する金融情報をコード、Fixture、Log、Commitへ含めない。
 - コメントは処理の逐語説明ではなく、理由、制約、代替案を記す。
+- draw.ioとMermaidを自動同期しない。検討用入力は`Confirmed`、`Proposed`、`Open Question`へ分け、Ownerが採用を承認した後だけMermaid正本へ反映する。
 
 ## Git・プルリクエスト
 
@@ -86,4 +89,5 @@ Epic／Taskの起票・改善は`prepare-github-work`、Ready済みTaskの実装
 - Frontend責務: [frontend.md](docs/engineering/frontend.md)
 - TDD・品質保証: [testing.md](docs/engineering/testing.md)
 - Epic／Task／Git／PR前文書更新: [delivery-workflow.md](docs/engineering/delivery-workflow.md)
+- 図の正本・draw.io検討用入力: [diagram-governance.md](docs/engineering/diagram-governance.md)
 - ADR・未確定事項: [08. 設計変更・意思決定](docs/governance/README.md)
