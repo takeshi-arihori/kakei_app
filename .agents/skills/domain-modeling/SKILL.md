@@ -9,7 +9,7 @@ description: 家計アプリの要求・業務知識から、System Context、Us
 
 ## 正本を確認する
 
-Notionは読み書きしない。[正本入口](../../../docs/governance/README.md)から現在の固定Commit、GitHub Issue、Private Projectを確認する。
+Notionは読み書きしない。[正本入口](../../../docs/governance/README.md)から現在の`develop`、GitHub Issue、Private Projectを確認する。
 
 - [現行Product Scope・業務モデル](../../../docs/product/current-model.md)
 - [未確定・未移行Gate](../../../docs/product/design-gates.md)
@@ -27,9 +27,9 @@ Notionは読み書きしない。[正本入口](../../../docs/governance/README.
 - [references/domain-model-rules.md](references/domain-model-rules.md)
 - [references/output-contract.md](references/output-contract.md)
 
-Diagramの作成・更新を求められた場合は、モデリング完了後に次も読む。
+Diagramの作成・更新またはdraw.io入力の参照を求められた場合は、モデリング完了後に次も読む。
 
-- [references/drawio-integration.md](references/drawio-integration.md)
+- [references/diagram-governance.md](references/diagram-governance.md)
 
 ## Workflow
 
@@ -163,18 +163,18 @@ Repositoryは現行実装のEvidenceであり、Domain上の正しさの根拠�
 10. Open Questions / Conflicts
 11. Next Modeling Step
 
-### 10. Diagramを生成・更新する
+### 10. Mermaid Diagramを生成・更新する
 
-UserがDiagramを求めている場合だけ、[references/drawio-integration.md](references/drawio-integration.md)へ従う。
+UserがDiagramを求めている場合は[references/diagram-governance.md](references/diagram-governance.md)へ従う。
 
 1. Diagramの意味へ影響する`Conflict`または`Open Question`がないことを確認する。
-2. Domain Modelからtyped Diagram Specificationを作る。
-3. 利用可能なMCP Toolを確認する。
-4. 新規作成は`drawio_create`、既存更新は先に`drawio_read`してから`drawio_update`を使う。
-5. 最後に`drawio_validate`を実行する。
-6. MCPが利用できない場合はDiagram Specificationまでを成果として返し、`.drawio`生成だけを未実施として報告する。
+2. 文章のAccepted DecisionとInvariantからMermaid Diagramを作る。
+3. `docs/diagrams/<name>.mermaid.md`へMetadataと根拠Linkを記載する。
+4. Markdown Link、MermaidのFenced Code Block、基本構文を検証する。
+5. draw.io入力がある場合は、Ownerが明示したときだけ読み取り専用で参照し、`Confirmed`、`Proposed`、`Open Question`へ分ける。
+6. `Proposed`はOwner承認後だけ、関連IssueまたはADRと同じ変更でMermaid正本へ反映する。
 
-MCPへDomain判断を委譲しない。Diagram FileをDomainの正本として扱わない。
+draw.ioファイルを変更せず、draw.ioとMermaidを自動同期しない。DiagramへDomain判断を委譲しない。
 
 ## Stop Conditions
 
@@ -190,8 +190,8 @@ MCPへDomain判断を委譲しない。Diagram FileをDomainの正本として�
 Diagramだけ停止する条件:
 
 - Diagramの意味を左右する`Conflict`または`Open Question`が残っている
-- 既存`.drawio`をMCPが安全に読めない
-- draw.io MCPが利用できず、File生成が必要
+- Proposedな内容についてOwner承認がない
+- 正本となる文章Decisionまたは関連Issueを特定できない
 
 Diagram停止条件は、Domain Modeling自体の結果を破棄する理由にはしない。
 
@@ -205,8 +205,10 @@ Diagram停止条件は、Domain Modeling自体の結果を破棄する理由に�
 - 最初のモデルを最終仕様として固定しない。
 - Userの明示確認なしにAccepted ADRを書き換えない。
 - `.drawio`に存在するElementを根拠にDomain ConceptをConfirmedへ昇格しない。
-- 既存Diagramを読まずに上書きしない。
+- draw.ioファイルを作成、更新、削除、整形しない。
+- draw.ioを変更するToolを使用しない。
+- draw.ioとMermaidを自動同期しない。
 
 ## Diagram
 
-Domain Modeling Skillは「何を描くか」を決め、draw.io MCPは「どう`.drawio`へ保存するか」を担当する。この境界を維持する。
+Domain Modeling Skillは「何を描くか」を文章Decisionから決め、正式な図をRepositoryのMermaid Markdownへ保存する。draw.ioはProject Ownerの検討用入力であり、Ownerが対象を明示した場合だけ読み取り専用で扱う。

@@ -1,10 +1,4 @@
-import {
-  createDiagramFile,
-  DrawioError,
-  readDiagramFile,
-  updateDiagramFile,
-  validateDiagramFile
-} from './drawio.mjs';
+import { DrawioError, readDiagramFile } from './drawio.mjs';
 
 export const SERVER_INFO = { name: 'kakei-drawio-mcp', version: '0.1.0' };
 export const MODERN_PROTOCOL_VERSION = '2026-07-28';
@@ -13,120 +7,18 @@ export const LEGACY_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26
 const PROTOCOL_VERSION_META = 'io.modelcontextprotocol/protocolVersion';
 const CLIENT_CAPABILITIES_META = 'io.modelcontextprotocol/clientCapabilities';
 const SERVER_INFO_META = 'io.modelcontextprotocol/serverInfo';
-const INSTRUCTIONS = 'Use draw.io tools only for diagram file operations. Domain and business decisions belong to the calling skill.';
+const INSTRUCTIONS = 'Read-only access to Project Owner draw.io input. Do not create, update, delete, format, or synchronize draw.io files.';
 
 const PATH_PROPERTY = {
   type: 'string',
   description: 'Repository-root-relative path ending in .drawio. Absolute paths and paths escaping the root are rejected.'
 };
 
-const NODE_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['id', 'label'],
-  properties: {
-    id: { type: 'string' },
-    label: { type: 'string' },
-    x: { type: 'number' },
-    y: { type: 'number' },
-    width: { type: 'number' },
-    height: { type: 'number' },
-    style: { type: 'string' }
-  }
-};
-
-const EDGE_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['id', 'source', 'target'],
-  properties: {
-    id: { type: 'string' },
-    source: { type: 'string' },
-    target: { type: 'string' },
-    label: { type: 'string' },
-    style: { type: 'string' }
-  }
-};
-
-const DIAGRAM_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['name', 'nodes', 'edges'],
-  properties: {
-    name: { type: 'string' },
-    nodes: { type: 'array', items: NODE_SCHEMA },
-    edges: { type: 'array', items: EDGE_SCHEMA }
-  }
-};
-
 export const TOOL_DEFINITIONS = [
-  {
-    name: 'drawio_create',
-    title: 'Create draw.io diagram',
-    description: 'Create an uncompressed draw.io file from a typed diagram specification. Does not infer domain concepts or business rules.',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['path', 'diagram'],
-      properties: {
-        path: PATH_PROPERTY,
-        diagram: DIAGRAM_SCHEMA,
-        overwrite: { type: 'boolean', default: false, description: 'Must be explicitly true to replace an existing file.' }
-      }
-    }
-  },
   {
     name: 'drawio_read',
     title: 'Read draw.io diagram',
     description: 'Read a supported uncompressed draw.io file and return a typed diagram specification instead of raw XML.',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['path'],
-      properties: { path: PATH_PROPERTY }
-    }
-  },
-  {
-    name: 'drawio_update',
-    title: 'Update draw.io diagram',
-    description: 'Apply typed operations while preserving untouched XML structure in a supported uncompressed draw.io file. Removing a node also removes connected edges.',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['path', 'operations'],
-      properties: {
-        path: PATH_PROPERTY,
-        operations: {
-          type: 'array',
-          minItems: 1,
-          items: {
-            oneOf: [
-              {
-                type: 'object', additionalProperties: false, required: ['type', 'name'],
-                properties: { type: { const: 'rename_diagram' }, name: { type: 'string' } }
-              },
-              {
-                type: 'object', additionalProperties: false, required: ['type', 'node'],
-                properties: { type: { const: 'upsert_node' }, node: NODE_SCHEMA }
-              },
-              {
-                type: 'object', additionalProperties: false, required: ['type', 'edge'],
-                properties: { type: { const: 'upsert_edge' }, edge: EDGE_SCHEMA }
-              },
-              {
-                type: 'object', additionalProperties: false, required: ['type', 'id'],
-                properties: { type: { const: 'remove_element' }, id: { type: 'string' } }
-              }
-            ]
-          }
-        }
-      }
-    }
-  },
-  {
-    name: 'drawio_validate',
-    title: 'Validate draw.io diagram',
-    description: 'Validate that a draw.io file is a supported uncompressed mxGraphModel with internally valid nodes and edges.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -210,23 +102,8 @@ function isModernRequest(message, context) {
 export async function executeTool(name, args, context) {
   const input = requireObject(args ?? {}, 'arguments');
   switch (name) {
-    case 'drawio_create':
-      return createDiagramFile({
-        rootDirectory: context.rootDirectory,
-        requestedPath: input.path,
-        diagram: input.diagram,
-        overwrite: input.overwrite === true
-      });
     case 'drawio_read':
       return readDiagramFile({ rootDirectory: context.rootDirectory, requestedPath: input.path });
-    case 'drawio_update':
-      return updateDiagramFile({
-        rootDirectory: context.rootDirectory,
-        requestedPath: input.path,
-        operations: input.operations
-      });
-    case 'drawio_validate':
-      return validateDiagramFile({ rootDirectory: context.rootDirectory, requestedPath: input.path });
     default:
       throw Object.assign(new Error(`unknown tool: ${name}`), { protocolCode: -32601 });
   }

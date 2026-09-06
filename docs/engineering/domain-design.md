@@ -1,5 +1,7 @@
 # ドメイン設計ルール
 
+Domain Modelなどの正式な図は[図の管理ルール](diagram-governance.md)に従い、`docs/diagrams/*.mermaid.md`へ記録する。文章のAccepted DecisionとInvariantを図より優先し、未承認の概念や境界を確定表現で追加しない。
+
 ## 目的とKnowledge State
 
 DDDは、共有割り勘の業務RuleをDB、Prisma、GraphQL、Honoの都合ではなく、ユビキタス言語とDomain Modelで表現するために使う。EntityやRepositoryを置くこと自体を目的にしない。
