@@ -9,6 +9,8 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 - 現行Scopeに対応した上記DecisionのAccepted ADR。旧Transaction限定・日付境界ArchiveのProposalを採用済みとして扱わない。
 - これらに依存するAPI/Schema/認可・運用詳細。既存のHono/Next.jsの責務分離、金額整数、秘密をEvent/Logへ保存しない等の不変条件は維持する。
 
+[Issue #9](https://github.com/takeshi-arihori/kakei_app/issues/9)で[設計境界の比較](../domain/shared-expense-design-boundaries.md)と[Proposed ADR](../adr/shared-expense-domain-boundaries.md)を準備している。Project Ownerの明示DecisionでADRがAcceptedになるまで、候補を正式Mermaid図、Directory、Schema、Event、後続実装TaskのReady判定へ反映しない。
+
 ## 今回の移行範囲
 
 現在の[業務モデル](current-model.md)は公開済みRepositoryの引き継ぎ記録を、取得済みの現行Scope/業務Ruleと照合して整理した。架空のActor・金額例を維持し、古い個人識別用の呼称、旧参照先、解消済み事項を未確定とする記述を除いた。業務判断の追加はしていない。
