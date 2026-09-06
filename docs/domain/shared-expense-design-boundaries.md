@@ -1,12 +1,12 @@
 # 共有割り勘モデルの設計境界検討
 
-- Knowledge State: Proposed analysis（採用前）
+- Knowledge State: 比較検討の履歴（2026-09-06にA／E1の基本方針を条件付き採用。個別境界は候補）
 - Related Task: [GitHub Issue #9](https://github.com/takeshi-arihori/kakei_app/issues/9)
 - Decision: [共有割り勘の設計境界と永続化方針](../adr/shared-expense-domain-boundaries.md)
 - Confirmed source: [現行Product Scope・業務モデル](../product/current-model.md)
 - Last reviewed: 2026-09-06
 
-この文書はOwnerが設計方針を判断するための入力である。Bounded Context、Aggregate、Data Owner、Event Sourcing、CQRS、Projectionを確定しない。`Confirmed`は現行仕様からの転記、`Proposed`は比較対象、`Open Question`は判断が必要な事項を表す。
+この文書は提案時の比較検討を保持する。採用内容の正本はADR #24で、3 ContextとE1の基本方針のみ条件付きAcceptedとなった。表の個別Data Owner、Aggregate、Port等は採用済みではない。`Confirmed`は現行仕様からの転記、`Proposed`は比較対象、`Open Question`は判断が必要な事項を表す。
 
 ## System Context
 
@@ -124,4 +124,4 @@ E1でもDomain Event、Stored Event、Integration Event、Audit Log、Outbox Mes
 - `Snapshot Revision`は業務上の不変記録であり、Event Sourcingの技術Snapshotと同義にしない。
 - 現行Product Ruleは業務上のSnapshot Revisionへ金額、実支払者、割合、負担額、Balance等を固定する。一方、Architecture不変条件は「Event、Snapshot、Logへ機密平文を保存しない」とする。`Snapshot`の範囲が曖昧なため、必要な業務Dataまで保存禁止とは解釈せず、上記Open Questionを解消してからPersistence実装をReadyにする。
 - 既存draw.ioはOwnerの検討用入力であり、この分析の根拠または正本ではない。AIは変更していない。
-- ADRがAcceptedになる前に、この候補をDirectory、Schema、正式Mermaid図、後続実装TaskのReady判定へ反映してはならない。
+- ADR #24で採用された基本方針だけを根拠として使用する。個別境界候補と条件C1は未決・未充足のままであり、依存する実装をReadyにしない。
