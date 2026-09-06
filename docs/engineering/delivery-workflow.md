@@ -77,6 +77,8 @@ StatusはBacklog → Ready → In Progress → Review → Done。飛ばす場合
 - 不具合修正: `codex/fix-issue-number-short-description`
 - 保守作業: `codex/chore-issue-number-short-description`
 - `develop`を統合Branchとし、Pull Requestを経由する。
+- `develop`向けPRはSquash mergeを使用し、1 PRを1 Commitとして統合する。Reviewと検証を完了し、Mergeの明示依頼を受けた後、GitHubの「Squash and merge」または`gh pr merge <PR番号> --squash`を使用する。
+- Squash後のCommitメッセージはConventional Commitsに従い、PR全体の成果を表す。作業Branch内のCommitを事前に1つへ書き換える必要はない。
 - `develop`への直接Pushと`main` Branchの作成・Pushを禁止する。
 - Conventional Commitsを使う。例: `feat(group-expense): add split allocation command`
 - Commitはレビュー可能な論理単位にし、Refactorと無関係な整形を混ぜない。
