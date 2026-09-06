@@ -70,6 +70,7 @@ Epic／Taskの起票・改善は`prepare-github-work`、Ready済みTaskの実装
 - Epic、Task、ADRの起票・状態管理はGitHubだけで行う。
 - `develop`を統合Branchとし、`develop`への直接Pushと`main` Branchの作成・Pushを禁止する。
 - 1 Task／1 Branch／1 PRを基本とする。
+- `develop`向けPRはSquash mergeで統合する。1 PRを1 Commitとし、最終CommitメッセージはConventional Commitsに従う。
 - Conventional Commitsを使用し、Commitをレビュー可能な論理単位にする。
 - PR本文へGitHub Task URLを記載する。
 - PR作成前に[delivery-workflow.md](docs/engineering/delivery-workflow.md)の文書影響確認を完了する。
