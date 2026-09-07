@@ -13,3 +13,10 @@ Decision本文はこのディレクトリで管理する。Owner承認、関連T
 ほかの旧ADR全文は未移行である。現在のRepository不変条件は維持するが、過去ADRの詳細が必要な変更は[設計Gate](../product/design-gates.md)に従い、GitHub上で根拠を確定するまでReadyにしない。Notionの再取得で補わない。
 
 ADRにはContext、Decision、Alternatives、Consequences、Implementation、Review Trigger、Owner承認日を含める。完全置換だけSupersedes/Superseded By、一部変更はAmendsで表す。承認済みの履歴を消さない。
+
+## Group Managementの後続Proposal
+
+- [整合性境界とParticipantの表現](group-management-consistency-boundary.md): Proposed。個別Data Owner・Aggregate・Repository PortはOwner判断待ち。
+- [Command本人性・認可・再試行](group-management-command-authorization.md): Proposed。本番認証・招待・保存の未決Gateは別途残る。
+
+[設計分析](../domain/group-management-first-boundary.md)を参照する。ADR #24のAcceptedとC1未充足は変更しない。

@@ -107,3 +107,7 @@ Proposed中はRepository ADRとGitHub ADR IssueをClose／Rejectedとして記�
 - Settlement履歴の監査・再生要件がState modelで満たせないと判明したとき
 - 非同期Projectionが必要な量、応答時間、可用性要件が確認されたとき
 - Security／Privacy、保持期限、削除要件が変わったとき
+
+## Accepted記録の統合確認
+
+[PR #27](https://github.com/takeshi-arihori/kakei_app/pull/27)は2026-09-06T12:03:31Z（Asia/Tokyo: 21:03:31）にMerge済み。Merge Commitは[`a244be382402df789354571056ec38c0cbd7417a`](https://github.com/takeshi-arihori/kakei_app/commit/a244be382402df789354571056ec38c0cbd7417a)。2026-09-07にGitHub APIで確認した。これはAccepted記録の統合であり、条件C1の充足や個別Aggregate・Portの採用ではない。C1は未充足、依存Persistence実装はBacklog / Blocked Yesを維持する。
