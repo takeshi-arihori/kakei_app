@@ -33,3 +33,7 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 ## 公開前Gate
 
 公開対象ごとに機械検査と手動Reviewを行う。Secret、PII、実在金融情報、内部Security情報、未分類・要編集の内容を公開しない。必要な現行非公開情報が新たに見つかった場合はOwnerへPrivate保管先を確認する。新規仕様を一般論から捏造しない。
+
+## Group Management初回境界
+
+[設計分析](../domain/group-management-first-boundary.md)、[整合性境界Proposal](../adr/group-management-consistency-boundary.md)、[認可Proposal](../adr/group-management-command-authorization.md)へ具体化した。すべての個別設計はProposedで、Owner Acceptedまでは依存Domain／Application実装をBacklog / Blocked Yesとする。招待、再参加、Archivedでの役割変更、Context間の認可競合、本番認証と保存方式は未決。C1は未充足、Persistence実装はBlockedを維持する。
