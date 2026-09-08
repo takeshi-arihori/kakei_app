@@ -260,7 +260,7 @@
 
 実装Ready前に残る設計Gate:
 
-1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。個別Data Owner、Aggregate、Port、Projection、条件C1は後続設計で解消する。
+1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可は[ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)で条件付き採用した。Category所属、他ContextのAggregate、Context間Port、Projection、本番認証、招待・再参加、冪等記録の保持、条件C1は後続設計で解消する。
 2. 旧「Transaction限定Event Sourcing／日付境界Archive」のProposalを現行仕様として扱わない。ADR #24の承認範囲と条件C1を優先する。
 3. 未移行または未確認のDecisionに依存するTaskは、GitHub上に根拠が揃うまでBlockedにする。
 
@@ -270,6 +270,6 @@
 
 - 2人限定・個人用家計・単一Payer／Payeeの旧記述は現行Ruleとして使用しない。
 - RepositoryのREADME、AGENTS、engineering docsは2026-08-23の共有割り勘Scopeへ同期済み。旧語はDeprecatedな前提を説明する場合だけ使用する。
-- 旧Issue #9で確認されたDomain Ruleはこの文書へ統合した。3 Contextと保存の基本方針はADR #24に従う。Aggregate境界、個別Data Owner、Persistence詳細、ProjectionとSnapshot保護条件C1は未確定であり、依存実装前に解消する。
+- 旧Issue #9で確認されたDomain Ruleはこの文書へ統合した。3 Contextと保存の基本方針はADR #24に従う。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36に従う。他ContextのAggregateとData Owner、Persistence詳細、本番認証、招待・再参加、Context間認可、ProjectionとSnapshot保護条件C1は未確定であり、依存実装前に解消する。
 - 作業の管理先はPrivate GitHub Project #9とIssue。管理先の切替は未確定の業務設計Gateを解消しない。
 - Conflictを実装で吸収しない。

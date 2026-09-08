@@ -14,9 +14,9 @@ Decision本文はこのディレクトリで管理する。Owner承認、関連T
 
 ADRにはContext、Decision、Alternatives、Consequences、Implementation、Review Trigger、Owner承認日を含める。完全置換だけSupersedes/Superseded By、一部変更はAmendsで表す。承認済みの履歴を消さない。
 
-## Group Managementの後続Proposal
+## Group ManagementのDecision
 
-- [整合性境界とParticipantの表現](group-management-consistency-boundary.md): Proposed。個別Data Owner・Aggregate・Repository PortはOwner判断待ち。
-- [Command本人性・認可・再試行](group-management-command-authorization.md): Proposed。本番認証・招待・保存の未決Gateは別途残る。
+- [整合性境界とParticipantの表現](group-management-consistency-boundary.md): Accepted（条件付き）。GroupをRootとする初回整合性境界とRepository Portを採用。
+- [Command本人性・認可・再試行](group-management-command-authorization.md): Accepted（条件付き）。信頼済みActorとGroup版による認可、成功結果の冪等再取得を採用。
 
-[設計分析](../domain/group-management-first-boundary.md)を参照する。ADR #24のAcceptedとC1未充足は変更しない。
+[設計分析](../domain/group-management-first-boundary.md)を参照する。本番認証、招待・再参加、冪等記録の保持、Context間認可、C1／Persistenceは未決またはBlockedを維持する。ADR #24のAcceptedとC1未充足は変更しない。

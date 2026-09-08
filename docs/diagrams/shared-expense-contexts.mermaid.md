@@ -24,13 +24,13 @@ Context間の方向、公開契約、依存関係は未決のため矢印を描�
 
 | 表現 | 根拠と意味 |
 | --- | --- |
-| Group Management、Expense Recording、Settlementの3つの箱 | ADR #24 Decision 1の論理境界。個別Data OwnerやAggregateの配置は表さない |
+| Group Management、Expense Recording、Settlementの3つの箱 | ADR #24 Decision 1の論理境界。この図は、ADR #35で条件付きAcceptedとなったGroup ManagementのData Owner／Group Aggregateを含め、個別配置を表さない |
 | Shared expenseの外枠 | [現行Product Scope](../product/current-model.md)の共有割り勘アプリ。DeploymentやDatabaseの境界ではない |
 | 物理配置を描かない | ADR #24 Decision 2はMVPでModular Monolithを許容する。3 Contextは3 Microserviceの採用を意味しない |
 
 ## 未決事項と実装Gate
 
-Categoryの所属、個別Data Owner、Aggregate境界、Expense予約・競合のTransaction方式、Port契約、非同期Projectionは未決であり、この図では採用しない。
+ADR #35／#36で条件付きAcceptedとなったGroup Management初回境界を除き、Categoryの所属、他ContextのData Owner／Aggregate境界、Context間Port、Expense予約・競合のTransaction方式、非同期Projectionは未決であり、この図では採用しない。Group ManagementのRepository Portは[ADR #35](../adr/group-management-consistency-boundary.md)を正本とする。
 
 条件C1は未充足である。Snapshot Revisionの最小保存項目、暗号化、Group内認可、保持・削除、機密平文禁止との整合について、必要なOwner承認と独立Security Reviewの証拠が揃うまで、依存Persistence実装TaskはBacklog／Blocked YesとしReadyへ進めない。詳細は[ADRの条件C1](../adr/shared-expense-domain-boundaries.md#承認条件-c1-snapshot-revisionの保護と保存)と[設計Gate](../product/design-gates.md)で追跡する。
 

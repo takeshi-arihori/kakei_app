@@ -26,7 +26,7 @@ GraphQL契約の正本は[`schema.graphql`](schema.graphql)です。Repository r
 
 ## Domain設計Gate
 
-現行Scopeは共有Groupの割り勘です。Aggregate境界、Bounded Context、Data Owner、Event Sourcing適用範囲は未確定のため、旧Repositoryルールを根拠にSchemaやModuleを追加しません。詳細はRepository rootの[ドメイン設計ルール](../../docs/engineering/domain-design.md)を参照してください。
+現行Scopeは共有Groupの割り勘です。3 Bounded ContextとState modelはADR #24、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36で条件付き採用しています。他ContextのAggregateとData Owner、Context間Port、Persistence、本番認証、招待・再参加は未決のため、旧Repositoryルールを根拠にSchemaやModuleを追加しません。詳細はRepository rootの[ドメイン設計ルール](../../docs/engineering/domain-design.md)を参照してください。
 
 ## 将来のGo分離
 

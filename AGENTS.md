@@ -36,7 +36,7 @@
 - 業務Domainは1〜4人のGroupで行う共有割り勘に限定し、個人収支を扱わない。
 - 現行の主要語はGroup、Participant、Group Expense、Split Allocation、Settlement Case、Snapshot Revision、Payment Instruction、Payment Attempt、Settlement Archiveとする。
 - 個人用Household、Account、収入Transaction、日付境界Archive、単一Payer／Payeeを現行仕様として実装しない。
-- [ADR #24](docs/adr/shared-expense-domain-boundaries.md)によりGroup Management、Expense Recording、Settlementの3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離を採用する。個別Data Owner、Aggregate、Port契約、非同期Projectionは未決。条件C1（Snapshot Revisionの最小保存、暗号化、Group内認可、保持・削除）は未充足であり、依存するPersistence実装はReadyへ進めない。旧Context一覧や旧Aggregate境界を採用済みとして扱わない。
+- [ADR #24](docs/adr/shared-expense-domain-boundaries.md)によりGroup Management、Expense Recording、Settlementの3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離を採用する。[ADR #35](docs/adr/group-management-consistency-boundary.md)と[ADR #36](docs/adr/group-management-command-authorization.md)により、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可を条件付き採用する。Category所属、他ContextのAggregate、Context間Port、非同期Projection、本番認証、招待・再参加、冪等記録の保持は未決。条件C1（Snapshot Revisionの最小保存、暗号化、Group内認可、保持・削除）は未充足であり、依存するPersistence実装はReadyへ進めない。旧Context一覧や旧Aggregate境界を採用済みとして扱わない。
 - 未確定の設計判断に依存するTaskをReadyまたは実装へ進めない。
 
 ## 実装手順
