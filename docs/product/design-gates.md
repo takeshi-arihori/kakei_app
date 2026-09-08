@@ -6,8 +6,8 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 
 [ADR #24](../adr/shared-expense-domain-boundaries.md)は2026-09-06に案Aを条件付きAcceptedとした。3 Context（Group Management、Expense Recording、Settlement）、MVP Modular Monolith、State model＋必要な不変業務履歴、Command／Query責務分離を採用する。全面Event Sourcingと別Store／非同期Projectionは初期採用しない。
 
-- 個別Data Owner、Category所属、Aggregate境界、Expense予約・競合のTransaction方式、Port契約は未決。
-- Persistence、認可、Retention、Backup、Projectionの詳細は必要な後続Decisionを経て確定する。
+- Group Managementの最初のData Owner、Aggregate、Repository Port、内部Command認可は後続ADR #35／#36で条件付きAcceptedとなった。Category所属、他ContextのAggregate、Expense予約・競合のTransaction方式、Context間Portは未決。
+- Persistence、本番本人性・認証、招待、再参加、Context間認可、Retention、Backup、Projectionの詳細は必要な後続Decisionを経て確定する。
 - 条件C1は未充足。Snapshot Revisionの最小保存項目、暗号化、Group内認可、保持・削除を文書化し、機密平文禁止とのConflictを解消、Security ADRのOwner承認と独立Security Reviewを得るまで依存Persistence実装はBacklog／Blocked YesでReady不可。
 - 条件追跡の責任者はProject Owner、期限はPersistence TaskのReady前。証拠欄は[ADRの条件C1](../adr/shared-expense-domain-boundaries.md)に保持する。
 
@@ -36,4 +36,4 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 
 ## Group Management初回境界
 
-[設計分析](../domain/group-management-first-boundary.md)、[整合性境界Proposal](../adr/group-management-consistency-boundary.md)、[認可Proposal](../adr/group-management-command-authorization.md)へ具体化した。すべての個別設計はProposedで、Owner Acceptedまでは依存Domain／Application実装をBacklog / Blocked Yesとする。招待、再参加、Archivedでの役割変更、Context間の認可競合、本番認証と保存方式は未決。C1は未充足、Persistence実装はBlockedを維持する。
+[設計分析](../domain/group-management-first-boundary.md)、[整合性境界Decision](../adr/group-management-consistency-boundary.md)、[認可Decision](../adr/group-management-command-authorization.md)へ具体化した。2026-09-08にProject Ownerが両ADRの案Aを条件付きAcceptedとした。Accepted記録が`develop`へ統合された後、依存Domain／Application Taskを個別Ready評価する。招待、再参加、Archived後の役割変更、Context間の認可競合、本番認証、冪等記録の保持と保存方式は未決。C1は未充足、Persistence実装はBlockedを維持する。

@@ -82,7 +82,7 @@ Receipt、Reporting／Retentionまで分け、SettlementだけEvent Sourcingを�
 
 条件を満たす証拠が揃うまで、依存するPersistence実装TaskはBacklog／Blocked YesとしReadyへ進めない。設計調査、条件を解消するProposal作成、承認済み3 Contextだけの可視化は、各TaskのReady評価を経て進められる。
 
-Categoryの所属、個別Data Owner、Aggregate境界、Expense予約と競合のTransaction方式、Port契約、非同期Projectionは未決である。案AのAcceptedはこれらの採用、物理配置の製品選定、既存GraphQLやHonoの変更を含まない。
+本ADRをAcceptedとした時点では、Categoryの所属、個別Data Owner、Aggregate境界、Expense予約と競合のTransaction方式、Port契約、非同期Projectionは未決であった。その後、ADR #35／#36でGroup Management初回のData Owner、Group Aggregate、Repository Port、内部Command認可だけを条件付き採用した。Category所属、他ContextのAggregate、Context間Port、Expense予約と競合のTransaction方式、非同期Projectionは引き続き未決である。
 
 ## Implementation after Acceptance
 

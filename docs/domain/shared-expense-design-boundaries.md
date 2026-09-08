@@ -6,7 +6,7 @@
 - Confirmed source: [現行Product Scope・業務モデル](../product/current-model.md)
 - Last reviewed: 2026-09-06
 
-この文書は提案時の比較検討を保持する。採用内容の正本はADR #24で、3 ContextとE1の基本方針のみ条件付きAcceptedとなった。表の個別Data Owner、Aggregate、Port等は採用済みではない。`Confirmed`は現行仕様からの転記、`Proposed`は比較対象、`Open Question`は判断が必要な事項を表す。
+この文書は提案時の比較検討を保持する。ADR #24のAcceptance時点では3 ContextとE1の基本方針だけが条件付きAcceptedだった。その後、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可は[ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)で条件付きAcceptedとなった。以下の候補表を一括採用したわけではなく、他Contextと残るGateは未決である。`Confirmed`は現行仕様からの転記、`Proposed`は比較時点の候補、`Open Question`は判断が必要な事項を表す。
 
 ## System Context
 
@@ -124,4 +124,4 @@ E1でもDomain Event、Stored Event、Integration Event、Audit Log、Outbox Mes
 - `Snapshot Revision`は業務上の不変記録であり、Event Sourcingの技術Snapshotと同義にしない。
 - 現行Product Ruleは業務上のSnapshot Revisionへ金額、実支払者、割合、負担額、Balance等を固定する。一方、Architecture不変条件は「Event、Snapshot、Logへ機密平文を保存しない」とする。`Snapshot`の範囲が曖昧なため、必要な業務Dataまで保存禁止とは解釈せず、上記Open Questionを解消してからPersistence実装をReadyにする。
 - 既存draw.ioはOwnerの検討用入力であり、この分析の根拠または正本ではない。AIは変更していない。
-- ADR #24で採用された基本方針だけを根拠として使用する。個別境界候補と条件C1は未決・未充足のままであり、依存する実装をReadyにしない。
+- ADR #24の基本方針に加え、ADR #35／#36でGroup Management初回のData Owner、Group Aggregate、Repository Port、内部Command認可を条件付き採用した。Category所属、他ContextのAggregate、Context間Port、Persistenceと条件C1は未決・未充足のままであり、依存する実装をReadyにしない。

@@ -6,7 +6,7 @@
 
 - [GitHubの正本入口](docs/governance/README.md)から、現行文書の固定Commitと作業Boardを確認します。Notionは使用しません。
 - [現行Product Scope・業務モデル](docs/product/current-model.md)が確定済みの業務Ruleを管理します。
-- [未確定・未移行Gate](docs/product/design-gates.md)を満たすまで、Aggregate境界・Bounded Context・Data Owner・Event Sourcing等を採用済みとして実装しません。
+- [未確定・未移行Gate](docs/product/design-gates.md)でAccepted範囲と未決事項を確認します。3 Bounded ContextとGroup Managementの最初のAggregate／Data Owner／Port／内部認可は関連ADRに従い、他Context、Persistence、本番認証等の未決事項を採用済みとして実装しません。
 
 ## 構成
 
