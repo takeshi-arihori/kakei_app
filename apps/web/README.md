@@ -25,6 +25,8 @@ pnpm -C apps/web build
 
 GraphQL Operation／Result型を手書きせず、Repository rootで`pnpm codegen`を実行して`apps/api/schema.graphql`から更新します。
 
+外部から受け取るResponseは生成型だけに依存せず、Client境界でJSONと必要Fieldを実行時検証します。通信失敗、非2xx、JSON読取失敗、不正なResponse構造は`ApiTransportError`、妥当なGraphQL `errors`は`ApiGraphQLError`として区別し、Response本文をLogへ出しません。
+
 ## 境界
 
 - Domain Model、Aggregate、Prisma ModelをWebへ共有しない
