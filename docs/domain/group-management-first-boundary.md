@@ -147,7 +147,7 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 ## 11. Next Modeling Step / Delivery Gate
 
 1. ADR #35／#36の条件付きAccepted記録は[PR #44](https://github.com/takeshi-arihori/kakei_app/pull/44)でRepositoryとGitHubへ統合済み。各実装Taskは一括昇格せず、Requirement・DCと実依存を個別にReady評価する。
-2. [#38](https://github.com/takeshi-arihori/kakei_app/issues/38)と[#39](https://github.com/takeshi-arihori/kakei_app/issues/39)の純粋Domainは完了。[#40](https://github.com/takeshi-arihori/kakei_app/issues/40)でApplicationとin-memory fakeによる契約を検証し、本番Adapterへ接続しない。
+2. [#38](https://github.com/takeshi-arihori/kakei_app/issues/38)、[#39](https://github.com/takeshi-arihori/kakei_app/issues/39)、[#40](https://github.com/takeshi-arihori/kakei_app/issues/40)の初回Domain／Application契約は完了。本番Adapterへ接続しない。
 3. 招待・再参加、Context間認可、C1の設計を必要な順に進める。C1未充足のPersistence実装はBlockedを維持し、Owner承認だけでSecurity Reviewを省略しない。
 
 ## GitHub delivery map
@@ -159,8 +159,8 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 | [#37 設計パッケージ](https://github.com/takeshi-arihori/kakei_app/issues/37) | 1日 | PR #43 Merge済み / Done | 本分析、ADR Proposal、Task、Merge記録 |
 | [#38 Group生成](https://github.com/takeshi-arihori/kakei_app/issues/38) | 1日 | PR #49 Merge済み / Done | 初期ParticipantとOwnerを持つ純粋Domain |
 | [#39 譲渡・脱退](https://github.com/takeshi-arihori/kakei_app/issues/39) | 2日 | PR #50 Merge済み / Done | 在籍・Owner遷移Domain |
-| [#40 Application・Port](https://github.com/takeshi-arihori/kakei_app/issues/40) | 2日 | #38/#39 Done、ADR #35/#36 Accepted / 本Taskで実装・検証 | fakeによる認可・競合・再送契約検証 |
-| [#41 招待・再参加設計](https://github.com/takeshi-arihori/kakei_app/issues/41) | 1日 | 現行Ruleを入力、採用は対象外 / Backlog・Blocked No | Owner判断用の比較表とADR入力 |
+| [#40 Application・Port](https://github.com/takeshi-arihori/kakei_app/issues/40) | 2日 | PR #51 Merge済み / Done | fakeによる認可・競合・再送契約検証 |
+| [#41 招待・再参加設計](https://github.com/takeshi-arihori/kakei_app/issues/41) | 1日 | ADR Proposal作成後にReady / Blocked No。採用は対象外 | [比較表とADR Proposal](group-invitation-rejoin-proposal.md)。Owner Decision前にInvitation／再参加実装Ready不可 |
 | [#42 保存Adapter](https://github.com/takeshi-arihori/kakei_app/issues/42) | 暫定2日 | #40、保存Security Decision、C1未充足 / Backlog・Blocked Yes | 将来の保存契約Integration検証。Ready前にSchema・移行・見積り再具体化 |
 
 ADR [#35](https://github.com/takeshi-arihori/kakei_app/issues/35)と[#36](https://github.com/takeshi-arihori/kakei_app/issues/36)は2026-09-08に条件付きAcceptedされ、記録はPR #44でdevelopへ統合済み。C1は[#24](https://github.com/takeshi-arihori/kakei_app/issues/24)で未充足を追跡し、#42へ紐付ける。
