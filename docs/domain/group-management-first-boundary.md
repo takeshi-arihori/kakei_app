@@ -70,7 +70,7 @@ Group→Participantの所有方向を採用する。削除はRetention全体の�
 
 | Model / Rule | Evidence（上記固定Commit） | Alignment | Feedback / State |
 | --- | --- | --- | --- |
-| Group / Participant / Owner | apps/api/src/domainにはshared/money.tsのみ | Missing | 対象Domain実装は未存在。Modelを既存DBから逆算しない |
+| Group / Participant / Owner | apps/api/src/domain/group-management/group.ts | Aligned（#38） | Group生成とActive Participant復元時の人数・Owner・重複・参加順Invariantを純粋Domainで実装。譲渡・脱退・Archivedは#39、Application／Repositoryは#40、PersistenceはC1解消後の#42へ分離 |
 | 認可・Command | apps/api/src/app.ts、presentation/graphql/resolvers.tsはhealth / apiStatusのみ | Missing | 認証済みActorの生成経路を前提に実装開始しない |
 | JPY整数 | apps/api/src/domain/shared/money.ts | Aligned | 金額は今回対象外。実装事実は新業務Ruleの根拠にしない |
 
