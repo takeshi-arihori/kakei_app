@@ -22,6 +22,8 @@ const participant = (
   subject: ActorSubject.from(subject),
   joinedAt,
   joinOrder,
+  status: 'Active',
+  leftAt: null,
 });
 
 const groupSnapshot = (
@@ -29,6 +31,7 @@ const groupSnapshot = (
   ownerParticipantId: ParticipantId | null = participants[0]?.id ?? null,
 ): GroupSnapshot => ({
   id: GroupId.from('group-a'),
+  status: 'Active',
   ownerParticipantId,
   participants,
 });
@@ -56,13 +59,15 @@ describe('Group', () => {
     });
 
     expect(group.id.value).toBe('group-a');
-    expect(group.ownerParticipantId.value).toBe('participant-a');
+    expect(group.ownerParticipantId?.value).toBe('participant-a');
     expect(group.participants).toEqual([
       {
         id: ParticipantId.from('participant-a'),
         subject: ActorSubject.from('subject-a'),
         joinedAt,
         joinOrder: 1,
+        status: 'Active',
+        leftAt: null,
       },
     ]);
     expect(group.activeParticipantCount).toBe(1);
@@ -149,7 +154,7 @@ describe('Group', () => {
     );
 
     expect(restored.activeParticipantCount).toBe(4);
-    expect(restored.ownerParticipantId.value).toBe('p-1');
+    expect(restored.ownerParticipantId?.value).toBe('p-1');
     expect(restored.participants.map(({ joinOrder }) => joinOrder)).toEqual([
       1, 2, 3, 4,
     ]);
