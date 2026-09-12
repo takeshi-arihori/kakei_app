@@ -71,7 +71,7 @@ Group→Participantの所有方向を採用する。削除はRetention全体の�
 | Model / Rule | Evidence（上記固定Commit） | Alignment | Feedback / State |
 | --- | --- | --- | --- |
 | Group / Participant / Owner | apps/api/src/domain/group-management/group.ts | Aligned（#38／#39） | Group生成、Active／Left履歴の復元、Owner譲渡、本人脱退を純粋Domainで実装。再参加は#41、Application／Repositoryは#40、PersistenceはC1解消後の#42へ分離 |
-| 認可・Command | apps/api/src/app.ts、presentation/graphql/resolvers.tsはhealth / apiStatusのみ | Missing | 認証済みActorの生成経路を前提に実装開始しない |
+| 認可・Command | apps/api/src/application/group-management | Aligned（#40の内部契約） | 信頼済みActor入力、最新Group状態によるDomain認可、期待版競合、Actor単位のoperation再送、応答喪失回復をApplicationとin-memory fakeで検証。本番本人性・保存Adapter・公開APIは未実装で、C1と#42のBlockedを維持 |
 | JPY整数 | apps/api/src/domain/shared/money.ts | Aligned | 金額は今回対象外。実装事実は新業務Ruleの根拠にしない |
 
 ### Ubiquitous Language
@@ -147,7 +147,7 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 ## 11. Next Modeling Step / Delivery Gate
 
 1. ADR #35／#36の条件付きAccepted記録は[PR #44](https://github.com/takeshi-arihori/kakei_app/pull/44)でRepositoryとGitHubへ統合済み。各実装Taskは一括昇格せず、Requirement・DCと実依存を個別にReady評価する。
-2. [#38](https://github.com/takeshi-arihori/kakei_app/issues/38)の純粋Domainから着手し、完了後に[#39](https://github.com/takeshi-arihori/kakei_app/issues/39)、続いて[#40](https://github.com/takeshi-arihori/kakei_app/issues/40)のApplicationとfakeによる契約検証をReady評価する。
+2. [#38](https://github.com/takeshi-arihori/kakei_app/issues/38)と[#39](https://github.com/takeshi-arihori/kakei_app/issues/39)の純粋Domainは完了。[#40](https://github.com/takeshi-arihori/kakei_app/issues/40)でApplicationとin-memory fakeによる契約を検証し、本番Adapterへ接続しない。
 3. 招待・再参加、Context間認可、C1の設計を必要な順に進める。C1未充足のPersistence実装はBlockedを維持し、Owner承認だけでSecurity Reviewを省略しない。
 
 ## GitHub delivery map
@@ -157,9 +157,9 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 | Task | Estimate | Dependencies / 初期Status | Deliverable |
 | --- | --- | --- | --- |
 | [#37 設計パッケージ](https://github.com/takeshi-arihori/kakei_app/issues/37) | 1日 | PR #43 Merge済み / Done | 本分析、ADR Proposal、Task、Merge記録 |
-| [#38 Group生成](https://github.com/takeshi-arihori/kakei_app/issues/38) | 1日 | PR #44 Merge済み、ADR #35/#36 Accepted / 個別Ready評価 | 初期ParticipantとOwnerを持つ純粋Domain |
-| [#39 譲渡・脱退](https://github.com/takeshi-arihori/kakei_app/issues/39) | 2日 | #38 Done / 依存完了後に個別Ready評価 | 在籍・Owner遷移Domain |
-| [#40 Application・Port](https://github.com/takeshi-arihori/kakei_app/issues/40) | 2日 | #38/#39 Done / 依存完了後に個別Ready評価 | fakeによる認可・競合・再送契約検証 |
+| [#38 Group生成](https://github.com/takeshi-arihori/kakei_app/issues/38) | 1日 | PR #49 Merge済み / Done | 初期ParticipantとOwnerを持つ純粋Domain |
+| [#39 譲渡・脱退](https://github.com/takeshi-arihori/kakei_app/issues/39) | 2日 | PR #50 Merge済み / Done | 在籍・Owner遷移Domain |
+| [#40 Application・Port](https://github.com/takeshi-arihori/kakei_app/issues/40) | 2日 | #38/#39 Done、ADR #35/#36 Accepted / 本Taskで実装・検証 | fakeによる認可・競合・再送契約検証 |
 | [#41 招待・再参加設計](https://github.com/takeshi-arihori/kakei_app/issues/41) | 1日 | 現行Ruleを入力、採用は対象外 / Backlog・Blocked No | Owner判断用の比較表とADR入力 |
 | [#42 保存Adapter](https://github.com/takeshi-arihori/kakei_app/issues/42) | 暫定2日 | #40、保存Security Decision、C1未充足 / Backlog・Blocked Yes | 将来の保存契約Integration検証。Ready前にSchema・移行・見積り再具体化 |
 
