@@ -18,5 +18,6 @@ ADRにはContext、Decision、Alternatives、Consequences、Implementation、Rev
 
 - [整合性境界とParticipantの表現](group-management-consistency-boundary.md): Accepted（条件付き）。GroupをRootとする初回整合性境界とRepository Portを採用。
 - [Command本人性・認可・再試行](group-management-command-authorization.md): Accepted（条件付き）。信頼済みActorとGroup版による認可、成功結果の冪等再取得を採用。
+- [招待・再参加のLifecycleと整合性境界](group-invitation-and-rejoin.md): Proposed。期限、枠予約、Owner譲渡後のPending、再参加Participant寿命のOwner Decision待ち。
 
 [設計分析](../domain/group-management-first-boundary.md)を参照する。本番認証、招待・再参加、冪等記録の保持、Context間認可、C1／Persistenceは未決またはBlockedを維持する。ADR #24のAcceptedとC1未充足は変更しない。
