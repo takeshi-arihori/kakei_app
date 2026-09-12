@@ -20,9 +20,48 @@ export class ApiTransportError extends Error {
   }
 }
 
-type GraphQLResponse = {
-  data?: ApiStatusQuery;
-  errors?: Array<{ message?: unknown }>;
+type UnknownRecord = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is UnknownRecord =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const hasOwn = (value: UnknownRecord, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(value, key);
+
+const invalidGraphQLResponse = () =>
+  new ApiTransportError(new Error('Invalid GraphQL response'));
+
+const parseApiStatus = (payload: unknown): ApiStatusQuery['apiStatus'] => {
+  if (!isRecord(payload)) {
+    throw invalidGraphQLResponse();
+  }
+
+  if (hasOwn(payload, 'errors')) {
+    const { errors } = payload;
+    if (!Array.isArray(errors) || !errors.every(isRecord)) {
+      throw invalidGraphQLResponse();
+    }
+
+    if (errors.length > 0) {
+      throw new ApiGraphQLError(
+        errors.map(({ message }) =>
+          typeof message === 'string' ? message : 'Unknown GraphQL error',
+        ),
+      );
+    }
+  }
+
+  const { data } = payload;
+  if (!isRecord(data) || !isRecord(data.apiStatus)) {
+    throw invalidGraphQLResponse();
+  }
+
+  const { status } = data.apiStatus;
+  if (typeof status !== 'string') {
+    throw invalidGraphQLResponse();
+  }
+
+  return { status };
 };
 
 export const executeApiStatus = async (
@@ -45,18 +84,12 @@ export const executeApiStatus = async (
     throw new ApiTransportError(new Error(`HTTP ${response.status}`));
   }
 
-  const payload = (await response.json()) as GraphQLResponse;
-  if (payload.errors?.length) {
-    throw new ApiGraphQLError(
-      payload.errors.map(({ message }) =>
-        typeof message === 'string' ? message : 'Unknown GraphQL error',
-      ),
-    );
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (cause) {
+    throw new ApiTransportError(cause);
   }
 
-  if (!payload.data?.apiStatus) {
-    throw new ApiTransportError(new Error('Invalid GraphQL response'));
-  }
-
-  return payload.data.apiStatus;
+  return parseApiStatus(payload);
 };
