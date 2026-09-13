@@ -37,7 +37,7 @@ Client申告のParticipantId・Owner Roleだけでは本人性を証明できな
 
 ## Consequences / Open Questions
 
-- 招待の宛先本人性、期限、取消、消費と参加の原子性、招待中の人数枠、旧Owner発行招待の扱いは後続設計TaskでADR入力へ分離する。InviteParticipant／AcceptInvitationはこのDecisionだけで実装Readyにならない。
+- Acceptance時点では、招待の宛先本人性、期限、取消、消費と参加の原子性、招待中の人数枠、旧Owner発行招待の扱いを後続設計Taskへ分離した。これらはその後ADR #52でAcceptedとなり、内部契約の実装は#57で個別Ready評価する。
 - ActorSubjectと利用者の対応、認証失効、本番Error、Rate limit、Auditの最小項目は未決。本番経路接続をBlockedにする。
 - 冪等記録とfingerprintの保存期限・削除・保護は未決。Group削除後も識別可能なoperation結果を残してよいとは判断しない。Persistence実装をBlockedにする。
 - Leftへの支払責務はSettlementが過去Instructionに基づいて判定する。在籍照会のfalseを全Context共通の拒否に使わない。Context間の競合契約は別Decision。
@@ -50,6 +50,10 @@ Client申告のParticipantId・Owner Roleだけでは本人性を証明できな
 - Decided at: 2026-09-08（Asia/Tokyo、承認時刻は未記録）
 - Evidence: ADR #35と#36の各提案Aを、残るGateを維持して条件付きAcceptedとしてよいか確認した会話に対するOwnerの回答「はい。」
 - Conditions: 本番認証、招待・再参加、冪等記録の保持、Context間認可、C1／Persistenceは未決またはBlockedを維持する。
+
+### Follow-up resolution（2026-09-13）
+
+上記ConditionsのうちInvitation lifecycleと再参加Participant寿命は[ADR #52](group-invitation-and-rejoin.md)でAcceptedとなった。本番本人性・配送、Invitation／冪等記録の保存保護・Retention、Context間認可、C1／Persistenceは引き続き未決またはBlockedである。
 
 ## Implementation
 
