@@ -68,6 +68,16 @@
 - ActiveなParticipantは、Group Expenseの登録とSettlement Snapshotの開始を行える。
 - Payment Instructionの支払報告は支払側、受取確認・差し戻しは支払先Participantだけが行える。
 
+### Invitation・参加・再参加（2026-09-13 Accepted）
+
+- InvitationはGroup Managementが所有し、特定の信頼済みActorへ束縛する。Participantや人数枠として数えない。
+- 現在OwnerだけがInvitationを作成・取消できる。Active Participantが4人なら作成を拒否する。3人以下では複数作成できるが、枠を予約しない。
+- Invitationは作成時から7日で期限切れとし、延長しない。必要な場合は再発行する。
+- Owner譲渡後も既存のPending Invitationは有効で、現在Ownerが取消できる。旧Ownerは新規作成・取消を行えない。
+- AcceptInvitationは宛先本人、期限、状態、GroupのActive、空き枠、Active重複、versionを最新状態で検証する。Invitation消費、新Participant、単調なjoinOrder、参加履歴、Group version、operation結果を原子的に成立させる。
+- 脱退済みActorの再参加は、新しいInvitationの受諾により、新ParticipantIdと過去最大より大きいjoinOrderを発行する。旧Participantと過去Expense・Settlement責務は変更しない。
+- 本番本人性・宛先解決・Token・配送・公開Error・保存保護とRetention・Context間認可は別Decisionとする。条件C1は未充足で、Persistence #42をReadyにしない。
+
 ### 途中参加・脱退の時間境界（2026-08-22 Confirmed）
 
 - Group Expenseを登録した時点のParticipantとSplit Allocationを固定する。
@@ -260,7 +270,7 @@
 
 実装Ready前に残る設計Gate:
 
-1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可は[ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)で条件付き採用した。Category所属、他ContextのAggregate、Context間Port、Projection、本番認証、招待・再参加、冪等記録の保持、条件C1は後続設計で解消する。
+1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可は[ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)で条件付き採用し、Invitation lifecycleと再参加Participant寿命は[ADR #52](../adr/group-invitation-and-rejoin.md)で採用した。Category所属、他ContextのAggregate、Context間Port、Projection、本番本人性・配送、Invitation／冪等記録の保存保護・Retention、条件C1は後続設計で解消する。
 2. 旧「Transaction限定Event Sourcing／日付境界Archive」のProposalを現行仕様として扱わない。ADR #24の承認範囲と条件C1を優先する。
 3. 未移行または未確認のDecisionに依存するTaskは、GitHub上に根拠が揃うまでBlockedにする。
 
@@ -270,6 +280,6 @@
 
 - 2人限定・個人用家計・単一Payer／Payeeの旧記述は現行Ruleとして使用しない。
 - RepositoryのREADME、AGENTS、engineering docsは2026-08-23の共有割り勘Scopeへ同期済み。旧語はDeprecatedな前提を説明する場合だけ使用する。
-- 旧Issue #9で確認されたDomain Ruleはこの文書へ統合した。3 Contextと保存の基本方針はADR #24に従う。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36に従う。他ContextのAggregateとData Owner、Persistence詳細、本番認証、招待・再参加、Context間認可、ProjectionとSnapshot保護条件C1は未確定であり、依存実装前に解消する。
+- 旧Issue #9で確認されたDomain Ruleはこの文書へ統合した。3 Contextと保存の基本方針はADR #24に従う。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36、Invitation lifecycleと再参加Participant寿命はADR #52に従う。他ContextのAggregateとData Owner、Persistence詳細、本番本人性・配送、Invitation／冪等記録の保存保護・Retention、Context間認可、ProjectionとSnapshot保護条件C1は未確定であり、依存実装前に解消する。
 - 作業の管理先はPrivate GitHub Project #9とIssue。管理先の切替は未確定の業務設計Gateを解消しない。
 - Conflictを実装で吸収しない。

@@ -46,9 +46,13 @@ Active Groupには唯一のOwnerが必要で、譲渡先のActive在籍とOwner�
 - Evidence: ADR #35と#36の各提案Aを、残るGateを維持して条件付きAcceptedとしてよいか確認した会話に対するOwnerの回答「はい。」
 - Conditions: 本番認証、招待・再参加、冪等記録の保持、Context間認可、C1／Persistenceは未決またはBlockedを維持する。
 
+### Follow-up resolution（2026-09-13）
+
+上記ConditionsのうちInvitation lifecycleと再参加Participant寿命は[ADR #52](group-invitation-and-rejoin.md)でAcceptedとなった。本番本人性・配送、Invitation／冪等記録の保存保護・Retention、Context間認可、C1／Persistenceは引き続き未決またはBlockedである。
+
 ## Implementation
 
-Active人数の解釈、重複禁止、操作分離、No-op／AlreadyLeft、初回契約でのArchived拒否、再参加の延期を案Aとして採用する。依存Domain／Application Taskは、Accepted記録が`develop`へ統合され、IssueとProjectが同期された後に個別Ready評価する。C1未充足のためPersistenceはBacklog / Blocked Yesを維持する。
+Acceptance時点では、Active人数の解釈、重複禁止、操作分離、No-op／AlreadyLeft、初回契約でのArchived拒否、再参加の延期を案Aとして採用した。再参加の方式はその後ADR #52で新Participant方式を採用した。依存Domain／Application Taskは個別Ready評価し、C1未充足のためPersistenceはBacklog / Blocked Yesを維持する。
 
 正常作成、4人境界、Owner脱退、他Group・Leftへの譲渡、競合の勝者双方、応答喪失と二重送信を契約テストの受入例にする。拒否時は版・状態・履歴を変えない。
 

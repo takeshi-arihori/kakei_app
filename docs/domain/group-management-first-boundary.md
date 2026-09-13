@@ -1,18 +1,18 @@
 # Group Managementの最初の実装境界（設計案）
 
-- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptanceを反映。残るOpen QuestionとBlockedを分離する。
-- Baseline: [develop固定Commit](https://github.com/takeshi-arihori/kakei_app/tree/cd2844543d71c3312740736a527add7315010c97)
+- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptanceと、2026-09-13のADR #52 Acceptanceを反映。残るOpen QuestionとBlockedを分離する。
+- Baseline: [develop固定Commit](https://github.com/takeshi-arihori/kakei_app/tree/79000fe311d6d852241e4ba46f2cb693fa81425a)
 - 根拠: [現行業務モデル](../product/current-model.md)、[Accepted ADR #24](../adr/shared-expense-domain-boundaries.md)
-- Decision: [整合性境界](../adr/group-management-consistency-boundary.md)、[本人性・認可・再試行](../adr/group-management-command-authorization.md)
+- Decision: [整合性境界](../adr/group-management-consistency-boundary.md)、[本人性・認可・再試行](../adr/group-management-command-authorization.md)、[招待・再参加](../adr/group-invitation-and-rejoin.md)
 - 条件C1は未充足。Persistence実装はBacklog / Blocked Yes。以下のPortはApplication契約としてAcceptedだが、本番保存Adapterの採用・実装を許可しない。
 
 ## 1. Problem / Scope
 
 利用者が少人数の割り勘Groupを作り、参加者と管理責任を維持する。人数超過、Owner不在・複数化、古い権限による更新を防ぎ、脱退後も過去の支出・精算責務を壊さないことを観測可能な成果とする。
 
-最初の境界はCreateGroup、TransferGroupOwnership、LeaveGroupの純粋Domainと、それらを呼ぶApplication・Repository Port契約である。招待から参加までのUse Caseも設計するが、本人性・招待のSecurity Decisionが未確定のため本番Commandの接続は後続とする。
+最初の境界はCreateGroup、TransferGroupOwnership、LeaveGroupの純粋Domainと、それらを呼ぶApplication・Repository Port契約である。ADR #52でInvitation lifecycleと再参加Participant寿命を採用し、#57でInviteParticipant、CancelInvitation、AcceptInvitationのDomain／Application内部契約を拡張する。本番本人性・配送・公開Command接続は後続とする。
 
-対象外: Group終了実装、CSV、Retention Batch、Invitation配送・Token実装、再参加実装、Expense／Settlement変更、DB／Migration、GraphQL／UI、非同期Event／Projection。Group終了は別Contextの未精算・進行中確認を要し、最初のGroup Aggregateだけでは成立させない。
+対象外: Group終了実装、CSV、Retention Batch、Invitation配送・Token実装、Expense／Settlement変更、DB／Migration、本番Persistence、GraphQL／UI、非同期Event／Projection。Group終了は別Contextの未精算・進行中確認を要し、最初のGroup Aggregateだけでは成立させない。
 
 ## 2. System Context
 
@@ -27,13 +27,14 @@
 
 ## 3. Use Cases / Commands
 
-CreateGroup、TransferGroupOwnership、LeaveGroupのCommand名・入力・戻り値はAcceptedなApplication契約で、GraphQL Schemaではない。InviteParticipantとAcceptInvitationは未決の後続候補。共通入力は信頼済みActorSubject、operationId。既存Group更新はgroupId、expectedVersionを持つ。時刻・IDは信頼境界内で生成し、Client申告Roleは採用しない。
+CreateGroup、TransferGroupOwnership、LeaveGroupのCommand名・入力・戻り値はAcceptedなApplication契約で、GraphQL Schemaではない。InviteParticipant、CancelInvitation、AcceptInvitationもADR #52で内部契約としてAcceptedし、#57で実装する。共通入力は信頼済みActorSubject、operationId。既存Group更新はgroupId、expectedVersionを持つ。時刻・IDは信頼境界内で生成し、Client申告Roleは採用しない。
 
 | Use Case / Command | Actor・Goal・Trigger | Preconditions | Success Outcome | Failure / Boundary |
 | --- | --- | --- | --- | --- |
 | Groupを開始 / CreateGroup | 利用者が新しい割り勘を開始 | 本人性確認済み（方式未決） | 新Groupと作成者Participant、唯一のOwnerを同時生成。GroupId / ParticipantId / versionを返す | 認証なし拒否。同じoperationの再送は同一Group。同一人の別operationは別Groupを許す |
-| 招待 / InviteParticipant（後続） | 現在のOwnerが仲間を招く | Active Group、現在Owner | 参加前のInvitationを作る案。まだParticipantにはしない | 非Owner、Archived拒否。宛先・期限・取消・人数枠予約は未決 |
-| 参加 / AcceptInvitation（後続） | 招待された本人が参加意思を示す | 招待検証、Active Group、空き枠、同一利用者のActive重複なし（案） | Participantを追加し参加順・時刻を確定、招待消費と同時成立 | 招待不正・失効・人数超過・競合は部分反映なし。Ownerが代理で他人を参加させる経路は作らない案 |
+| 招待 / InviteParticipant（#57） | 現在のOwnerが仲間を招く | Active Group、現在Owner、Active 3人以下、宛先Actor確定 | 期限7日のPending Invitationを作る。枠は予約せず、まだParticipantにはしない | 非Owner、旧Owner、Archived、4人、Active重複を拒否 |
+| 招待取消 / CancelInvitation（#57） | 現在OwnerがPending Invitationを取り消す | Active Group、現在Owner、Pending | InvitationをCancelledにする。旧Owner発行分も現在Ownerが取消可能 | 旧Owner、非Owner、Consumed／Cancelled／Expiredを拒否または変更なしの契約で扱う |
+| 参加 / AcceptInvitation（#57） | 招待された本人が参加意思を示す | 宛先Actor一致、Pending、7日以内、Active Group、空き枠、Active重複なし | Invitation消費、新Participant、単調joinOrder、履歴、版、operation結果が同時成立 | 他Actor、取消・期限切れ、人数超過、競合は部分反映なし。Owner代理参加経路は作らない |
 | 管理責任を渡す / TransferGroupOwnership | 現在OwnerがtargetParticipantIdを指定 | Active Group、同じGroupのActiveな譲渡先 | Owner参照を原子的に切替。旧OwnerはParticipantのまま | 別Group・脱退者・非Owner拒否。自己譲渡は変更なし |
 | 自分が脱退 / LeaveGroup | Active Participant本人が離れる | Active Group、現在Ownerではない | ParticipantをLeftにし時刻を固定。過去のMembership・支払責務は残る | Active GroupのOwnerは拒否。Ownerによる他人の除名は対象外。別operationでの再脱退はAlreadyLeft |
 
@@ -46,21 +47,22 @@ CreateGroup、TransferGroupOwnership、LeaveGroupのCommand名・入力・戻り
 | Scenario / Objects | Relationship・Expected Rule | Outcome | State |
 | --- | --- | --- | --- |
 | 利用者U-AがG-Aを作る。P-A joinedAt=2026-09-07T00:00:00Z、joinOrder=1 | G-AのActive集合={P-A}、owner=P-A | 1人Group成立。U-AがG-Bを別途作ることも可 | Confirmed / Accepted |
-| G-AにP-A/P-B/P-C、v7。U-D/U-Eが同時参加 | 両者がv7を読む。Active人数の上限は4 | 片方だけv8へ成功、他方Conflict。再読込で4人を見てCapacityExceeded。5人状態なし | Confirmed / Accepted。招待・参加経路は未決 |
+| G-AにP-A/P-B/P-C、v7。U-D/U-E宛Invitationが同時受諾 | 両者がv7を読む。Active人数の上限は4 | 片方だけv8へ成功、他方Conflict。再読込で4人を見てCapacityExceeded。5人状態なし | Accepted。実装は#57 |
 | P-AがOwnerをP-Bへ譲渡 | P-A/P-BともActive、v8→v9 | owner=P-B、P-AはActiveのまま。P-Aの脱退は別Command | Confirmed / Accepted |
 | v9でP-B→P-Cへの譲渡とP-Cの脱退が競合 | 同じ整合性版にOwnerと在籍を含める | 脱退が先なら譲渡は再検証で拒否、譲渡が先なら脱退はOwner制約で拒否 | Confirmed / Accepted |
 | 唯一のP-AがOwnerのG-Bから脱退 | 0人Active GroupとOwner不在は不正 | 変更なしでOwnerMustTransferOrEnd | Confirmed |
 | P-Cが脱退。過去Expense E-Xの負担と支払指示I-Xが存在 | P-CのMembership参照を維持 | E-X/I-Xは無変更。新Expenseの対象外。I-Xの支払・受取責務は残る | Confirmed |
 | Group保存後に応答喪失、同一operationIdで再送 | fingerprintもActorも同一 | 同じ結果、追加Group・履歴・版更新なし。別payloadはOperationMismatch | Accepted。保存期間は未決 |
 | 旧Owner P-Aが保存直前に権限を失う | 認可判定時のv10に対し他操作がv11成立 | 保存を拒否。最新状態から認可をやり直し、旧権限を使用しない | Accepted |
-| U-Cが脱退後に再参加したい | 過去P-Cの履歴と新在籍の区別が必要 | 再参加ID／joinOrderがAcceptedになるまで参加実装をBlocked | Open Question |
+| U-Cが脱退後に本人宛の新Invitationを受諾 | 過去P-Cの履歴と新在籍の区別が必要 | 新ParticipantIdと過去最大より大きいjoinOrderを発行し、P-Cと過去責務は変更しない | Accepted。実装は#57 |
 
 ## 5. Domain Concepts / Relationships / Lifecycle
 
 | Concept | Meaning / Identity・代表属性 | Lifecycle / Relationships | State |
 | --- | --- | --- | --- |
 | Group | 割り勘の共同単位。GroupId、state、ownerParticipantId、version | Active→Archived→期限削除はConfirmed。Active Participant 1〜4、過去の在籍記録0..nを保持。最初の実装はActiveでの操作のみ | 概念Confirmed、属性・所有境界Accepted |
-| Participant | Groupに参加した主体。ParticipantId、subjectRef、joinedAt、leftAt、joinOrder | Groupに必ず1つ所属。Active→Left。利用者1人は複数Groupに別の参加関係を持つ | 概念・時間境界Confirmed、初回ID表現Accepted。再参加時のID寿命は未決 |
+| Participant | Groupに参加した主体。ParticipantId、subjectRef、joinedAt、leftAt、joinOrder | Groupに必ず1つ所属。Active→Left。再参加は新ParticipantIdと単調joinOrder。利用者1人は複数Groupに別の参加関係を持つ | 概念・時間境界・再参加ID寿命Accepted |
+| Invitation | Group Ownerが特定のtrusted Actorへ発行する参加機会。InvitationId、target、issuer、createdAt、expiryAt、status | Group Aggregate内でPending→Consumed／Cancelled／Expired。Participantでも人数枠予約でもない | ADR #52でAccepted。実装は#57 |
 | Group Owner | Groupを管理するParticipantのRole | Active Group→Active Participantへの必須参照がちょうど1。独立Entity／Repositoryを作らない | 一意性Confirmed、参照表現Accepted |
 | Membership | Participantの参加・脱退の時間関係を表す語 | 参加・脱退履歴を残す。Participantとは別の重複した変更入口を作らない | 履歴必要Confirmed、モデル統合Accepted |
 
@@ -70,7 +72,7 @@ Group→Participantの所有方向を採用する。削除はRetention全体の�
 
 | Model / Rule | Evidence（上記固定Commit） | Alignment | Feedback / State |
 | --- | --- | --- | --- |
-| Group / Participant / Owner | apps/api/src/domain/group-management/group.ts | Aligned（#38／#39） | Group生成、Active／Left履歴の復元、Owner譲渡、本人脱退を純粋Domainで実装。再参加は#41、Application／Repositoryは#40、PersistenceはC1解消後の#42へ分離 |
+| Group / Participant / Owner | apps/api/src/domain/group-management/group.ts | Aligned（#38／#39） | Group生成、Active／Left履歴の復元、Owner譲渡、本人脱退を純粋Domainで実装。Invitation／再参加は#57、Application／Repositoryは#40と#57、PersistenceはC1解消後の#42へ分離 |
 | 認可・Command | apps/api/src/application/group-management | Aligned（#40の内部契約） | 信頼済みActor入力、最新Group状態によるDomain認可、期待版競合、Actor単位のoperation再送、応答喪失回復をApplicationとin-memory fakeで検証。本番本人性・保存Adapter・公開APIは未実装で、C1と#42のBlockedを維持 |
 | JPY整数 | apps/api/src/domain/shared/money.ts | Aligned | 金額は今回対象外。実装事実は新業務Ruleの根拠にしない |
 
@@ -113,32 +115,34 @@ GroupをRootとし、現在のParticipant状態・Owner参照・参加順採番�
 | GroupRepository.commit | newState、expectedVersion（作成時Absent）、operation{actorSubject, operationId, fingerprint}、membershipChanges → Committed{ids,version} / Conflict / AlreadyExists / OperationMismatch / Unavailable | create-if-absent / compare-and-swap。状態・版・参加脱退履歴・operation結果を全成功または全失敗。失敗しても元状態・履歴不変 |
 | GroupRepository.findOperation | actorSubject＋operationId → result＋fingerprint またはMissing | 同じActorのoperation結果を照合。異なるActorへ結果を返さない。応答喪失時は先に照合し、Missing時だけ最新状態で再判断 |
 
+#57ではこのPortの責務を変えず、GroupStateにInvitation lifecycleを含め、`commit`の原子的な変更集合へInvitation作成・取消・消費とParticipant追加を加える。本番Schema、保存Adapter、保持方式は#42とSecurity Gateまで追加しない。
+
 operationIdはActor内で全Group・Command共通の一意な名前空間とし、fingerprintはCommand種別、対象Group／Participant、expectedVersion、入力を含む。サーバ生成時刻・IDは含めず最初の成功結果を再利用する。初回成功後にOwnerを失った再送では、同じActorへ最小限のCommand結果（ID・versionのみ）を返し、現在Groupの閲覧権限を付与しない。
 
 競合後に入力・期待版を変える操作は新operationIdを用いる。Conflictを無条件に自動再試行しない。Unavailableでは成功したか不明な場合があるためfindOperationで照合する。失敗結果は永続記録しない。冪等結果の保持期間、削除、fingerprint保護、DB側の原子性は未決であり、in-memory fakeの成功はPersistence適合の証拠にならない。
 
-ActorSubject解決、Clock、ID発行はApplication境界で注入可能にする。業務Entityへ認証Tokenを渡さない。検証済みInvitationを受け取る内部操作は、公開経路から直接呼べない契約が成立してから後続で導入する。
+ActorSubject解決、Clock、ID発行はApplication境界で注入可能にする。業務Entityへ認証Tokenを渡さない。Invitationのtrusted Actor内部契約は#57で導入するが、本番宛先解決・配送・公開経路からの接続は別Security Decisionまで行わない。
 
 他Context向けの照会候補はversion付きGroupMembershipView（GroupId、groupState、ParticipantId、active、joinOrder、ownerParticipantId）。用途は「この時点の在籍」であり、Settlementの過去支払責務の判定には使わない。照会後の脱退とExpense作成の競合を解く契約は未決。これをAcceptedなContext間Portとして公開・実装しない。
 
 ## 8. Confirmed Decisions
 
-ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query分離を維持する。GM-02〜07、人数1〜4、複数Group所属、参加・脱退履歴はcurrent-modelのConfirmed Rule。ADR #35／#36によりGroup Root、Repository Port、内部Command認可と冪等再送を条件付きAcceptedとした。PR #27は2026-09-06T12:03:31ZにMerge済みで、Accepted文書の統合記録である。C1の充足証拠ではない。
+ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query分離を維持する。GM-02〜07、人数1〜4、複数Group所属、参加・脱退履歴はcurrent-modelのConfirmed Rule。ADR #35／#36によりGroup Root、Repository Port、内部Command認可と冪等再送を条件付きAcceptedとし、ADR #52によりInvitation lifecycle、受諾原子性、新Participantによる再参加をAcceptedとした。PR #27は2026-09-06T12:03:31ZにMerge済みで、ADR #24のAccepted文書統合記録である。C1の充足証拠ではない。
 
-## 9. Remaining Proposed / Assumptions
+## 9. Remaining Assumptions / Implementation gaps
 
 | Item | Type | Reason | Validation Needed |
 | --- | --- | --- | --- |
 | テスト内のActorSubjectは架空で、認証済みと仮定 | Assumption | 本番認証なしでも純粋モデルを検証するため | 本番接続前に別途認証方式のAccepted Decision |
-| InviteParticipant／AcceptInvitation | Proposed | 招待・参加の具体例を検討するため | #41と後続ADR。公開Commandとして未採用 |
-| 再参加時のParticipantIdとjoinOrder | Proposed | 過去履歴と新しい在籍を区別するため | #41で比較しOwner Decision |
+| InviteParticipant／CancelInvitation／AcceptInvitation | Accepted / Implementation gap | ADR #52で内部契約を採用し、実装は未着手 | #57でDomain／Application契約を検証。公開Commandは別Decision |
+| 再参加時のParticipantIdとjoinOrder | Accepted / Implementation gap | 過去履歴と新しい在籍を区別するため | #57で新Participantと単調joinOrderを検証 |
 
 ## 10. Open Questions / Conflicts
 
 | ID | Type | Question | Impact / Required Evidence |
 | --- | --- | --- | --- |
-| OQ-G1 | Open Question | 再参加時のID・順序・履歴はどうするか | Active在籍数を1〜4人とする判断はAccepted。再参加は#41へ延期 |
-| OQ-G2 | Open Question | 本人性の信頼元、招待宛先・期限・取消・消費、枠予約をどうするか | 認可ADRと後続招待設計Task。参加Command本番接続はBlocked |
+| OQ-G1 | Implementation Gap | ADR #52の新Participant・単調joinOrderによる再参加をどう既存Groupへ反映するか | #57でDomain Unit Testと内部Application契約を実装 |
+| OQ-G2 | Open Question | 本番本人性の信頼元、宛先解決、Token、配送、公開Errorをどうするか | 別Security Decisionまで参加Commandの公開接続はBlocked |
 | OQ-G3 | Open Question | 脱退・Owner変更と他Context操作の認可判定時点 | 版付き照会だけで解決済みにしない。後続Context間整合性ADRが必要 |
 | OQ-G4 | Open Question | Archivedでの譲渡・脱退・Owner不在とCSV責任 | 初回Scope外。Group終了・Retention実装前に別Decision |
 | OQ-G5 | Open Question | 冪等記録の保存期限・最小化・削除・本人性との関係 | 認可ADR、後続保存設計。PersistenceのReadyを阻害 |
@@ -148,7 +152,7 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 
 1. ADR #35／#36の条件付きAccepted記録は[PR #44](https://github.com/takeshi-arihori/kakei_app/pull/44)でRepositoryとGitHubへ統合済み。各実装Taskは一括昇格せず、Requirement・DCと実依存を個別にReady評価する。
 2. [#38](https://github.com/takeshi-arihori/kakei_app/issues/38)、[#39](https://github.com/takeshi-arihori/kakei_app/issues/39)、[#40](https://github.com/takeshi-arihori/kakei_app/issues/40)の初回Domain／Application契約は完了。本番Adapterへ接続しない。
-3. 招待・再参加、Context間認可、C1の設計を必要な順に進める。C1未充足のPersistence実装はBlockedを維持し、Owner承認だけでSecurity Reviewを省略しない。
+3. #57でInvitation／再参加の内部契約を実装し、Context間認可、本番本人性・配送、C1の設計を必要な順に進める。C1未充足のPersistence実装はBlockedを維持し、Owner承認だけでSecurity Reviewを省略しない。
 
 ## GitHub delivery map
 
@@ -160,7 +164,8 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 | [#38 Group生成](https://github.com/takeshi-arihori/kakei_app/issues/38) | 1日 | PR #49 Merge済み / Done | 初期ParticipantとOwnerを持つ純粋Domain |
 | [#39 譲渡・脱退](https://github.com/takeshi-arihori/kakei_app/issues/39) | 2日 | PR #50 Merge済み / Done | 在籍・Owner遷移Domain |
 | [#40 Application・Port](https://github.com/takeshi-arihori/kakei_app/issues/40) | 2日 | PR #51 Merge済み / Done | fakeによる認可・競合・再送契約検証 |
-| [#41 招待・再参加設計](https://github.com/takeshi-arihori/kakei_app/issues/41) | 1日 | ADR Proposal作成後にReady / Blocked No。採用は対象外 | [比較表とADR Proposal](group-invitation-rejoin-proposal.md)。Owner Decision前にInvitation／再参加実装Ready不可 |
+| [#41 招待・再参加設計](https://github.com/takeshi-arihori/kakei_app/issues/41) | 1日 | PR #53 Merge済み / Done | [比較表とADR](group-invitation-rejoin-proposal.md)。ADR #52は2026-09-13にAccepted |
+| [#57 Invitation内部契約](https://github.com/takeshi-arihori/kakei_app/issues/57) | 2日 | ADR #52 Accepted記録のdevelop統合待ち / Backlog・Blocked Yes | Invitation lifecycle、受諾原子性、再参加をDomain／Applicationとfakeで検証。本番Persistenceは対象外 |
 | [#42 保存Adapter](https://github.com/takeshi-arihori/kakei_app/issues/42) | 暫定2日 | #40、保存Security Decision、C1未充足 / Backlog・Blocked Yes | 将来の保存契約Integration検証。Ready前にSchema・移行・見積り再具体化 |
 
-ADR [#35](https://github.com/takeshi-arihori/kakei_app/issues/35)と[#36](https://github.com/takeshi-arihori/kakei_app/issues/36)は2026-09-08に条件付きAcceptedされ、記録はPR #44でdevelopへ統合済み。C1は[#24](https://github.com/takeshi-arihori/kakei_app/issues/24)で未充足を追跡し、#42へ紐付ける。
+ADR [#35](https://github.com/takeshi-arihori/kakei_app/issues/35)と[#36](https://github.com/takeshi-arihori/kakei_app/issues/36)は2026-09-08に条件付きAcceptedされ、記録はPR #44でdevelopへ統合済み。ADR [#52](https://github.com/takeshi-arihori/kakei_app/issues/52)は2026-09-13にAcceptedされ、本変更でRepositoryへ同期する。C1は[#24](https://github.com/takeshi-arihori/kakei_app/issues/24)で未充足を追跡し、#42へ紐付ける。
