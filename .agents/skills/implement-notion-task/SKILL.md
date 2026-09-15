@@ -1,6 +1,6 @@
 ---
 name: implement-notion-task
-description: 旧Skill名の互換入口。Notionへ接続せず、Ready済みGitHub Taskの実装にはimplement-github-taskを使用する。
+description: 旧implement-notion-task呼び出しをGitHub Task実装へ転送する。Notionには接続しない。
 ---
 
 # GitHub Task実装への互換入口

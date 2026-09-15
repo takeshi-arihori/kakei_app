@@ -4,8 +4,8 @@
 
 - 利用者の最新の明示指示を最優先する。
 - Notionは読み書きしない。GitHub Issueを要件・完了条件、Private Projectを進捗・Sprint、Repositoryを仕様・設計・ADRの正本とする。
-- 正本の参照先とCutover記録は[正本入口](docs/governance/README.md)を確認する。
-- 実装前に対象Task、関連仕様、GitHubのAccepted ADR、既存コードを確認する。
+- GitHubの取得先や固定Commitを確認するときは[正本入口](docs/governance/README.md)を使う。
+- 機能Taskの実装前に対象Task、関連仕様、GitHubのAccepted ADR、既存コードを確認する。
 - 詳細ルールの入口は[docs/engineering/README.md](docs/engineering/README.md)とする。必要な文書だけを読む。
 - GitHubとコードが矛盾する場合は実装で吸収せず、矛盾と影響を報告して解消する。
 
@@ -36,21 +36,17 @@
 - 業務Domainは1〜4人のGroupで行う共有割り勘に限定し、個人収支を扱わない。
 - 現行の主要語はGroup、Participant、Group Expense、Split Allocation、Settlement Case、Snapshot Revision、Payment Instruction、Payment Attempt、Settlement Archiveとする。
 - 個人用Household、Account、収入Transaction、日付境界Archive、単一Payer／Payeeを現行仕様として実装しない。
-- [ADR #24](docs/adr/shared-expense-domain-boundaries.md)によりGroup Management、Expense Recording、Settlementの3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離を採用する。[ADR #35](docs/adr/group-management-consistency-boundary.md)と[ADR #36](docs/adr/group-management-command-authorization.md)により、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可を条件付き採用する。[ADR #52](docs/adr/group-invitation-and-rejoin.md)によりInvitation lifecycleと再参加Participant寿命を採用する。Category所属、他ContextのAggregate、Context間Port、非同期Projection、本番本人性・配送、Invitation／冪等記録の保存保護・Retentionは未決。条件C1（Snapshot Revisionの最小保存、暗号化、Group内認可、保持・削除）は未充足であり、依存するPersistence実装はReadyへ進めない。旧Context一覧や旧Aggregate境界を採用済みとして扱わない。
+- 3 Context（Group Management、Expense Recording、Settlement）、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離を採用する。境界やPersistenceを扱う前に[設計Gate](docs/product/design-gates.md)と、そこから辿れる対象ADRを確認する。条件付き採用や未決事項を採用済みと解釈しない。C1は未充足であり、依存Persistence実装はReady不可。
 - 未確定の設計判断に依存するTaskをReadyまたは実装へ進めない。
 
-## 実装手順
+## 作業の入口と完了範囲
 
-Epic／Taskの起票・改善は`prepare-github-work`、Ready済みTaskの実装は`implement-github-task`を使用する。旧Notion名のSkillは互換入口であり、Notionへ接続しない。
-
-1. 対象TaskのStatus、Requirement、Done Criteria、依存関係、Estimate、Decision Check、Related ADRを確認する。
-2. 変更をBounded Context、Aggregate、画面、GraphQL、Data、Security、運用へ対応付ける。
-3. Epic／Taskの起票・変更では`Decision Check` Propertyを設定し、文書変更でも`方針変更なし／あり`を判定する。`方針変更あり`または不明なら`Related ADR`を設定し、未決ならGitHubへADR Proposalを起票する。Project OwnerがAcceptedを明示し、TaskがそのDecisionへ整合するまでReadyまたは実装へ進めない。Rejectedの場合は現行DecisionへRequirementとDone Criteriaを戻し、Decision Checkをやり直す。
-4. 仕様の不足や矛盾を解消し、TaskがReadyであることを確認する。
-5. 失敗するTestを先に作り、最小実装、Refactorの順で進める。
-6. 実装と同じ変更内で関連するRepository文書、図、Schema、ADR、Runbookを更新する。
-7. package.jsonに存在するlint、typecheck、test、buildを実行する。
-8. Done Criteriaと差分を自己レビューしてからPR準備へ進む。
+- GitHub Epic／Taskの起票・改善は`prepare-github-work`、Ready済みTaskの実装は`implement-github-task`を使う。旧Notion名は互換入口であり、Notionへ接続しない。
+- Domain Modelingは`domain-modeling`、PRの視覚証跡は`prepare-pr-evidence`を使う。通常のCode Reviewや文書編集にこれらを一律適用しない。
+- 利用者が対象を指定した文書・Skillの整理は、その範囲で進める。新しい機能Taskを選ぶ作業と混同しない。機能の着手条件、GitHub起票・変更のDecision Check、ADR承認は[delivery-workflow](docs/engineering/delivery-workflow.md)に従う。
+- 変更の影響範囲に応じて必要な文書だけを読み、関連文書を同じ差分で整合させる。既に得た利用者の承認を繰り返し求めない。
+- 依頼された成果の作成、検証、変更起因の修正、再検証まで進める。未決Decisionがあれば依存する確定・実装を止め、影響と必要な判断を報告し、依存しない作業を続ける。
+- 検証は[testing.md](docs/engineering/testing.md)に従う。新しい振る舞いとBug FixはTDD、文書・Skillのみの変更は構造・リンク・指示の整合性を確認する。
 
 ## 変更ルール
 
@@ -77,7 +73,7 @@ Epic／Taskの起票・改善は`prepare-github-work`、Ready済みTaskの実装
 
 ## 完了条件
 
-- 正常系だけでなく、境界値、権限、失敗、競合、再試行を検証する。
+- 変更に関係する正常、境界、権限、失敗、競合、再試行を検証する。
 - 新しいDomain RuleにはDomain Unit Testがある。
 - テスト失敗や未確認事項を無視して完了扱いにしない。
 - 関連するIssue、Repository文書、Schema、ADR、Runbookの更新要否が説明できる。

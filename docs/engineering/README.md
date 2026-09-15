@@ -2,7 +2,7 @@
 
 このディレクトリは、GitHubの承認済み仕様を実装へ落とすためのリポジトリ内ガイドである。Project、Epic、Task、仕様、設計、ADRの正本はGitHubとする。
 
-## AIが実装対象を決める順序
+## AIが機能Taskの実装対象を決める順序
 
 1. 利用者が指定したGitHub Taskを取得する。
 2. TaskのStatusがReadyで、Requirement、Done Criteria、Dependencies、Estimate、Epic、Project、Decision Check、必要なRelated ADRが揃うことを確認する。
@@ -11,7 +11,7 @@
 5. 仕様の不足・矛盾・未承認Decisionがあれば実装せず、Working Assumptionと影響を示して解消する。
 6. TDDの最初の失敗Testと、PR前に更新する文書を決めてからコードを変更する。
 
-Taskが指定されていない場合、AIはコードの見た目だけから次の機能を選ばない。GitHubのReady Taskを確認し、複数候補がある場合は利用者へ選択を求める。
+利用者が対象を指定した文書・Skill整理は、その範囲で実施する。機能Taskを選ぶ場合にTaskが指定されていなければ、AIはコードの見た目だけから次の機能を選ばない。GitHubのReady Taskを確認し、複数候補がある場合は利用者へ選択を求める。
 
 現行モデルのConfirmed Ruleと未確定Gateを区別する。個人用家計、2人限定、日付境界、単一Payer／Payeeを前提とする旧節を現行仕様として実装しない。
 
@@ -35,6 +35,7 @@ Taskが指定されていない場合、AIはコードの見た目だけから�
 | Frontend／画面 | frontend、testing | 画面遷移、UX/UI、GraphQL Operation |
 | Prisma／Migration／Read Model | domain-design、coding-standards、testing | ER図、Migration、Rebuild計画 |
 | 認証／認可／削除 | coding-standards、testing | Security、ADR、Runbook |
+| 文書・Skillのみ | testingの検証Command、変更対象の参照元 | 起票・PR作成時はdelivery-workflow、方針変更があればADR |
 | CI／Cloud／運用 | delivery-workflow、testing | Architecture、Security、Runbook、ADR |
 
 ## 正本の入口
