@@ -2,6 +2,7 @@ import {
   Group,
   type ActorSubject,
   type GroupId,
+  type InvitationId,
   type ParticipantId,
   type UtcInstant,
 } from '../../domain/group-management/group.js';
@@ -12,6 +13,9 @@ import {
   type GroupCommandResult,
   type GroupCreatedResult,
   type GroupRepository,
+  type InvitationAcceptedResult,
+  type InvitationCancelledResult,
+  type InvitationCreatedResult,
   type OperationId,
   type ParticipantLeftResult,
   type StoredOperation,
@@ -39,6 +43,7 @@ export class GroupCommandApplicationError extends Error {
 export type GroupCommandDependencies = Readonly<{
   nextGroupId: () => GroupId;
   nextParticipantId: () => ParticipantId;
+  nextInvitationId: () => InvitationId;
   now: () => UtcInstant;
 }>;
 
@@ -60,6 +65,30 @@ export type LeaveGroupCommand = Readonly<{
   operationId: OperationId;
   groupId: GroupId;
   participantId: ParticipantId;
+  expectedVersion: number;
+}>;
+
+export type InviteParticipantCommand = Readonly<{
+  actorSubject: ActorSubject;
+  operationId: OperationId;
+  groupId: GroupId;
+  targetSubject: ActorSubject;
+  expectedVersion: number;
+}>;
+
+export type CancelInvitationCommand = Readonly<{
+  actorSubject: ActorSubject;
+  operationId: OperationId;
+  groupId: GroupId;
+  invitationId: InvitationId;
+  expectedVersion: number;
+}>;
+
+export type AcceptInvitationCommand = Readonly<{
+  actorSubject: ActorSubject;
+  operationId: OperationId;
+  groupId: GroupId;
+  invitationId: InvitationId;
   expectedVersion: number;
 }>;
 
@@ -97,6 +126,7 @@ export class GroupCommandService {
           at: createdAt,
         },
       ],
+      invitationChanges: [],
       operation: {
         actorSubject: command.actorSubject,
         operationId: command.operationId,
@@ -144,6 +174,7 @@ export class GroupCommandService {
       expectedVersion: loaded.version,
       stateChanged: transferred,
       membershipChanges: [],
+      invitationChanges: [],
       operation: {
         actorSubject: command.actorSubject,
         operationId: command.operationId,
@@ -202,6 +233,7 @@ export class GroupCommandService {
           at: leftAt,
         },
       ],
+      invitationChanges: [],
       operation: {
         actorSubject: command.actorSubject,
         operationId: command.operationId,
@@ -214,6 +246,177 @@ export class GroupCommandService {
       },
     });
     return this.expectResultKind(result, ['ParticipantLeft']);
+  }
+
+  async inviteParticipant(
+    command: InviteParticipantCommand,
+  ): Promise<InvitationCreatedResult> {
+    this.assertExpectedVersion(command.expectedVersion);
+    const fingerprint = this.fingerprint([
+      'InviteParticipant',
+      command.groupId.value,
+      command.targetSubject.value,
+      command.expectedVersion,
+    ]);
+    const replay = await this.findReplay(command, fingerprint);
+    if (replay !== null) {
+      return this.expectResultKind(replay, ['InvitationCreated']);
+    }
+
+    const loaded = await this.loadExpectedVersion(
+      command.groupId,
+      command.expectedVersion,
+    );
+    const invitationId = this.dependencies.nextInvitationId();
+    const createdAt = this.dependencies.now();
+    const invited = loaded.group.inviteParticipant({
+      actorSubject: command.actorSubject,
+      invitationId,
+      targetSubject: command.targetSubject,
+      createdAt,
+    });
+
+    const result = await this.commit({
+      group: invited.group,
+      expectedVersion: loaded.version,
+      stateChanged: true,
+      membershipChanges: [],
+      invitationChanges: [
+        {
+          kind: 'Created',
+          invitationId,
+          targetSubject: command.targetSubject,
+          issuerParticipantId: invited.invitation.issuerParticipantId,
+          createdAt,
+          expiryAt: invited.invitation.expiryAt,
+        },
+      ],
+      operation: {
+        actorSubject: command.actorSubject,
+        operationId: command.operationId,
+        fingerprint,
+      },
+      result: {
+        kind: 'InvitationCreated',
+        groupId: invited.group.id,
+        invitationId,
+      },
+    });
+    return this.expectResultKind(result, ['InvitationCreated']);
+  }
+
+  async cancelInvitation(
+    command: CancelInvitationCommand,
+  ): Promise<InvitationCancelledResult> {
+    this.assertExpectedVersion(command.expectedVersion);
+    const fingerprint = this.fingerprint([
+      'CancelInvitation',
+      command.groupId.value,
+      command.invitationId.value,
+      command.expectedVersion,
+    ]);
+    const replay = await this.findReplay(command, fingerprint);
+    if (replay !== null) {
+      return this.expectResultKind(replay, ['InvitationCancelled']);
+    }
+
+    const loaded = await this.loadExpectedVersion(
+      command.groupId,
+      command.expectedVersion,
+    );
+    const cancelledAt = this.dependencies.now();
+    const cancelled = loaded.group.cancelInvitation({
+      actorSubject: command.actorSubject,
+      invitationId: command.invitationId,
+      cancelledAt,
+    });
+
+    const result = await this.commit({
+      group: cancelled.group,
+      expectedVersion: loaded.version,
+      stateChanged: true,
+      membershipChanges: [],
+      invitationChanges: [
+        {
+          kind: 'Cancelled',
+          invitationId: command.invitationId,
+          at: cancelledAt,
+        },
+      ],
+      operation: {
+        actorSubject: command.actorSubject,
+        operationId: command.operationId,
+        fingerprint,
+      },
+      result: {
+        kind: 'InvitationCancelled',
+        groupId: cancelled.group.id,
+        invitationId: command.invitationId,
+      },
+    });
+    return this.expectResultKind(result, ['InvitationCancelled']);
+  }
+
+  async acceptInvitation(
+    command: AcceptInvitationCommand,
+  ): Promise<InvitationAcceptedResult> {
+    this.assertExpectedVersion(command.expectedVersion);
+    const fingerprint = this.fingerprint([
+      'AcceptInvitation',
+      command.groupId.value,
+      command.invitationId.value,
+      command.expectedVersion,
+    ]);
+    const replay = await this.findReplay(command, fingerprint);
+    if (replay !== null) {
+      return this.expectResultKind(replay, ['InvitationAccepted']);
+    }
+
+    const loaded = await this.loadExpectedVersion(
+      command.groupId,
+      command.expectedVersion,
+    );
+    const participantId = this.dependencies.nextParticipantId();
+    const acceptedAt = this.dependencies.now();
+    const accepted = loaded.group.acceptInvitation({
+      actorSubject: command.actorSubject,
+      invitationId: command.invitationId,
+      participantId,
+      acceptedAt,
+    });
+
+    const result = await this.commit({
+      group: accepted.group,
+      expectedVersion: loaded.version,
+      stateChanged: true,
+      membershipChanges: [
+        {
+          kind: 'Joined',
+          participantId,
+          at: acceptedAt,
+        },
+      ],
+      invitationChanges: [
+        {
+          kind: 'Consumed',
+          invitationId: command.invitationId,
+          participantId,
+          at: acceptedAt,
+        },
+      ],
+      operation: {
+        actorSubject: command.actorSubject,
+        operationId: command.operationId,
+        fingerprint,
+      },
+      result: {
+        kind: 'InvitationAccepted',
+        groupId: accepted.group.id,
+        invitationId: command.invitationId,
+        participantId,
+      },
+    });
+    return this.expectResultKind(result, ['InvitationAccepted']);
   }
 
   private async findReplay(

@@ -8,7 +8,6 @@ export type GroupInvariantViolationCode =
   | 'ACTIVE_PARTICIPANT_COUNT_OUT_OF_RANGE'
   | 'PARTICIPANT_DUPLICATED'
   | 'ACTIVE_SUBJECT_DUPLICATED'
-  | 'REJOIN_NOT_DECIDED'
   | 'JOIN_ORDER_INVALID'
   | 'JOIN_ORDER_DUPLICATED'
   | 'LEFT_AT_REQUIRED'
@@ -19,7 +18,17 @@ export type GroupInvariantViolationCode =
   | 'TARGET_PARTICIPANT_NOT_ACTIVE'
   | 'ACTOR_PARTICIPANT_MISMATCH'
   | 'OWNER_MUST_TRANSFER_OR_END'
-  | 'ALREADY_LEFT';
+  | 'ALREADY_LEFT'
+  | 'GROUP_CAPACITY_REACHED'
+  | 'INVITATION_DUPLICATED'
+  | 'INVITATION_NOT_FOUND'
+  | 'INVITATION_NOT_PENDING'
+  | 'INVITATION_EXPIRED'
+  | 'INVITATION_TARGET_MISMATCH'
+  | 'INVITATION_EXPIRY_INVALID'
+  | 'INVITATION_RESULT_INVALID'
+  | 'INVITATION_ISSUER_NOT_FOUND'
+  | 'INVITATION_ACTION_BEFORE_CREATED';
 
 export class GroupInvariantViolation extends Error {
   constructor(
@@ -70,6 +79,20 @@ export class ParticipantId {
   }
 }
 
+export class InvitationId {
+  private constructor(readonly value: string) {
+    Object.freeze(this);
+  }
+
+  static from(value: string): InvitationId {
+    return new InvitationId(requireNonEmpty(value));
+  }
+
+  equals(other: InvitationId): boolean {
+    return this.value === other.value;
+  }
+}
+
 export class ActorSubject {
   private constructor(readonly value: string) {
     Object.freeze(this);
@@ -85,7 +108,10 @@ export class ActorSubject {
 }
 
 export class UtcInstant {
-  private constructor(readonly value: string) {
+  private constructor(
+    readonly value: string,
+    private readonly epochMilliseconds: number,
+  ) {
     Object.freeze(this);
   }
 
@@ -97,7 +123,7 @@ export class UtcInstant {
       );
     }
 
-    return new UtcInstant(value.toISOString());
+    return new UtcInstant(value.toISOString(), value.getTime());
   }
 
   equals(other: UtcInstant): boolean {
@@ -105,12 +131,30 @@ export class UtcInstant {
   }
 
   isBefore(other: UtcInstant): boolean {
-    return this.value < other.value;
+    return this.epochMilliseconds < other.epochMilliseconds;
+  }
+
+  isAtOrAfter(other: UtcInstant): boolean {
+    return this.epochMilliseconds >= other.epochMilliseconds;
+  }
+
+  plusDays(days: number): UtcInstant {
+    if (!Number.isSafeInteger(days) || days < 0) {
+      throw new GroupInvariantViolation(
+        'UTC_INSTANT_INVALID',
+        'UTC instant days must be a non-negative safe integer',
+      );
+    }
+
+    return UtcInstant.from(
+      new Date(this.epochMilliseconds + days * 24 * 60 * 60 * 1_000),
+    );
   }
 }
 
 export type GroupStatus = 'Active' | 'Archived';
 export type ParticipantStatus = 'Active' | 'Left';
+export type InvitationStatus = 'Pending' | 'Consumed' | 'Cancelled' | 'Expired';
 
 export type ParticipantSnapshot = Readonly<{
   id: ParticipantId;
@@ -121,11 +165,22 @@ export type ParticipantSnapshot = Readonly<{
   leftAt: UtcInstant | null;
 }>;
 
+export type InvitationSnapshot = Readonly<{
+  id: InvitationId;
+  targetSubject: ActorSubject;
+  issuerParticipantId: ParticipantId;
+  createdAt: UtcInstant;
+  expiryAt: UtcInstant;
+  status: InvitationStatus;
+  resultingParticipantId: ParticipantId | null;
+}>;
+
 export type GroupSnapshot = Readonly<{
   id: GroupId;
   status: GroupStatus;
   ownerParticipantId: ParticipantId | null;
   participants: readonly ParticipantSnapshot[];
+  invitations: readonly InvitationSnapshot[];
 }>;
 
 export type CreateGroupInput = Readonly<{
@@ -145,6 +200,17 @@ const freezeParticipant = (
     joinOrder: participant.joinOrder,
     status: participant.status,
     leftAt: participant.leftAt,
+  });
+
+const freezeInvitation = (invitation: InvitationSnapshot): InvitationSnapshot =>
+  Object.freeze({
+    id: invitation.id,
+    targetSubject: invitation.targetSubject,
+    issuerParticipantId: invitation.issuerParticipantId,
+    createdAt: invitation.createdAt,
+    expiryAt: invitation.expiryAt,
+    status: invitation.status,
+    resultingParticipantId: invitation.resultingParticipantId,
   });
 
 export type TransferOwnershipInput = Readonly<{
@@ -168,16 +234,55 @@ export type LeaveGroupResult = Readonly<{
   result: 'Left';
 }>;
 
+export type InviteParticipantInput = Readonly<{
+  actorSubject: ActorSubject;
+  invitationId: InvitationId;
+  targetSubject: ActorSubject;
+  createdAt: UtcInstant;
+}>;
+
+export type InviteParticipantResult = Readonly<{
+  group: Group;
+  invitation: InvitationSnapshot;
+}>;
+
+export type CancelInvitationInput = Readonly<{
+  actorSubject: ActorSubject;
+  invitationId: InvitationId;
+  cancelledAt: UtcInstant;
+}>;
+
+export type CancelInvitationResult = Readonly<{
+  group: Group;
+  invitation: InvitationSnapshot;
+}>;
+
+export type AcceptInvitationInput = Readonly<{
+  actorSubject: ActorSubject;
+  invitationId: InvitationId;
+  participantId: ParticipantId;
+  acceptedAt: UtcInstant;
+}>;
+
+export type AcceptInvitationResult = Readonly<{
+  group: Group;
+  invitation: InvitationSnapshot;
+  participant: ParticipantSnapshot;
+}>;
+
 export class Group {
   private readonly participantStates: readonly ParticipantSnapshot[];
+  private readonly invitationStates: readonly InvitationSnapshot[];
 
   private constructor(
     readonly id: GroupId,
     readonly status: GroupStatus,
     readonly ownerParticipantId: ParticipantId | null,
     participants: readonly ParticipantSnapshot[],
+    invitations: readonly InvitationSnapshot[],
   ) {
     this.participantStates = Object.freeze(participants.map(freezeParticipant));
+    this.invitationStates = Object.freeze(invitations.map(freezeInvitation));
   }
 
   static create(input: CreateGroupInput): Group {
@@ -195,6 +300,7 @@ export class Group {
           leftAt: null,
         },
       ],
+      invitations: [],
     });
   }
 
@@ -246,12 +352,17 @@ export class Group {
     }
 
     Group.assertParticipantInvariants(snapshot.participants);
+    Group.assertInvitationInvariants(
+      snapshot.invitations,
+      snapshot.participants,
+    );
 
     return new Group(
       snapshot.id,
       snapshot.status,
       snapshot.ownerParticipantId,
       snapshot.participants,
+      snapshot.invitations,
     );
   }
 
@@ -262,6 +373,10 @@ export class Group {
   get activeParticipantCount(): number {
     return this.participantStates.filter(({ status }) => status === 'Active')
       .length;
+  }
+
+  get invitations(): readonly InvitationSnapshot[] {
+    return this.invitationStates;
   }
 
   transferOwnership(input: TransferOwnershipInput): TransferOwnershipResult {
@@ -302,7 +417,13 @@ export class Group {
     }
 
     return Object.freeze({
-      group: new Group(this.id, this.status, target.id, this.participantStates),
+      group: new Group(
+        this.id,
+        this.status,
+        target.id,
+        this.participantStates,
+        this.invitationStates,
+      ),
       result: 'Transferred',
     });
   }
@@ -365,9 +486,170 @@ export class Group {
         status: this.status,
         ownerParticipantId: this.ownerParticipantId,
         participants,
+        invitations: this.invitationStates,
       }),
       result: 'Left',
     });
+  }
+
+  inviteParticipant(input: InviteParticipantInput): InviteParticipantResult {
+    this.assertActive();
+    const owner = this.currentOwnerFor(input.actorSubject);
+
+    if (this.activeParticipantCount >= 4) {
+      throw new GroupInvariantViolation(
+        'GROUP_CAPACITY_REACHED',
+        'An Invitation cannot be created when the Group has four active Participants',
+      );
+    }
+
+    if (
+      this.participantStates.some(
+        ({ subject, status }) =>
+          status === 'Active' && subject.equals(input.targetSubject),
+      )
+    ) {
+      throw new GroupInvariantViolation(
+        'ACTIVE_SUBJECT_DUPLICATED',
+        'An active Participant cannot be invited to the same Group',
+      );
+    }
+
+    if (this.findInvitation(input.invitationId) !== undefined) {
+      throw new GroupInvariantViolation(
+        'INVITATION_DUPLICATED',
+        'An Invitation ID must be unique within a Group',
+      );
+    }
+
+    const invitation: InvitationSnapshot = freezeInvitation({
+      id: input.invitationId,
+      targetSubject: input.targetSubject,
+      issuerParticipantId: owner.id,
+      createdAt: input.createdAt,
+      expiryAt: input.createdAt.plusDays(7),
+      status: 'Pending',
+      resultingParticipantId: null,
+    });
+    const group = Group.restore({
+      ...this.toSnapshot(),
+      invitations: [...this.invitationStates, invitation],
+    });
+
+    return Object.freeze({ group, invitation });
+  }
+
+  cancelInvitation(input: CancelInvitationInput): CancelInvitationResult {
+    this.assertActive();
+    this.currentOwnerFor(input.actorSubject);
+    const invitation = this.requireInvitation(input.invitationId);
+    this.assertInvitationActionTime(invitation, input.cancelledAt);
+
+    if (input.cancelledAt.isAtOrAfter(invitation.expiryAt)) {
+      throw new GroupInvariantViolation(
+        'INVITATION_EXPIRED',
+        'An Invitation cannot be cancelled at or after its expiry time',
+      );
+    }
+
+    this.assertInvitationPending(invitation);
+    const cancelled = freezeInvitation({
+      ...invitation,
+      status: 'Cancelled',
+    });
+    const group = Group.restore({
+      ...this.toSnapshot(),
+      invitations: this.invitationStates.map((current) =>
+        current.id.equals(cancelled.id) ? cancelled : current,
+      ),
+    });
+
+    return Object.freeze({ group, invitation: cancelled });
+  }
+
+  acceptInvitation(input: AcceptInvitationInput): AcceptInvitationResult {
+    this.assertActive();
+    const invitation = this.requireInvitation(input.invitationId);
+    this.assertInvitationActionTime(invitation, input.acceptedAt);
+
+    if (!invitation.targetSubject.equals(input.actorSubject)) {
+      throw new GroupInvariantViolation(
+        'INVITATION_TARGET_MISMATCH',
+        'Only the actor targeted by an Invitation may accept it',
+      );
+    }
+
+    if (input.acceptedAt.isAtOrAfter(invitation.expiryAt)) {
+      throw new GroupInvariantViolation(
+        'INVITATION_EXPIRED',
+        'An Invitation cannot be accepted at or after its expiry time',
+      );
+    }
+
+    this.assertInvitationPending(invitation);
+
+    if (this.activeParticipantCount >= 4) {
+      throw new GroupInvariantViolation(
+        'GROUP_CAPACITY_REACHED',
+        'An Invitation cannot be accepted when the Group has four active Participants',
+      );
+    }
+
+    if (
+      this.participantStates.some(
+        ({ subject, status }) =>
+          status === 'Active' && subject.equals(input.actorSubject),
+      )
+    ) {
+      throw new GroupInvariantViolation(
+        'ACTIVE_SUBJECT_DUPLICATED',
+        'The invited actor already has an active membership in the Group',
+      );
+    }
+
+    if (
+      this.participantStates.some(({ id }) => id.equals(input.participantId))
+    ) {
+      throw new GroupInvariantViolation(
+        'PARTICIPANT_DUPLICATED',
+        'A new membership must use a new Participant ID',
+      );
+    }
+
+    const previousJoinOrder = this.participantStates.reduce(
+      (maximum, participant) => Math.max(maximum, participant.joinOrder),
+      0,
+    );
+    const joinOrder = previousJoinOrder + 1;
+    if (!Number.isSafeInteger(joinOrder)) {
+      throw new GroupInvariantViolation(
+        'JOIN_ORDER_INVALID',
+        'Participant join order must remain a safe integer',
+      );
+    }
+
+    const participant = freezeParticipant({
+      id: input.participantId,
+      subject: input.actorSubject,
+      joinedAt: input.acceptedAt,
+      joinOrder,
+      status: 'Active',
+      leftAt: null,
+    });
+    const consumed = freezeInvitation({
+      ...invitation,
+      status: 'Consumed',
+      resultingParticipantId: participant.id,
+    });
+    const group = Group.restore({
+      ...this.toSnapshot(),
+      participants: [...this.participantStates, participant],
+      invitations: this.invitationStates.map((current) =>
+        current.id.equals(consumed.id) ? consumed : current,
+      ),
+    });
+
+    return Object.freeze({ group, invitation: consumed, participant });
   }
 
   toSnapshot(): GroupSnapshot {
@@ -376,6 +658,7 @@ export class Group {
       status: this.status,
       ownerParticipantId: this.ownerParticipantId,
       participants: this.participantStates,
+      invitations: this.invitationStates,
     });
   }
 
@@ -383,7 +666,7 @@ export class Group {
     participants: readonly ParticipantSnapshot[],
   ): void {
     const participantIds = new Set<string>();
-    const subjects = new Map<string, ParticipantStatus>();
+    const activeSubjects = new Set<string>();
     const joinOrders = new Set<number>();
 
     for (const participant of participants) {
@@ -395,18 +678,18 @@ export class Group {
       }
       participantIds.add(participant.id.value);
 
-      const existingStatus = subjects.get(participant.subject.value);
-      if (existingStatus !== undefined) {
-        const bothActive =
-          existingStatus === 'Active' && participant.status === 'Active';
+      if (
+        participant.status === 'Active' &&
+        activeSubjects.has(participant.subject.value)
+      ) {
         throw new GroupInvariantViolation(
-          bothActive ? 'ACTIVE_SUBJECT_DUPLICATED' : 'REJOIN_NOT_DECIDED',
-          bothActive
-            ? 'The same actor must not have duplicate active membership in a Group'
-            : 'Rejoining the same Group is not decided',
+          'ACTIVE_SUBJECT_DUPLICATED',
+          'The same actor must not have duplicate active membership in a Group',
         );
       }
-      subjects.set(participant.subject.value, participant.status);
+      if (participant.status === 'Active') {
+        activeSubjects.add(participant.subject.value);
+      }
 
       if (
         !Number.isSafeInteger(participant.joinOrder) ||
@@ -448,6 +731,136 @@ export class Group {
           );
         }
       }
+    }
+  }
+
+  private static assertInvitationInvariants(
+    invitations: readonly InvitationSnapshot[],
+    participants: readonly ParticipantSnapshot[],
+  ): void {
+    const invitationIds = new Set<string>();
+
+    for (const invitation of invitations) {
+      if (invitationIds.has(invitation.id.value)) {
+        throw new GroupInvariantViolation(
+          'INVITATION_DUPLICATED',
+          'An Invitation ID must be unique within a Group',
+        );
+      }
+      invitationIds.add(invitation.id.value);
+
+      if (!invitation.expiryAt.equals(invitation.createdAt.plusDays(7))) {
+        throw new GroupInvariantViolation(
+          'INVITATION_EXPIRY_INVALID',
+          'An Invitation expiry time must be exactly seven days after creation',
+        );
+      }
+
+      const issuer = participants.find(({ id }) =>
+        id.equals(invitation.issuerParticipantId),
+      );
+      const issuerWasActiveAtCreation =
+        issuer !== undefined &&
+        !invitation.createdAt.isBefore(issuer.joinedAt) &&
+        (issuer.leftAt === null ||
+          invitation.createdAt.isBefore(issuer.leftAt));
+      if (!issuerWasActiveAtCreation) {
+        throw new GroupInvariantViolation(
+          'INVITATION_ISSUER_NOT_FOUND',
+          'An Invitation issuer must be active in the Group at creation time',
+        );
+      }
+
+      const hasResult = invitation.resultingParticipantId !== null;
+      if ((invitation.status === 'Consumed') !== hasResult) {
+        throw new GroupInvariantViolation(
+          'INVITATION_RESULT_INVALID',
+          'Only a consumed Invitation must identify its resulting Participant',
+        );
+      }
+
+      const resultingParticipantId = invitation.resultingParticipantId;
+      if (resultingParticipantId !== null) {
+        const resultParticipant = participants.find(({ id }) =>
+          id.equals(resultingParticipantId),
+        );
+        const resultMatchesInvitation =
+          resultParticipant !== undefined &&
+          resultParticipant.subject.equals(invitation.targetSubject) &&
+          !resultParticipant.joinedAt.isBefore(invitation.createdAt) &&
+          resultParticipant.joinedAt.isBefore(invitation.expiryAt);
+        if (!resultMatchesInvitation) {
+          throw new GroupInvariantViolation(
+            'INVITATION_RESULT_INVALID',
+            'A consumed Invitation must identify its target Participant joined during its validity',
+          );
+        }
+      }
+    }
+  }
+
+  private currentOwnerFor(actorSubject: ActorSubject): ParticipantSnapshot {
+    const ownerParticipantId = this.ownerParticipantId;
+    const owner =
+      ownerParticipantId === null
+        ? undefined
+        : this.participantStates.find(({ id }) =>
+            id.equals(ownerParticipantId),
+          );
+
+    if (owner === undefined) {
+      throw new GroupInvariantViolation(
+        'OWNER_MISSING',
+        'An active Group must have one Owner',
+      );
+    }
+
+    if (!owner.subject.equals(actorSubject)) {
+      throw new GroupInvariantViolation(
+        'NOT_CURRENT_OWNER',
+        'Only the current Group Owner may perform this action',
+      );
+    }
+
+    return owner;
+  }
+
+  private findInvitation(
+    invitationId: InvitationId,
+  ): InvitationSnapshot | undefined {
+    return this.invitationStates.find(({ id }) => id.equals(invitationId));
+  }
+
+  private requireInvitation(invitationId: InvitationId): InvitationSnapshot {
+    const invitation = this.findInvitation(invitationId);
+    if (invitation === undefined) {
+      throw new GroupInvariantViolation(
+        'INVITATION_NOT_FOUND',
+        'The Invitation was not found in this Group',
+      );
+    }
+
+    return invitation;
+  }
+
+  private assertInvitationPending(invitation: InvitationSnapshot): void {
+    if (invitation.status !== 'Pending') {
+      throw new GroupInvariantViolation(
+        'INVITATION_NOT_PENDING',
+        'Only a pending Invitation may be changed',
+      );
+    }
+  }
+
+  private assertInvitationActionTime(
+    invitation: InvitationSnapshot,
+    actionAt: UtcInstant,
+  ): void {
+    if (actionAt.isBefore(invitation.createdAt)) {
+      throw new GroupInvariantViolation(
+        'INVITATION_ACTION_BEFORE_CREATED',
+        'An Invitation cannot be changed before its creation time',
+      );
     }
   }
 
