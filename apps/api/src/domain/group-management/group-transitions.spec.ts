@@ -50,6 +50,7 @@ const snapshot = (
       ? (participants.find(({ status }) => status === 'Active')?.id ?? null)
       : options.ownerParticipantId,
   participants,
+  invitations: [],
 });
 
 const expectViolation = (
@@ -138,17 +139,18 @@ describe('Groupの復元', () => {
     );
   });
 
-  it('Left履歴とActive在籍のActorSubject重複を再参加未決として拒否する', () => {
-    expectViolation(
-      () =>
-        Group.restore(
-          snapshot([
-            active('p-1', 'same-subject', 1),
-            left('p-2', 'same-subject', 2),
-          ]),
-        ),
-      'REJOIN_NOT_DECIDED',
+  it('Left履歴と新しいActive在籍で同じActorSubjectの再参加を復元する', () => {
+    const restored = Group.restore(
+      snapshot([
+        active('p-1', 'same-subject', 3),
+        left('p-2', 'same-subject', 2),
+      ]),
     );
+
+    expect(restored.participants).toHaveLength(2);
+    expect(restored.activeParticipantCount).toBe(1);
+    expect(restored.participants[0]?.id.value).toBe('p-1');
+    expect(restored.participants[1]?.status).toBe('Left');
   });
 
   it('Left履歴とActive在籍の参加順重複を拒否する', () => {

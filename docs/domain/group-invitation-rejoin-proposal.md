@@ -1,6 +1,6 @@
 # Group招待・参加・再参加の判断入力
 
-- Knowledge State: Accepted。2026-09-13にProject OwnerがADR #52の案Aを採用した。実装はTask #57で個別Ready評価する。
+- Knowledge State: Accepted / Implemented internally。2026-09-13にProject OwnerがADR #52の案Aを採用し、Task #57でDomain／Application内部契約とfake Repository検証を実装した。本番接続と保存は未決Gateを維持する。
 - Scope source: [現行Product Scope](../product/current-model.md)、[設計Gate](../product/design-gates.md)、[初回境界](group-management-first-boundary.md)
 - Related accepted decisions: [整合性境界](../adr/group-management-consistency-boundary.md)、[Command本人性・認可・再試行](../adr/group-management-command-authorization.md)
 - Accepted decision: [招待・再参加](../adr/group-invitation-and-rejoin.md)
@@ -42,7 +42,7 @@ Group Ownerが特定の利用者を招待し、その利用者だけが参加で
 | I-Dの宛先U-D以外が受諾 | I-D.target=U-D、actor=U-E | 結果・Group存在を返さず、状態・履歴・operation結果を作らない | Accepted。外部Errorの形は本番認証Decision待ち |
 | P-AがI-Dを発行後、P-BへOwner譲渡 | issuer=P-A、currentOwner=P-B、I-D=Pending | I-Dは有効で、P-Bが取消できる。P-Aは新規作成・取消不可 | Accepted |
 | U-DがAccept成功後に応答を失う | 同じActor、operationId、fingerprint | 同じ最小結果を再取得し、Invitation消費・Participant追加を重複しない | Accepted |
-| U-CがP-CとしてLeft後、新Invitationを受諾 | P-C.leftAtあり、U-C宛I-C2、maxJoinOrder=4 | 新P-C2、joinOrder=5を作り、P-Cを変更しない。過去責務は旧P-Cを参照する | Accepted。実装は#57 |
+| U-CがP-CとしてLeft後、新Invitationを受諾 | P-C.leftAtあり、U-C宛I-C2、maxJoinOrder=4 | 新P-C2、joinOrder=5を作り、P-Cを変更しない。過去責務は旧P-Cを参照する | Accepted / #57で内部契約を実装 |
 
 ## 5. Domain Concepts / Domain Model
 
@@ -54,13 +54,16 @@ Group Ownerが特定の利用者を招待し、その利用者だけが参加で
 | Participant | Groupに参加した在籍の単位 | Active → Left。再参加時は新しいParticipantを作る | Groupが所有。過去Expense／Settlementは当時のParticipantを参照 | Accepted |
 | Group Owner | Active Participantの現在Role | 譲渡で変更 | Invite/Cancelを許可する現在Role | Accepted |
 
-現行実装はGroup Aggregate内のActive/Left Participant、Owner、joinOrderを守り、同一Actorの再参加は`REJOIN_NOT_DECIDED`として拒否する。Invitationは未実装である。#57でAccepted Decisionとの実装差を解消する。
+### Implementation Evidence
+
+Task #57はGroup Aggregate内へInvitationId、宛先Actor、発行者、作成時刻、7日固定の期限、Pending／Consumed／Cancelled／Expiredを追加した。InviteParticipant、CancelInvitation、AcceptInvitationはActive人数・現在Owner・宛先・期限・Active重複を同じGroup状態で検証する。ApplicationのGroupRepository PortはInvitation変更、Membership変更、Group版、Actor単位のoperation結果を単一commitへ渡す。Left Actorの受諾は旧Participantを保持したまま新ParticipantIdと過去最大+1のjoinOrderを作る。本番Persistence、本人性、配送、公開APIは実装していない。
 
 | Model Element | Implementation Evidence | Alignment | Feedback | Knowledge State |
 | --- | --- | --- | --- | --- |
-| Active人数1〜4、Owner | `apps/api/src/domain/group-management/group.ts` | Aligned | Accept成功は同じGroup整合性版へ含める必要がある | Confirmed / Accepted |
-| Active→Left履歴 | 同上 | Aligned | 再参加は明示的に拒否される。#57で新しいParticipantを作る契約へ変更する | Accepted / Implementation pending |
-| Invitation lifecycle | 実装なし | Missing | #57でDomain／Application内部契約を実装し、DB/API設計から逆算しない | Accepted / Implementation pending |
+| Active人数1〜4、Owner | `apps/api/src/domain/group-management/group.ts` | Aligned | Invitation作成・受諾でも人数とOwnerを同じAggregateで検証する | Confirmed / Accepted / Implemented |
+| Active→Left履歴と再参加 | 同上 | Aligned | 同じActorのLeft履歴を残し、新しいParticipantを追加する | Accepted / Implemented internally |
+| Invitation lifecycle | `apps/api/src/domain/group-management/group.ts`、`group-invitations.spec.ts` | Aligned | 7日固定、4状態、Owner認可、受諾時再検証を純粋Domainで検証する | Accepted / Implemented internally |
+| 原子的Command契約 | `apps/api/src/application/group-management/group-command-service.ts`、`group-repository.ts`、`group-command-service.spec.ts` | Aligned | fake RepositoryでInvitation・Membership・版・operation結果の原子性、競合、応答喪失再送を検証する | Accepted / Implemented internally |
 
 ## 6. Business Rules / Invariants
 
@@ -99,11 +102,11 @@ Group Ownerが特定の利用者を招待し、その利用者だけが参加で
 
 | Item | State | Reason | Follow-up |
 | --- | --- | --- | --- |
-| 宛先Actorに束縛されたInvitationとPending/Consumed/Cancelled/Expired lifecycle | Accepted | 他人の受諾と二重消費を防ぐため | #57で内部契約を検証。本番宛先解決は別Decision |
-| 期限はサーバClockで判定し、作成時から7日、延長なし・再発行 | Accepted | Client時刻の操作を避け、再試行を決定的にするため | #57でClock境界を検証 |
-| 枠はInvitation作成時に予約せず、4人時はInvite拒否、Accept時にも再検証 | Accepted | 期限切れ招待で空き枠を塞がないため | #57で同時受諾を検証 |
-| 旧Owner発行のPending Invitationは譲渡後も有効で、現在Ownerが取消できる | Accepted | 発行時の正当性と現在の管理責任を両立するため | #57で権限変更競合を検証 |
-| 再参加は新ParticipantId・単調なjoinOrderを使う | Accepted | 過去責務と現在在籍を混同しないため | #57でGroup履歴を検証。Context間参照は別Decision |
+| 宛先Actorに束縛されたInvitationとPending/Consumed/Cancelled/Expired lifecycle | Accepted / Implemented internally | 他人の受諾と二重消費を防ぐため | 本番宛先解決は別Decision |
+| 期限はサーバClockで判定し、作成時から7日、延長なし・再発行 | Accepted / Implemented internally | Client時刻の操作を避け、再試行を決定的にするため | 本番Clock接続は公開境界Taskで検証 |
+| 枠はInvitation作成時に予約せず、4人時はInvite拒否、Accept時にも再検証 | Accepted / Implemented internally | 期限切れ招待で空き枠を塞がないため | 同時受諾をfake Repositoryで検証済み |
+| 旧Owner発行のPending Invitationは譲渡後も有効で、現在Ownerが取消できる | Accepted / Implemented internally | 発行時の正当性と現在の管理責任を両立するため | Owner譲渡後の権限をDomain Testで検証済み |
+| 再参加は新ParticipantId・単調なjoinOrderを使う | Accepted / Implemented internally | 過去責務と現在在籍を混同しないため | Context間参照は別Decision |
 
 ## 10. Open Questions / Conflicts
 
@@ -111,11 +114,10 @@ Group Ownerが特定の利用者を招待し、その利用者だけが参加で
 | --- | --- | --- | --- | --- |
 | OQ-I4 | Open Question | 宛先Actorを本番でどう解決し、招待をどう配送するか | Security／Privacy、公開API | 本番認証・配送の別ADR |
 | OQ-I5 | Open Question | 再参加後のParticipant参照をExpense／Settlementがいつ採用するか | Context間認可、過去責務 | Context間契約ADR。今回は実装しない |
-| OQ-I6 | Implementation Gap | 既存Groupは同一Actorの再参加を拒否するが、ADR #52は新Participantによる再参加を採用した | Domain実装とAccepted Decisionの差 | #57で変更を検証 |
 | OQ-I7 | Open Question | Invitationとoperation結果を本番でどう保護・保持・削除するか | Security／Privacy、Persistence | 保存Security Decision。#42をReadyにしない |
 
 ## 11. Next Modeling Step
 
-1. [Task #57](https://github.com/takeshi-arihori/kakei_app/issues/57)を個別Ready評価し、Invitation lifecycleとAcceptInvitationのDomain／Application内部契約を実装する。
-2. 公開本人性・宛先解決・配送、保存最小化・保護・Retention、Context間参照を別Ready Gateで具体化する。
+1. 公開本人性・宛先解決・配送を別Security DecisionとReady Gateで具体化する。
+2. 保存最小化・保護・RetentionとContext間参照をそれぞれのDecisionへ分離する。Task #57の内部fake検証を本番接続・保存の証拠にしない。
 3. C1未充足とPersistence #42のBacklog / Blocked Yesを維持する。

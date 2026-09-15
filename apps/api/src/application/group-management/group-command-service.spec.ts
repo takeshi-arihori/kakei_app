@@ -5,6 +5,7 @@ import {
   Group,
   GroupId,
   GroupInvariantViolation,
+  InvitationId,
   ParticipantId,
   UtcInstant,
   type ParticipantSnapshot,
@@ -22,6 +23,7 @@ import {
   type FindOperationResult,
   type GroupCommandResult,
   type GroupRepository,
+  type InvitationChange,
   type LoadedGroup,
   type MembershipChange,
   type StoredOperation,
@@ -53,6 +55,7 @@ const existingGroup = (): Group =>
       activeParticipant('p-member', 'member-subject', 2),
       activeParticipant('p-third', 'third-subject', 3),
     ],
+    invitations: [],
   });
 
 type CommitFault = 'BeforeWriteUnavailable' | 'AfterWriteUnavailable';
@@ -78,6 +81,7 @@ class InMemoryGroupRepository implements GroupRepository {
     Map<string, StoredOperation>
   >();
   private readonly membershipChanges: MembershipChange[] = [];
+  private readonly invitationChanges: InvitationChange[] = [];
   private nextFault: CommitFault | null = null;
   private nextBarrier: PendingCommitBarrier | null = null;
 
@@ -168,6 +172,7 @@ class InMemoryGroupRepository implements GroupRepository {
     const result = versionResult(request.result, version);
     this.groups.set(request.group.id.value, { group: request.group, version });
     this.membershipChanges.push(...request.membershipChanges);
+    this.invitationChanges.push(...request.invitationChanges);
     actorOperations.set(request.operation.operationId.value, {
       actorSubject: request.operation.actorSubject,
       operationId: request.operation.operationId,
@@ -198,11 +203,16 @@ class InMemoryGroupRepository implements GroupRepository {
   changes(): readonly MembershipChange[] {
     return [...this.membershipChanges];
   }
+
+  invitationHistory(): readonly InvitationChange[] {
+    return [...this.invitationChanges];
+  }
 }
 
 const dependencies = (): GroupCommandDependencies => ({
   nextGroupId: vi.fn(() => GroupId.from('generated-group')),
   nextParticipantId: vi.fn(() => ParticipantId.from('generated-participant')),
+  nextInvitationId: vi.fn(() => InvitationId.from('generated-invitation')),
   now: vi.fn(() => createdAt),
 });
 
@@ -376,6 +386,7 @@ describe('GroupCommandService.createGroup', () => {
         .fn<() => ParticipantId>()
         .mockReturnValueOnce(ParticipantId.from('participant-one'))
         .mockReturnValueOnce(ParticipantId.from('participant-two')),
+      nextInvitationId: vi.fn(() => InvitationId.from('unused-invitation')),
       now: vi.fn(() => createdAt),
     };
     const service = new GroupCommandService(repository, injected);
@@ -396,6 +407,359 @@ describe('GroupCommandService.createGroup', () => {
     expect(second.groupId).toEqual(GroupId.from('group-two'));
     expect(repository.groupCount()).toBe(2);
     expect(repository.operationCount()).toBe(2);
+  });
+});
+
+describe('GroupCommandServiceのInvitation Command', () => {
+  const invitationCommand = {
+    actorSubject: ActorSubject.from('owner-subject'),
+    operationId: OperationId.from('invite-1'),
+    groupId: GroupId.from('group-a'),
+    targetSubject: ActorSubject.from('invited-subject'),
+    expectedVersion: 1,
+  };
+
+  const setup = (group = existingGroup(), version = 1) => {
+    const repository = new InMemoryGroupRepository();
+    repository.seed(group, version);
+    const injected = dependencies();
+    return {
+      repository,
+      injected,
+      service: new GroupCommandService(repository, injected),
+    };
+  };
+
+  const withInvitation = (
+    id: string,
+    target: string,
+    source = existingGroup(),
+  ): Group =>
+    source.inviteParticipant({
+      actorSubject: ActorSubject.from('owner-subject'),
+      invitationId: InvitationId.from(id),
+      targetSubject: ActorSubject.from(target),
+      createdAt,
+    }).group;
+
+  it('Invitation状態・作成履歴・operation結果を同じ版更新で保存する', async () => {
+    const { repository, service } = setup();
+
+    const result = await service.inviteParticipant(invitationCommand);
+
+    expect(result).toEqual({
+      kind: 'InvitationCreated',
+      groupId: GroupId.from('group-a'),
+      invitationId: InvitationId.from('generated-invitation'),
+      version: 2,
+    });
+    expect(repository.invitationHistory()).toEqual([
+      {
+        kind: 'Created',
+        invitationId: InvitationId.from('generated-invitation'),
+        targetSubject: ActorSubject.from('invited-subject'),
+        issuerParticipantId: ParticipantId.from('p-owner'),
+        createdAt,
+        expiryAt: instant('2026-09-14T00:00:00.000Z'),
+      },
+    ]);
+    expect(repository.operationCount()).toBe(1);
+  });
+
+  it('同じoperationIdとpayloadの再送はIDや時刻を再生成しない', async () => {
+    const { repository, injected, service } = setup();
+
+    const first = await service.inviteParticipant(invitationCommand);
+    const replay = await service.inviteParticipant(invitationCommand);
+
+    expect(replay).toEqual(first);
+    expect(injected.nextInvitationId).toHaveBeenCalledTimes(1);
+    expect(injected.now).toHaveBeenCalledTimes(1);
+    expect(repository.invitationHistory()).toHaveLength(1);
+    expect(repository.operationCount()).toBe(1);
+  });
+
+  it('同じoperationIdでInvitationの宛先を変えた再送を拒否する', async () => {
+    const { repository, service } = setup();
+    await service.inviteParticipant(invitationCommand);
+
+    await expectApplicationError(
+      () =>
+        service.inviteParticipant({
+          ...invitationCommand,
+          targetSubject: ActorSubject.from('different-subject'),
+        }),
+      'OPERATION_MISMATCH',
+    );
+    expect(repository.invitationHistory()).toHaveLength(1);
+  });
+
+  it('現在Ownerが取消しを状態・履歴・operation結果へ同時に保存する', async () => {
+    const pending = withInvitation('invitation-a', 'invited-subject');
+    const { repository, service } = setup(pending);
+
+    const result = await service.cancelInvitation({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('cancel-1'),
+      groupId: GroupId.from('group-a'),
+      invitationId: InvitationId.from('invitation-a'),
+      expectedVersion: 1,
+    });
+
+    expect(result).toEqual({
+      kind: 'InvitationCancelled',
+      groupId: GroupId.from('group-a'),
+      invitationId: InvitationId.from('invitation-a'),
+      version: 2,
+    });
+    expect(repository.invitationHistory()).toEqual([
+      {
+        kind: 'Cancelled',
+        invitationId: InvitationId.from('invitation-a'),
+        at: createdAt,
+      },
+    ]);
+  });
+
+  it('受諾時にInvitation消費・Participant追加・両履歴・operation結果を原子的に保存する', async () => {
+    const pending = withInvitation('invitation-a', 'invited-subject');
+    const { repository, service } = setup(pending);
+
+    const result = await service.acceptInvitation({
+      actorSubject: ActorSubject.from('invited-subject'),
+      operationId: OperationId.from('accept-1'),
+      groupId: GroupId.from('group-a'),
+      invitationId: InvitationId.from('invitation-a'),
+      expectedVersion: 1,
+    });
+
+    expect(result).toEqual({
+      kind: 'InvitationAccepted',
+      groupId: GroupId.from('group-a'),
+      invitationId: InvitationId.from('invitation-a'),
+      participantId: ParticipantId.from('generated-participant'),
+      version: 2,
+    });
+    expect(repository.changes()).toEqual([
+      {
+        kind: 'Joined',
+        participantId: ParticipantId.from('generated-participant'),
+        at: createdAt,
+      },
+    ]);
+    expect(repository.invitationHistory()).toEqual([
+      {
+        kind: 'Consumed',
+        invitationId: InvitationId.from('invitation-a'),
+        participantId: ParticipantId.from('generated-participant'),
+        at: createdAt,
+      },
+    ]);
+    const saved = await repository.load(GroupId.from('group-a'));
+    expect(saved?.group.activeParticipantCount).toBe(4);
+    expect(saved?.group.invitations[0]?.status).toBe('Consumed');
+    expect(repository.operationCount()).toBe(1);
+  });
+
+  it('受諾保存後の応答喪失をoperation照合で復旧し二重参加させない', async () => {
+    const pending = withInvitation('invitation-a', 'invited-subject');
+    const { repository, service } = setup(pending);
+    repository.failNextCommit('AfterWriteUnavailable');
+    const command = {
+      actorSubject: ActorSubject.from('invited-subject'),
+      operationId: OperationId.from('accept-1'),
+      groupId: GroupId.from('group-a'),
+      invitationId: InvitationId.from('invitation-a'),
+      expectedVersion: 1,
+    };
+
+    const recovered = await service.acceptInvitation(command);
+    const replay = await service.acceptInvitation(command);
+
+    expect(replay).toEqual(recovered);
+    expect(repository.changes()).toHaveLength(1);
+    expect(repository.invitationHistory()).toHaveLength(1);
+    expect(repository.operationCount()).toBe(1);
+  });
+
+  it('受諾保存前UnavailableではGroup・履歴・operationを一切変えない', async () => {
+    const pending = withInvitation('invitation-a', 'invited-subject');
+    const { repository, service } = setup(pending);
+    repository.failNextCommit('BeforeWriteUnavailable');
+
+    await expectApplicationError(
+      () =>
+        service.acceptInvitation({
+          actorSubject: ActorSubject.from('invited-subject'),
+          operationId: OperationId.from('accept-1'),
+          groupId: GroupId.from('group-a'),
+          invitationId: InvitationId.from('invitation-a'),
+          expectedVersion: 1,
+        }),
+      'UNAVAILABLE',
+    );
+
+    expect((await repository.load(GroupId.from('group-a')))?.group).toEqual(
+      pending,
+    );
+    expect(repository.changes()).toEqual([]);
+    expect(repository.invitationHistory()).toEqual([]);
+    expect(repository.operationCount()).toBe(0);
+  });
+
+  it('残り1枠への同時受諾は1件だけCommitし他方をConflictにする', async () => {
+    const firstPending = withInvitation('invitation-a', 'first-subject');
+    const twoPending = withInvitation(
+      'invitation-b',
+      'second-subject',
+      firstPending,
+    );
+    const { repository, service } = setup(twoPending);
+    const barrier = repository.pauseNextCommit();
+    const delayed = service.acceptInvitation({
+      actorSubject: ActorSubject.from('first-subject'),
+      operationId: OperationId.from('accept-first'),
+      groupId: GroupId.from('group-a'),
+      invitationId: InvitationId.from('invitation-a'),
+      expectedVersion: 1,
+    });
+    await barrier.entered;
+
+    await expect(
+      service.acceptInvitation({
+        actorSubject: ActorSubject.from('second-subject'),
+        operationId: OperationId.from('accept-second'),
+        groupId: GroupId.from('group-a'),
+        invitationId: InvitationId.from('invitation-b'),
+        expectedVersion: 1,
+      }),
+    ).resolves.toMatchObject({ kind: 'InvitationAccepted', version: 2 });
+    barrier.release();
+    await expectApplicationError(() => delayed, 'CONFLICT');
+
+    const saved = await repository.load(GroupId.from('group-a'));
+    expect(saved?.group.activeParticipantCount).toBe(4);
+    expect(repository.changes()).toHaveLength(1);
+    expect(repository.invitationHistory()).toHaveLength(1);
+    expect(repository.operationCount()).toBe(1);
+  });
+
+  it('成功結果は実行Actorだけが取得できる', async () => {
+    const pending = withInvitation('invitation-a', 'invited-subject');
+    const { repository, service } = setup(pending);
+    const operationId = OperationId.from('accept-1');
+    await service.acceptInvitation({
+      actorSubject: ActorSubject.from('invited-subject'),
+      operationId,
+      groupId: GroupId.from('group-a'),
+      invitationId: InvitationId.from('invitation-a'),
+      expectedVersion: 1,
+    });
+
+    await expect(
+      repository.findOperation(
+        ActorSubject.from('different-subject'),
+        operationId,
+      ),
+    ).resolves.toEqual({ kind: 'Missing' });
+  });
+
+  it('InvitationのOwner・宛先Actor認可違反を履歴とoperationへ保存しない', async () => {
+    const pending = withInvitation('invitation-a', 'invited-subject');
+    const { repository, service } = setup(pending);
+
+    await expectDomainError(
+      () =>
+        service.cancelInvitation({
+          actorSubject: ActorSubject.from('member-subject'),
+          operationId: OperationId.from('cancel-1'),
+          groupId: GroupId.from('group-a'),
+          invitationId: InvitationId.from('invitation-a'),
+          expectedVersion: 1,
+        }),
+      'NOT_CURRENT_OWNER',
+    );
+    await expectDomainError(
+      () =>
+        service.acceptInvitation({
+          actorSubject: ActorSubject.from('different-subject'),
+          operationId: OperationId.from('accept-1'),
+          groupId: GroupId.from('group-a'),
+          invitationId: InvitationId.from('invitation-a'),
+          expectedVersion: 1,
+        }),
+      'INVITATION_TARGET_MISMATCH',
+    );
+
+    expect((await repository.load(GroupId.from('group-a')))?.group).toEqual(
+      pending,
+    );
+    expect(repository.changes()).toEqual([]);
+    expect(repository.invitationHistory()).toEqual([]);
+    expect(repository.operationCount()).toBe(0);
+  });
+
+  it('Invitation Commandの期待版不一致をID・時刻生成前にConflictにする', async () => {
+    const { repository, injected, service } = setup();
+
+    await expectApplicationError(
+      () =>
+        service.inviteParticipant({
+          ...invitationCommand,
+          expectedVersion: 2,
+        }),
+      'CONFLICT',
+    );
+
+    expect(injected.nextInvitationId).not.toHaveBeenCalled();
+    expect(injected.now).not.toHaveBeenCalled();
+    expect(repository.invitationHistory()).toEqual([]);
+    expect(repository.operationCount()).toBe(0);
+  });
+
+  it('Left Actorの再受諾を旧Participantを残した新しいMembershipとして保存する', async () => {
+    const previousParticipant: ParticipantSnapshot = {
+      ...activeParticipant('p-previous', 'returning-subject', 5),
+      status: 'Left',
+      leftAt: createdAt,
+    };
+    const rejoinable = Group.restore({
+      id: GroupId.from('group-a'),
+      status: 'Active',
+      ownerParticipantId: ParticipantId.from('p-owner'),
+      participants: [
+        activeParticipant('p-owner', 'owner-subject', 1),
+        activeParticipant('p-member', 'member-subject', 2),
+        previousParticipant,
+      ],
+      invitations: [],
+    });
+    const pending = withInvitation(
+      'invitation-return',
+      'returning-subject',
+      rejoinable,
+    );
+    const { repository, service } = setup(pending);
+
+    const result = await service.acceptInvitation({
+      actorSubject: ActorSubject.from('returning-subject'),
+      operationId: OperationId.from('accept-return'),
+      groupId: GroupId.from('group-a'),
+      invitationId: InvitationId.from('invitation-return'),
+      expectedVersion: 1,
+    });
+
+    const saved = await repository.load(GroupId.from('group-a'));
+    expect(result.participantId).not.toEqual(previousParticipant.id);
+    expect(saved?.group.participants).toContainEqual(previousParticipant);
+    expect(
+      saved?.group.participants.find(({ id }) =>
+        id.equals(result.participantId),
+      )?.joinOrder,
+    ).toBe(6);
+    expect(repository.changes()).toEqual([
+      { kind: 'Joined', participantId: result.participantId, at: createdAt },
+    ]);
   });
 });
 

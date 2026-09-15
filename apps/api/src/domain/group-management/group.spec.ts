@@ -34,6 +34,7 @@ const groupSnapshot = (
   status: 'Active',
   ownerParticipantId,
   participants,
+  invitations: [],
 });
 
 const expectViolation = (

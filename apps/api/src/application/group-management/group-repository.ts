@@ -2,6 +2,7 @@ import type {
   ActorSubject,
   Group,
   GroupId,
+  InvitationId,
   ParticipantId,
   UtcInstant,
 } from '../../domain/group-management/group.js';
@@ -63,6 +64,27 @@ export type MembershipChange =
       at: UtcInstant;
     }>;
 
+export type InvitationChange =
+  | Readonly<{
+      kind: 'Created';
+      invitationId: InvitationId;
+      targetSubject: ActorSubject;
+      issuerParticipantId: ParticipantId;
+      createdAt: UtcInstant;
+      expiryAt: UtcInstant;
+    }>
+  | Readonly<{
+      kind: 'Cancelled';
+      invitationId: InvitationId;
+      at: UtcInstant;
+    }>
+  | Readonly<{
+      kind: 'Consumed';
+      invitationId: InvitationId;
+      participantId: ParticipantId;
+      at: UtcInstant;
+    }>;
+
 export type UnversionedGroupCommandResult =
   | Readonly<{
       kind: 'GroupCreated';
@@ -82,6 +104,22 @@ export type UnversionedGroupCommandResult =
   | Readonly<{
       kind: 'ParticipantLeft';
       groupId: GroupId;
+      participantId: ParticipantId;
+    }>
+  | Readonly<{
+      kind: 'InvitationCreated';
+      groupId: GroupId;
+      invitationId: InvitationId;
+    }>
+  | Readonly<{
+      kind: 'InvitationCancelled';
+      groupId: GroupId;
+      invitationId: InvitationId;
+    }>
+  | Readonly<{
+      kind: 'InvitationAccepted';
+      groupId: GroupId;
+      invitationId: InvitationId;
       participantId: ParticipantId;
     }>;
 
@@ -109,6 +147,25 @@ export type GroupCommandResult =
       groupId: GroupId;
       participantId: ParticipantId;
       version: number;
+    }>
+  | Readonly<{
+      kind: 'InvitationCreated';
+      groupId: GroupId;
+      invitationId: InvitationId;
+      version: number;
+    }>
+  | Readonly<{
+      kind: 'InvitationCancelled';
+      groupId: GroupId;
+      invitationId: InvitationId;
+      version: number;
+    }>
+  | Readonly<{
+      kind: 'InvitationAccepted';
+      groupId: GroupId;
+      invitationId: InvitationId;
+      participantId: ParticipantId;
+      version: number;
     }>;
 
 export type GroupCreatedResult = Extract<
@@ -124,6 +181,21 @@ export type TransferGroupOwnershipResult = Extract<
 export type ParticipantLeftResult = Extract<
   GroupCommandResult,
   { kind: 'ParticipantLeft' }
+>;
+
+export type InvitationCreatedResult = Extract<
+  GroupCommandResult,
+  { kind: 'InvitationCreated' }
+>;
+
+export type InvitationCancelledResult = Extract<
+  GroupCommandResult,
+  { kind: 'InvitationCancelled' }
+>;
+
+export type InvitationAcceptedResult = Extract<
+  GroupCommandResult,
+  { kind: 'InvitationAccepted' }
 >;
 
 export type OperationContext = Readonly<{
@@ -143,6 +215,7 @@ export type CommitGroupRequest = Readonly<{
   expectedVersion: number | 'Absent';
   stateChanged: boolean;
   membershipChanges: readonly MembershipChange[];
+  invitationChanges: readonly InvitationChange[];
   operation: OperationContext;
   result: UnversionedGroupCommandResult;
 }>;
