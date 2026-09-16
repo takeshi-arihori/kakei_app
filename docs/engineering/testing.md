@@ -93,7 +93,7 @@ Given: 過去Event列
 
 ## 検証Command
 
-変更したPackageのScriptを先に実行し、最後にRootから存在するCheckを実行する。
+実行Code、依存関係、Build／CI設定に影響する変更では、変更したPackageのScriptを先に実行し、最後にRootから存在するCheckを実行する。
 
 ```bash
 pnpm lint
@@ -101,6 +101,10 @@ pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+文書・Skillだけの変更で実行CodeやBuildへ影響しない場合は、リンク、構造、指示・参照先の整合性を検証し、アプリのlint／typecheck／test／buildは省略できる。Skillを変更した場合はfrontmatter検証を行い、振る舞いを大きく変えた場合は代表的な依頼で適用範囲と判断境界も確認する。
+
+検証に合格した後は、新たな変更・失敗・未解決の懸念がない限り同じ検証を繰り返さない。
 
 必要に応じて`pnpm test:e2e`、Integration、Schema差分、Migration検証を追加する。実行しないCheckは理由と残リスクをPRへ記載する。
 

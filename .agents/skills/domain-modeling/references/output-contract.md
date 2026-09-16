@@ -2,6 +2,8 @@
 
 Domain Modelingの成果は、別の人間またはAIが「何が確定し、何が未確定か」を再現できる形で出力する。
 
+全体モデルを新規整理する場合の構成例。局所レビューや特定Ruleの相談では関連する項目だけを使い、空のSectionを作らない。根拠とKnowledge State、未決事項は対象範囲で必ず示す。
+
 ## 1. Problem / Scope
 
 - Problem

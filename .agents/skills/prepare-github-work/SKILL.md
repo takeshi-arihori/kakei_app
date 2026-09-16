@@ -1,15 +1,17 @@
 ---
 name: prepare-github-work
-description: 家計アプリのGitHub Epic・Taskを作成、分割、レビュー、改善し、Decision Check、ADR、1〜2日の粒度、依存関係、Done Criteria、Ready判定を整える。Ready済みTaskの実装にはimplement-github-taskを使用する。
+description: 家計アプリのGitHub Epic・Taskを作成・分割・レビューし、要件、依存関係、ADR、Ready判定を整える。
 ---
 
 # GitHub作業項目の準備
 
 要求を、別の開発者やAIが推測せず実装できるGitHub作業項目へ変換する。Notionは読み書きしない。
 
+レビューのみなら、以下の起票・Property設定・Status変更は提案として扱い、GitHubへ書き込まない。作成・更新を依頼された場合だけ保存手順へ進む。
+
 ## 正本と参照元を確認する
 
-1. `docs/governance/README.md`、`docs/engineering/README.md`、`docs/engineering/delivery-workflow.md`を読む。
+1. [delivery-workflow](../../../docs/engineering/delivery-workflow.md)の起票・Ready・ADR条件を確認する。GitHub取得先と固定Commitは[正本入口](../../../docs/governance/README.md)で確認し、仕様・設計は今回の成果に関係する箇所だけ読む。
 2. 対象のGitHub Project、Epic Issue、Task Issue、関連Issue、Repositoryの仕様・設計・Accepted ADRを取得する。
 3. `develop`に未反映の正本は、ガバナンス文書が示す固定Commit URLから読む。
 4. Project内とRepository Issuesを業務語彙、期待成果、Bounded Contextで検索し、重複と包含関係を比較する。
@@ -51,12 +53,6 @@ Accepted ADR、新しいBounded Context、DB、Cloud Service、Runtime、Event S
 
 状態はBacklog → Ready → In Progress → Review → Doneとする。飛ばす場合はIssueへ理由を記録する。個人開発のIn Progressは原則1件に制限する。
 
-## 独立Planning Evaluator Loop
+## 完了まで進める
 
-親AgentだけがGitHubを更新する。書き込み前に新しい`work_planning_evaluator` Subagentへproposalを渡し、pass後に書き込む。書き込み後はIssue、Project Field、Status、URLを再取得し、別の新しいEvaluatorへpersisted評価を依頼する。同じEvaluatorを再利用しない。
-
-ReviewInputには元要求、対象外、参照URLと固定Commit、現状とGap、検索結果、重複比較、全Property、Requirement、Done Criteria、依存関係、Ready判定、Decision Check、ADR、未決事項を含める。さらに、公開可否の分類結果、未分類0件、機械検査と手動Review、公開しなかった情報、Private保管先待ちの有無を証拠として必須にする。`findings`と`missingEvidence`が空のpassだけを合格とする。failは修正して新しいEvaluatorで再評価し、blockedは証拠と影響を利用者へ報告する。
-
-## 結果を報告する
-
-ProjectとEpic、作成・更新したIssue、Ready判定、未解決事項、GitHub URL、Project Fieldの永続化結果、Evaluator結果を報告する。
+レビューのみの依頼では提案とReady判定を報告する。GitHubの作成・更新を依頼された場合は、書き込み前に[独立Planning評価と保存確認](references/delivery.md)を読み、proposal評価、保存、persisted評価まで完了する。親Agentだけが書き込み、初稿の提示だけで作業を終えない。
