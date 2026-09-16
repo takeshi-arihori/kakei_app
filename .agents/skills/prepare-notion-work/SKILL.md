@@ -1,6 +1,6 @@
 ---
 name: prepare-notion-work
-description: 旧Skill名の互換入口。Notionへ接続せず、GitHub Epic・Taskの準備にはprepare-github-workを使用する。
+description: 旧prepare-notion-work呼び出しをGitHub作業項目の準備へ転送する。Notionには接続しない。
 ---
 
 # GitHub作業項目準備への互換入口
