@@ -19,6 +19,8 @@
 
 ## 依存と境界
 
+- APIは`src/<context>/<layer>`の順で配置し、Contextの変更範囲を同じDirectoryへ凝集させる。共通GraphQL組み立てとComposition RootはContext外に置く。
+- Context固有のLayerと将来Contextは最初の利用Taskで追加し、空Scaffoldを先行作成しない。
 - PresentationはApplicationだけを呼ぶ。
 - ApplicationはDomainとPortへ依存する。
 - DomainはFrameworkとInfrastructureへ依存しない。
