@@ -5,7 +5,7 @@ import {
   type InvitationId,
   type ParticipantId,
   type UtcInstant,
-} from '../../domain/group-management/group.js';
+} from '../domain/group.js';
 import {
   CommandFingerprint,
   type CommitGroupOutcome,

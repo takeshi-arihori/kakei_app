@@ -5,7 +5,7 @@ import type {
   InvitationId,
   ParticipantId,
   UtcInstant,
-} from '../../domain/group-management/group.js';
+} from '../domain/group.js';
 
 const requireNonEmpty = (value: string, message: string): string => {
   if (value.trim().length === 0) {

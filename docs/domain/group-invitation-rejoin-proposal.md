@@ -60,10 +60,10 @@ Task #57はGroup Aggregate内へInvitationId、宛先Actor、発行者、作成�
 
 | Model Element | Implementation Evidence | Alignment | Feedback | Knowledge State |
 | --- | --- | --- | --- | --- |
-| Active人数1〜4、Owner | `apps/api/src/domain/group-management/group.ts` | Aligned | Invitation作成・受諾でも人数とOwnerを同じAggregateで検証する | Confirmed / Accepted / Implemented |
+| Active人数1〜4、Owner | `apps/api/src/group-management/domain/group.ts` | Aligned | Invitation作成・受諾でも人数とOwnerを同じAggregateで検証する | Confirmed / Accepted / Implemented |
 | Active→Left履歴と再参加 | 同上 | Aligned | 同じActorのLeft履歴を残し、新しいParticipantを追加する | Accepted / Implemented internally |
-| Invitation lifecycle | `apps/api/src/domain/group-management/group.ts`、`group-invitations.spec.ts` | Aligned | 7日固定、4状態、Owner認可、受諾時再検証を純粋Domainで検証する | Accepted / Implemented internally |
-| 原子的Command契約 | `apps/api/src/application/group-management/group-command-service.ts`、`group-repository.ts`、`group-command-service.spec.ts` | Aligned | fake RepositoryでInvitation・Membership・版・operation結果の原子性、競合、応答喪失再送を検証する | Accepted / Implemented internally |
+| Invitation lifecycle | `apps/api/src/group-management/domain/group.ts`、`group-invitations.spec.ts` | Aligned | 7日固定、4状態、Owner認可、受諾時再検証を純粋Domainで検証する | Accepted / Implemented internally |
+| 原子的Command契約 | `apps/api/src/group-management/application/group-command-service.ts`、`group-repository.ts`、`group-command-service.spec.ts` | Aligned | fake RepositoryでInvitation・Membership・版・operation結果の原子性、競合、応答喪失再送を検証する | Accepted / Implemented internally |
 
 ## 6. Business Rules / Invariants
 

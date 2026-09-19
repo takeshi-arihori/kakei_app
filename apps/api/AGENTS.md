@@ -4,13 +4,18 @@
 
 ## レイヤと依存方向
 
-- `presentation/graphql`: 認証Guard、Input／Output変換、Command／Query呼出しだけを行う。
-- `application`: Use Caseの順序、認可、Transaction境界、Port呼出しを調整する。
-- `domain`: Aggregate、Entity、Value Object、Domain Service、Domain Event、不変条件を持つ。
-- `infrastructure`: Prisma、PostgreSQL、Firestore、KMS、Email、OAuthなどのAdapterを実装する。
+- `src/<context>/domain`: Aggregate、Entity、Value Object、Domain Service、Domain Event、不変条件を持つ。
+- `src/<context>/application`: Use Caseの順序、認可、Transaction境界、Port呼出しを調整する。
+- `src/<context>/presentation`: Context固有の認証Guard、Input／Output変換、Command／Query呼出しだけを行う。
+- `src/<context>/infrastructure`: Prisma、PostgreSQL、Firestore、KMS、Email、OAuthなどのAdapterを実装する。
+- `src/shared/domain`: 複数Contextで意味と変更理由が一致するDomain型だけを置く。
+- `src/presentation/graphql`: GraphQL Schema、生成型、Context Presentationの共通組み立てを置く。
+- Context固有のPresentation／Infrastructureは最初の利用Taskで追加し、空Directoryを先行作成しない。
+- Expense Recording／Settlementも、Accepted済みの実装対象へ着手するときにContext Directoryを追加する。
 - DomainからHono、GraphQL、Prisma、Cloud SDKをImportしない。
 - ApplicationはPortへ依存し、Infrastructureが内向きにPortを実装する。
 - Resolverへ業務ルール、Repository呼出しの組立、個別の例外変換を散在させない。
+- `architecture-dependencies.spec.ts`でLayer逆転、Context横断、解決不能、ProductionからTestへの依存を検出する。
 
 ## 戦術的DDD
 

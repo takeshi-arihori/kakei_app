@@ -9,7 +9,7 @@ import {
   ParticipantId,
   UtcInstant,
   type ParticipantSnapshot,
-} from '../../domain/group-management/group.js';
+} from '../domain/group.js';
 import {
   GroupCommandApplicationError,
   GroupCommandService,

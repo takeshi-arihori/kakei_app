@@ -72,9 +72,9 @@ Group→Participantの所有方向を採用する。削除はRetention全体の�
 
 | Model / Rule | Evidence（上記固定Commit） | Alignment | Feedback / State |
 | --- | --- | --- | --- |
-| Group / Participant / Owner / Invitation | apps/api/src/domain/group-management/group.ts | Aligned（#38／#39／#57） | Group生成、Active／Left履歴、Owner譲渡、本人脱退、Invitation lifecycle、受諾、新Participantによる再参加を純粋Domainで実装。PersistenceはC1解消後の#42へ分離 |
-| 認可・Command | apps/api/src/application/group-management | Aligned（#40／#57の内部契約） | 信頼済みActor入力、最新Group状態によるDomain認可、期待版競合、InvitationとMembershipの原子的変更集合、Actor単位のoperation再送、応答喪失回復をApplicationとin-memory fakeで検証。本番本人性・保存Adapter・公開APIは未実装で、C1と#42のBlockedを維持 |
-| JPY整数 | apps/api/src/domain/shared/money.ts | Aligned | 金額は今回対象外。実装事実は新業務Ruleの根拠にしない |
+| Group / Participant / Owner / Invitation | apps/api/src/group-management/domain/group.ts | Aligned（#38／#39／#57） | Group生成、Active／Left履歴、Owner譲渡、本人脱退、Invitation lifecycle、受諾、新Participantによる再参加を純粋Domainで実装。PersistenceはC1解消後の#42へ分離 |
+| 認可・Command | apps/api/src/group-management/application | Aligned（#40／#57の内部契約） | 信頼済みActor入力、最新Group状態によるDomain認可、期待版競合、InvitationとMembershipの原子的変更集合、Actor単位のoperation再送、応答喪失回復をApplicationとin-memory fakeで検証。本番本人性・保存Adapter・公開APIは未実装で、C1と#42のBlockedを維持 |
+| JPY整数 | apps/api/src/shared/domain/money.ts | Aligned | 金額は今回対象外。実装事実は新業務Ruleの根拠にしない |
 
 ### Ubiquitous Language
 
