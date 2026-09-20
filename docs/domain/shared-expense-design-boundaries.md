@@ -124,4 +124,4 @@ E1でもDomain Event、Stored Event、Integration Event、Audit Log、Outbox Mes
 - `Snapshot Revision`は業務上の不変記録であり、Event Sourcingの技術Snapshotと同義にしない。
 - 現行Product Ruleは業務上のSnapshot Revisionへ金額、実支払者、割合、負担額、Balance等を固定する。一方、Architecture不変条件は「Event、Snapshot、Logへ機密平文を保存しない」とする。`Snapshot`の範囲が曖昧なため、必要な業務Dataまで保存禁止とは解釈せず、上記Open Questionを解消してからPersistence実装をReadyにする。
 - 既存draw.ioはOwnerの検討用入力であり、この分析の根拠または正本ではない。AIは変更していない。
-- ADR #24の基本方針に加え、ADR #35／#36でGroup Management初回のData Owner、Group Aggregate、Repository Port、内部Command認可を条件付き採用した。Category所属、他ContextのAggregate、Context間Port、Persistenceと条件C1は未決・未充足のままであり、依存する実装をReadyにしない。
+- ADR #24の基本方針に加え、ADR #35／#36でGroup Management初回のData Owner、Group Aggregate、Repository Port、内部Command認可を条件付き採用した。この分析時点ではPersistenceと条件C1が未決だったが、2026-09-20にADR #55の正式Reviewとdevelop統合でC1は充足した。Category所属、他ContextのAggregate、Context間Port、Persistence実装は引き続き対象TaskのGateに従う。

@@ -1,7 +1,7 @@
 # 共有割り勘の設計境界と永続化方針
 
 - Status: Accepted
-- Acceptance: 条件付き（C1は未充足）
+- Acceptance: 条件付き（C1は2026-09-20に充足）
 - Accepted Date: 2026-09-06
 - Decision Owner: Project Owner
 - Proposed Date: 2026-09-06
@@ -68,10 +68,10 @@ Receipt、Reporting／Retentionまで分け、SettlementだけEvent Sourcingを�
 
 ## 承認条件 C1: Snapshot Revisionの保護と保存
 
-- State: 未充足
+- State: 充足（2026-09-20）
 - Accountable Owner: Project Owner
 - Due: 依存するPersistence実装TaskのReady判定前
-- Evidence: 未提出。以下の設計文書、Security Decision、評価結果をリンクして追跡する。
+- Evidence: [Accepted Security ADR](snapshot-revision-security-and-retention.md)、[Formal Security Review pass](https://github.com/takeshi-arihori/kakei_app/issues/55#issuecomment-5748185586)、[PR #70](https://github.com/takeshi-arihori/kakei_app/pull/70)、merge commit `d0546e46c614d4c081bb2adfd59da27cce9f70af`。
 
 1. 必須項目と保存しない項目を列挙し、Confirmed Ruleを満たす最小保存内容を定義する。
 2. 暗号化の対象、方式、鍵の管理、Backupと復元時の保護を決定する。この承認で暗号方式やCloud Serviceを選定しない。
@@ -80,7 +80,7 @@ Receipt、Reporting／Retentionまで分け、SettlementだけEvent Sourcingを�
 5. 技術Snapshotと業務Snapshot Revisionの区別を含め、既存の「Event、Snapshot、Logへ機密平文を保存しない」と保存必須情報のConflictを解消する。既存禁止条件をこのADRで緩和しない。
 6. 上記のSecurity／Privacy方式は別のADRとOwnerの明示承認で確定し、独立Security Reviewで条件充足を確認する。
 
-条件を満たす証拠が揃うまで、依存するPersistence実装TaskはBacklog／Blocked YesとしReadyへ進めない。設計調査、条件を解消するProposal作成、承認済み3 Contextだけの可視化は、各TaskのReady評価を経て進められる。
+上記証拠によりC1は充足した。ただし、依存するPersistence実装TaskはS0〜S3とTask固有のReady条件が揃うまでBacklog／Blocked Yesとする。設計調査と承認済み3 Contextの可視化は、各TaskのReady評価を経て進められる。
 
 本ADRをAcceptedとした時点では、Categoryの所属、個別Data Owner、Aggregate境界、Expense予約と競合のTransaction方式、Port契約、非同期Projectionは未決であった。その後、ADR #35／#36でGroup Management初回のData Owner、Group Aggregate、Repository Port、内部Command認可だけを条件付き採用した。Category所属、他ContextのAggregate、Context間Port、Expense予約と競合のTransaction方式、非同期Projectionは引き続き未決である。
 
@@ -111,3 +111,7 @@ Proposed中はRepository ADRとGitHub ADR IssueをClose／Rejectedとして記�
 ## Accepted記録の統合確認
 
 [PR #27](https://github.com/takeshi-arihori/kakei_app/pull/27)は2026-09-06T12:03:31Z（Asia/Tokyo: 21:03:31）にMerge済み。Merge Commitは[`a244be382402df789354571056ec38c0cbd7417a`](https://github.com/takeshi-arihori/kakei_app/commit/a244be382402df789354571056ec38c0cbd7417a)。2026-09-07にGitHub APIで確認した。これはAccepted記録の統合であり、条件C1の充足や個別Aggregate・Portの採用ではない。C1は未充足、依存Persistence実装はBacklog / Blocked Yesを維持する。
+
+### Subsequent resolution（2026-09-20）
+
+上段のPR #27に関する記述は2026-09-07時点の履歴である。その後、ADR #55のOwner Accepted、正式Security Review pass、PR #70のdevelop統合が完了し、C1は充足した。個別Persistence実装はS0〜S3と#42の順で検証し、本番wiringはProduction Gateが揃うまで禁止する。
