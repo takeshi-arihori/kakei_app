@@ -26,6 +26,7 @@ description: 家計アプリの業務要求からドメインモデルを整理�
 | System Context／Use Case／Object／Domainの各視点を整理 | [SUDOの観点](references/sudo-modeling.md) |
 | 業務知識の不足を質問で解消 | [Interview Guide](references/interview-guide.md) |
 | Concept・Rule・Invariant・境界の検証 | [Domain Model Rules](references/domain-model-rules.md) |
+| 個別Use Case／CommandをPRE・POST・INV・FAILとTestへ構造化 | [Specification Contract](../specification-contract/SKILL.md) |
 | 正式Mermaid図の作成・更新、明示されたdraw.io入力の参照 | 作業前に[Diagram Governance](references/diagram-governance.md) |
 
 局所レビューは対象の結論、根拠、具体例、未決事項に絞る。全体モデルの11項目を毎回再作成しない。
