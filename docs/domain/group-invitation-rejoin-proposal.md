@@ -11,7 +11,7 @@ Group Ownerが特定の利用者を招待し、その利用者だけが参加で
 
 成功は、招待の作成者・宛先・状態・期限を説明でき、受諾の成功時にはInvitation消費、Participant追加、参加履歴、版、operation結果が一括で成立すること。失敗時はこれらの一部だけを反映しないこと。
 
-対象はGroup Managementの設計だけである。対象外は認証Provider、Tokenやメール配送、DB/Schema、GraphQL/UI、Group終了、Expense／Settlementの実装、Context間の認可連携、本番Persistenceである。C1は未充足であり、#42の保存AdapterをReadyにしない。
+対象はGroup Managementの設計だけである。対象外は認証Provider、Tokenやメール配送、DB/Schema、GraphQL/UI、Group終了、Expense／Settlementの実装、Context間の認可連携、本番Persistenceである。C1は2026-09-20に充足したが、S0〜S3が完了するまで#42の保存AdapterをReadyにしない。
 
 ## 2. System Context
 
@@ -120,4 +120,4 @@ Task #57はGroup Aggregate内へInvitationId、宛先Actor、発行者、作成�
 
 1. 公開本人性・宛先解決・配送を別Security DecisionとReady Gateで具体化する。
 2. 保存最小化・保護・RetentionとContext間参照をそれぞれのDecisionへ分離する。Task #57の内部fake検証を本番接続・保存の証拠にしない。
-3. C1未充足とPersistence #42のBacklog / Blocked Yesを維持する。
+3. C1充足後もS0〜S3が完了するまでPersistence #42のBacklog / Blocked Yesを維持する。

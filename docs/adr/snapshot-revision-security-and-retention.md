@@ -4,6 +4,7 @@
 - Accepted: 2026-09-20
 - Decision Owner: Project Owner
 - Decision record: [GitHub ADR Issue #55](https://github.com/takeshi-arihori/kakei_app/issues/55)
+- Activation evidence: [Formal Security Review](https://github.com/takeshi-arihori/kakei_app/issues/55#issuecomment-5748185586)、[PR #70](https://github.com/takeshi-arihori/kakei_app/pull/70)、merge commit `d0546e46c614d4c081bb2adfd59da27cce9f70af`
 - Amends: [ADR #24](shared-expense-domain-boundaries.md#承認条件-c1-snapshot-revisionの保護と保存)
 - Related input: [GitHub Task #54](https://github.com/takeshi-arihori/kakei_app/issues/54)
 - Persistence dependency: [GitHub Task #42](https://github.com/takeshi-arihori/kakei_app/issues/42)
@@ -280,7 +281,7 @@ Key Provider、Durable Audit Store、Retention Coordinator、全Context Deletion
 
 Authorから分離したReviewerがPlaintext inventory、Canonical Envelope、Golden vector、Access matrix、Lock一貫性、non-member decrypt 0、Key／Digest用途分離、Audit、Operation locator、Deletion receipt、Checkpoint／Witness、Backup Restore、PostgreSQL transaction、Migration、Task境界を確認する。
 
-`findings=[]`かつ`missingEvidence=[]`のpassを[Issue #55](https://github.com/takeshi-arihori/kakei_app/issues/55)へ記録し、このAccepted ADRのdevelop統合をもってC1の充足証拠とする。文書統合前、またはReview未完了の状態ではC1を充足扱いにしない。
+`findings=[]`かつ`missingEvidence=[]`のpassを[Issue #55](https://github.com/takeshi-arihori/kakei_app/issues/55)へ記録し、2026-09-20の[PR #70](https://github.com/takeshi-arihori/kakei_app/pull/70)によるdevelop統合をもってC1の充足証拠が揃った。C1充足はS0〜S3または#42の実装完了、本番配置可能性を意味しない。
 
 ## Rollback and review trigger
 

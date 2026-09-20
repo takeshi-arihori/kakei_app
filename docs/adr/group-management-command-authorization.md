@@ -11,7 +11,7 @@
 - Related ADR: [ADR #24](shared-expense-domain-boundaries.md)、[整合性境界Decision](group-management-consistency-boundary.md)
 - Analysis: [最初の実装境界](../domain/group-management-first-boundary.md)
 - Decision Check: 方針変更あり（認可・再試行方式を具体化する）
-- Relationship: ADR #24の未決詳細を補完する。C1のSecurity ADR／充足証拠を代替しない。
+- Relationship: ADR #24の未決詳細を補完する。本ADR自体はC1のSecurity ADR／充足証拠を代替しない。
 
 ## Context
 
@@ -39,9 +39,9 @@ Client申告のParticipantId・Owner Roleだけでは本人性を証明できな
 
 - Acceptance時点では、招待の宛先本人性、期限、取消、消費と参加の原子性、招待中の人数枠、旧Owner発行招待の扱いを後続設計Taskへ分離した。これらはその後ADR #52でAcceptedとなり、内部契約の実装は#57で個別Ready評価する。
 - ActorSubjectと利用者の対応、認証失効、本番Error、Rate limit、Auditの最小項目は未決。本番経路接続をBlockedにする。
-- 冪等記録とfingerprintの保存期限・削除・保護は未決。Group削除後も識別可能なoperation結果を残してよいとは判断しない。Persistence実装をBlockedにする。
+- Acceptance時点では、冪等記録とfingerprintの保存期限・削除・保護は未決だった。Group削除後も識別可能なoperation結果を残してよいとは判断せず、Persistence実装をBlockedとした。後続の解消状態は下記Subsequent resolutionで追跡する。
 - Leftへの支払責務はSettlementが過去Instructionに基づいて判定する。在籍照会のfalseを全Context共通の拒否に使わない。Context間の競合契約は別Decision。
-- C1の最小保存、暗号化・鍵管理、Group内認可、Backup／Projection含む保持・削除、独立Security Reviewは今回未充足のまま。
+- C1の最小保存、暗号化・鍵管理、Group内認可、Backup／Projection含む保持・削除、独立Security Reviewは本ADRのAcceptance時点では未充足のまま。
 
 ## Owner Decision
 
@@ -49,11 +49,15 @@ Client申告のParticipantId・Owner Roleだけでは本人性を証明できな
 - Decided by: Project Owner（takeshi-arihori）
 - Decided at: 2026-09-08（Asia/Tokyo、承認時刻は未記録）
 - Evidence: ADR #35と#36の各提案Aを、残るGateを維持して条件付きAcceptedとしてよいか確認した会話に対するOwnerの回答「はい。」
-- Conditions: 本番認証、招待・再参加、冪等記録の保持、Context間認可、C1／Persistenceは未決またはBlockedを維持する。
+- Conditions at acceptance: 本番認証、招待・再参加、冪等記録の保持、Context間認可、C1／Persistenceは未決またはBlockedだった。
 
 ### Follow-up resolution（2026-09-13）
 
-上記ConditionsのうちInvitation lifecycleと再参加Participant寿命は[ADR #52](group-invitation-and-rejoin.md)でAcceptedとなった。本番本人性・配送、Invitation／冪等記録の保存保護・Retention、Context間認可、C1／Persistenceは引き続き未決またはBlockedである。
+上記ConditionsのうちInvitation lifecycleと再参加Participant寿命は[ADR #52](group-invitation-and-rejoin.md)でAcceptedとなった。本段落はADR #52採用時点の履歴であり、後続のC1解消は下記Subsequent resolutionで追跡する。
+
+## Subsequent resolution（2026-09-20）
+
+上記のC1未充足と冪等記録の保存保護・Retention未決はAcceptance時点の履歴である。ADR #55のOwner Accepted、正式Security Review pass、PR #70のdevelop統合によりC1と保存保護・Retention Decisionは解消した。実装証拠はS1〜S3で追加し、S0〜S3完了後に#42を個別Ready評価する。
 
 ## Implementation
 

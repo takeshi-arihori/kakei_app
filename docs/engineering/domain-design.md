@@ -11,7 +11,7 @@ DDDは、共有割り勘の業務RuleをDB、Prisma、GraphQL、Honoの都合で
 - Confirmed: 共有GroupのProduct Scope、主要Concept、GitHubで確認済みのBusiness Rule／Invariant
 - Accepted Architecture: [ADR #24](../adr/shared-expense-domain-boundaries.md)の3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離
 - Accepted Group Management: [ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)の最初のData Owner、Group Aggregate、Repository Port、内部Command認可。[ADR #52](../adr/group-invitation-and-rejoin.md)のInvitation lifecycle、受諾原子性、新Participantによる再参加
-- Pending Decision: Category所属、他ContextのAggregateとData Owner、Context間Port、Persistence詳細、本番本人性・配送、Invitation／冪等記録の保存保護・Retention、非同期Projection。条件C1は未充足で依存Persistence実装Ready不可
+- Pending Decision: Category所属、他ContextのAggregateとData Owner、Context間Port、Persistence実装、本番本人性・配送、非同期Projection。保存保護・Retentionの条件C1は充足済みだが、S0〜S3が完了するまで依存Persistence実装Ready不可
 - Deprecated: 個人用Household、Account、収入Transaction、日付境界Archive、2人限定の単一Payer／Payeeモデル
 
 Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repositoryを作らない。関連ADRがAcceptedとなり、仕様とRepository実装が整合するまで実装Readyへ進めない。
@@ -68,7 +68,7 @@ Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repos
 - Receipt Draftは最終編集から30日後、またはGroup終了後の次回Batchで、Draft、OCR結果、Item候補、画像を冪等に削除する。閲覧だけでは期限を延長しない。
 - 月別Category集計はAsia/Tokyoの`occurredOn`、Settlement Archiveの所属月はAsia/Tokyoの`archivedAt`で判定する。
 
-Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。3 Contextと保存の基本方針はADR #24で採用した。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36で条件付き採用し、Invitation lifecycleと再参加Participant寿命はADR #52で採用した。他ContextのData OwnerとAggregate、PersistenceとProjection詳細、本番本人性・配送、Invitation／冪等記録の保存保護・Retention、Context間認可、条件C1は引き続き[設計Gate](../product/design-gates.md)で追跡し、必要なDecisionと条件が揃うまで依存実装Readyへ進めない。
+Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。3 Contextと保存の基本方針はADR #24、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36、Invitation lifecycleと再参加Participant寿命はADR #52、保存保護・Retentionの条件C1はADR #55で採用した。C1は2026-09-20に充足した。他ContextのData OwnerとAggregate、PersistenceとProjection実装、本番本人性・配送、Context間認可は[設計Gate](../product/design-gates.md)で追跡し、S0〜S3を含む必要条件が揃うまで依存実装Readyへ進めない。
 
 ## Modelの選択
 
@@ -117,7 +117,7 @@ Aggregateは同一TransactionでInvariantを守る必要がある最小境界と
 
 ## Eventと永続化
 
-ADR #24ではState model＋必要な不変業務履歴とCommand／Query責務分離を採用し、全面Event Sourcingは初期採用しない。個別のProjection、Outbox、Snapshot保存設計は未決で、条件C1を維持する。旧ADRの「TransactionとSettlementだけ」を現行モデルへ適用しない。
+ADR #24ではState model＋必要な不変業務履歴とCommand／Query責務分離を採用し、全面Event Sourcingは初期採用しない。Snapshot保存の保護・保持条件はADR #55で確定しC1は充足した。個別のProjectionとOutboxは未決で、旧ADRの「TransactionとSettlementだけ」を現行モデルへ適用しない。
 
 Accepted ADRでEvent Sourcingを採用する場合も、次を守る。
 

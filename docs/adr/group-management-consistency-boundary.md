@@ -11,7 +11,7 @@
 - Related ADR: [ADR #24](shared-expense-domain-boundaries.md)、[認可・再試行Decision](group-management-command-authorization.md)
 - Analysis: [最初の実装境界](../domain/group-management-first-boundary.md)
 - Decision Check: 方針変更あり（未決のData Owner、Aggregate、Repository Portを具体化する）
-- Relationship: ADR #24の未決詳細を補完する。Supersedesではない。C1は未充足のまま。
+- Relationship: ADR #24の未決詳細を補完する。Supersedesではない。Acceptance時点ではC1未充足だった。
 
 ## Context
 
@@ -44,15 +44,19 @@ Active Groupには唯一のOwnerが必要で、譲渡先のActive在籍とOwner�
 - Decided by: Project Owner（takeshi-arihori）
 - Decided at: 2026-09-08（Asia/Tokyo、承認時刻は未記録）
 - Evidence: ADR #35と#36の各提案Aを、残るGateを維持して条件付きAcceptedとしてよいか確認した会話に対するOwnerの回答「はい。」
-- Conditions: 本番認証、招待・再参加、冪等記録の保持、Context間認可、C1／Persistenceは未決またはBlockedを維持する。
+- Conditions at acceptance: 本番認証、招待・再参加、冪等記録の保持、Context間認可、C1／Persistenceは未決またはBlockedだった。
 
 ### Follow-up resolution（2026-09-13）
 
-上記ConditionsのうちInvitation lifecycleと再参加Participant寿命は[ADR #52](group-invitation-and-rejoin.md)でAcceptedとなった。本番本人性・配送、Invitation／冪等記録の保存保護・Retention、Context間認可、C1／Persistenceは引き続き未決またはBlockedである。
+上記ConditionsのうちInvitation lifecycleと再参加Participant寿命は[ADR #52](group-invitation-and-rejoin.md)でAcceptedとなった。本段落はADR #52採用時点の履歴であり、後続のC1解消は下記Subsequent resolutionで追跡する。
 
 ## Implementation
 
 Acceptance時点では、Active人数の解釈、重複禁止、操作分離、No-op／AlreadyLeft、初回契約でのArchived拒否、再参加の延期を案Aとして採用した。再参加の方式はその後ADR #52で新Participant方式を採用した。依存Domain／Application Taskは個別Ready評価し、C1未充足のためPersistenceはBacklog / Blocked Yesを維持する。
+
+## Subsequent resolution（2026-09-20）
+
+上記のC1未充足表現はAcceptance時点の履歴である。ADR #55のOwner Accepted、正式Security Review pass、PR #70のdevelop統合によりC1は充足した。PersistenceはS0〜S3完了後に#42を個別Ready評価する。
 
 正常作成、4人境界、Owner脱退、他Group・Leftへの譲渡、競合の勝者双方、応答喪失と二重送信を契約テストの受入例にする。拒否時は版・状態・履歴を変えない。
 

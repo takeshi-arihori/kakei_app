@@ -36,7 +36,7 @@
 - 業務Domainは1〜4人のGroupで行う共有割り勘に限定し、個人収支を扱わない。
 - 現行の主要語はGroup、Participant、Group Expense、Split Allocation、Settlement Case、Snapshot Revision、Payment Instruction、Payment Attempt、Settlement Archiveとする。
 - 個人用Household、Account、収入Transaction、日付境界Archive、単一Payer／Payeeを現行仕様として実装しない。
-- 3 Context（Group Management、Expense Recording、Settlement）、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離を採用する。境界やPersistenceを扱う前に[設計Gate](docs/product/design-gates.md)と、そこから辿れる対象ADRを確認する。条件付き採用や未決事項を採用済みと解釈しない。C1は未充足であり、依存Persistence実装はReady不可。
+- 3 Context（Group Management、Expense Recording、Settlement）、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離を採用する。境界やPersistenceを扱う前に[設計Gate](docs/product/design-gates.md)と、そこから辿れる対象ADRを確認する。条件付き採用や未決事項を採用済みと解釈しない。C1は2026-09-20に充足したが、Persistence実装はS0〜S3と対象Task固有のReady条件が揃うまで進めない。
 - 未確定の設計判断に依存するTaskをReadyまたは実装へ進めない。
 
 ## 作業の入口と完了範囲

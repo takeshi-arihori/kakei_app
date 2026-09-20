@@ -4,7 +4,7 @@
 
 ## 図一覧
 
-- [共有割り勘の論理Context境界](shared-expense-contexts.mermaid.md): ADR #24で採用した3 Context。Context間契約は未決、条件C1は未充足。
+- [共有割り勘の論理Context境界](shared-expense-contexts.mermaid.md): ADR #24で採用した3 Context。条件C1は充足済み。Context間契約の未決部分は残る。
 
 ## Template
 

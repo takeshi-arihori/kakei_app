@@ -43,7 +43,7 @@ Project Ownerは案Aを採用した。
 - 期限7日、延長なし・再発行、取消、枠予約なし、4人時Invite拒否、Owner譲渡後の継続、新Participant方式を採用する。
 - 同一ActorのLeft履歴を許すため、Groupの`REJOIN_NOT_DECIDED`を#57で新Participant作成契約へ変更する。既存Groupの履歴や他Context参照を直接書き換えない。
 - 受諾後にExpense／SettlementがどのParticipantを参照し、参加・脱退・Expense作成が競合した時の認可時点は別Context間Decisionである。
-- C1未充足、冪等operation結果の保存期限・削除・保護、Invitationの保存最小化・暗号化、Backup／Projectionは未決である。Persistence #42をReadyにしない。
+- Acceptance時点ではC1未充足で、冪等operation結果の保存期限・削除・保護、Invitationの保存最小化・暗号化、Backup／Projectionは未決だった。後続の解消状態は下記Subsequent resolutionで追跡する。
 
 ## Implementation Boundary
 
@@ -51,7 +51,7 @@ Accepted記録がdevelopへ統合された後、次を個別TaskとしてReady�
 
 1. Invitation lifecycleとAcceptInvitationのDomain/Application契約・fake検証。
 2. 本番本人性・宛先解決・外部ErrorのSecurity Decision。
-3. 保存方式がC1と独立Security Reviewを満たす場合だけのPersistence Adapter。
+3. C1と独立Security Reviewは2026-09-20に満たした。Persistence AdapterはS0〜S3完了後に個別Ready評価する。
 4. Expense Recording／SettlementへのParticipant参照・認可時点のContext間契約。
 
 ## Owner Decision
@@ -61,7 +61,11 @@ Accepted記録がdevelopへ統合された後、次を個別TaskとしてReady�
 - Date: 2026-09-13
 - Evidence: 「招待・再参加は案A、C1 Securityも案AをAcceptedとして進めてよいですか？」への明示回答「はい」
 - Rationale: 枠を期限切れInvitationで占有せず、受諾時の再検証で1〜4人Invariantを守り、再参加時に過去Participantと過去責務を不変に保つ。
-- Conditions: 本番本人性、Token、配送、公開Error、Context間認可、Invitation／operation結果の保存保護・Retention、C1／Persistence #42は別Gateとする。
+- Conditions: 本番本人性、Token、配送、公開Error、Context間認可、Invitation／operation結果の保存実装、Persistence #42は別Gateとする。
+
+## Subsequent resolution（2026-09-20）
+
+ADR #55のOwner Accepted、正式Security Review pass、PR #70のdevelop統合によりC1は充足した。Invitation／operation結果の保存実装はS1〜S3、Repository Integrationは#42で検証し、それまではBacklog／Blocked Yesを維持する。
 
 ## Rollback / Review Trigger
 
