@@ -1,0 +1,4 @@
+interface:
+  display_name: "Specification Contract"
+  short_description: "仕様を契約3条件とTest Traceへ構造化する"
+  default_prompt: "Use $specification-contract to structure this use case as testable preconditions, postconditions, invariants, and failure contracts."
