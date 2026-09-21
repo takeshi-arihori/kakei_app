@@ -6,6 +6,7 @@
 - Decision record: [GitHub ADR Issue #55](https://github.com/takeshi-arihori/kakei_app/issues/55)
 - Activation evidence: [Formal Security Review](https://github.com/takeshi-arihori/kakei_app/issues/55#issuecomment-5748185586)、[PR #70](https://github.com/takeshi-arihori/kakei_app/pull/70)、merge commit `d0546e46c614d4c081bb2adfd59da27cce9f70af`
 - Amends: [ADR #24](shared-expense-domain-boundaries.md#承認条件-c1-snapshot-revisionの保護と保存)
+- Amended By: [Group終了の整合性と保持期限境界](group-close-consistency-and-retention-boundary.md)
 - Related input: [GitHub Task #54](https://github.com/takeshi-arihori/kakei_app/issues/54)
 - Persistence dependency: [GitHub Task #42](https://github.com/takeshi-arihori/kakei_app/issues/42)
 
@@ -249,13 +250,15 @@ SQLiteはConcurrency／Deploymentの別経路を増やし、Fake-onlyは実保�
 
 即時実装対象を次へ分割する。
 
-1. S0: Group終了、`ownerAtArchiveParticipantId`、`archivedAt`、`deleteEligibleAt`、Archive後拒否のDomain／Application Invariant。
+1. S0: [Group終了Decision](group-close-consistency-and-retention-boundary.md)に従うClose Intent、Context fence／Receipt、`Closing`／`Archived`、`ownerAtArchiveParticipantId`、`archivedAt`、`deleteEligibleAt`、取消、Archive後拒否のDomain／Application Invariant。
 2. S1: PostgreSQL Schema、Version付きMigration、Plaintext inventory、runtime `pg`、Migration／production import検証。
 3. S2: Canonical TLV、AES-256-GCM Envelope、Key／Nonce Port、用途分離、Rotation／破損Test。
 4. S3: `GroupAccessPolicyPort`、Membership／operation blind index、Policy version、Lock transaction contract。
 5. #42: PostgreSQL GroupRepositoryの`load`／`findOperation`／`commit`、Row Lock、2接続CAS、状態・履歴・operation結果・索引の原子性、故障・応答喪失Integration Test。
 
 S0とS1とS2はこのADRのAccepted記録と独立Security Reviewを依存とする。S3はS0／S1／S2／#40／#57、#42はS0〜S3を依存とする。
+
+S0のContext間終了契約とAsia/Tokyo基準1暦年後の境界はADR #73が追補する。2月29日は翌年2月28日へclampする。これは本ADRのContext別Data Owner、暗号境界、Retention CoordinatorのProduction Gateを緩和せず、実fence／Receipt配送・永続化・保護は後続Taskまで本番へwireしない。
 
 Key Provider、Durable Audit Store、Retention Coordinator、全Context Deletion Port、Checkpoint／Witness、Backup Restore Runbook、Cloud／KMS Providerが揃うまで、#42のAdapterをApplication Composition Rootへimport／wireせず本番配置しない。Architecture／CI TestでこのGateを機械検査する。
 

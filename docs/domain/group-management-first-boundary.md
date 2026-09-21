@@ -1,18 +1,18 @@
 # Group Managementの最初の実装境界（設計案）
 
-- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptance、2026-09-13のADR #52 Acceptance、Task #57の内部契約実装、2026-09-20のC1充足を反映。残るOpen QuestionとBlockedを分離する。
+- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptance、2026-09-13のADR #52 Acceptance、Task #57の内部契約実装、2026-09-20のC1充足、2026-09-21のADR #73 Acceptanceを反映。残るOpen QuestionとBlockedを分離する。
 - Baseline: [実装開始時のdevelop固定Commit](https://github.com/takeshi-arihori/kakei_app/tree/68d9c469605f554306f773a929250d8b1f642d05)
 - 根拠: [現行業務モデル](../product/current-model.md)、[Accepted ADR #24](../adr/shared-expense-domain-boundaries.md)
-- Decision: [整合性境界](../adr/group-management-consistency-boundary.md)、[本人性・認可・再試行](../adr/group-management-command-authorization.md)、[招待・再参加](../adr/group-invitation-and-rejoin.md)
-- 条件C1は充足済み。Persistence実装はS0〜S3が完了するまでBacklog / Blocked Yes。以下のPortはApplication契約としてAcceptedだが、本番保存Adapterは#42で個別Ready評価する。
+- Decision: [整合性境界](../adr/group-management-consistency-boundary.md)、[本人性・認可・再試行](../adr/group-management-command-authorization.md)、[招待・再参加](../adr/group-invitation-and-rejoin.md)、[Group終了](../adr/group-close-consistency-and-retention-boundary.md)
+- 条件C1は充足済み。Group終了のRepository同期と正式Security Review後にS0を個別Ready評価する。Persistence実装はS0〜S3が完了するまでBacklog / Blocked Yes。以下のPortはApplication契約としてAcceptedだが、本番保存Adapterは#42で個別Ready評価する。
 
 ## 1. Problem / Scope
 
 利用者が少人数の割り勘Groupを作り、参加者と管理責任を維持する。人数超過、Owner不在・複数化、古い権限による更新を防ぎ、脱退後も過去の支出・精算責務を壊さないことを観測可能な成果とする。
 
-最初の境界はCreateGroup、TransferGroupOwnership、LeaveGroup、InviteParticipant、CancelInvitation、AcceptInvitationの純粋Domainと、それらを呼ぶApplication・Repository Port契約である。Invitation lifecycleと再参加Participant寿命はADR #52で採用し、#57でDomain／Application内部契約とfake Repository検証を追加した。本番本人性・配送・公開Command接続は後続とする。
+最初の境界はCreateGroup、TransferGroupOwnership、LeaveGroup、InviteParticipant、CancelInvitation、AcceptInvitationの純粋Domainと、それらを呼ぶApplication・Repository Port契約である。Invitation lifecycleと再参加Participant寿命はADR #52で採用し、#57でDomain／Application内部契約とfake Repository検証を追加した。Group終了のClose Intent、Context fence／Receipt、Archive／取消、保持期限はADR #73で採用し、#75でDomain／Application内部契約を実装する。本番本人性・配送・公開Command接続は後続とする。
 
-対象外: Group終了実装、CSV、Retention Batch、Invitation配送・Token実装、Expense／Settlement変更、DB／Migration、本番Persistence、GraphQL／UI、非同期Event／Projection。Group終了は別Contextの未精算・進行中確認を要し、最初のGroup Aggregateだけでは成立させない。
+対象外: CSV実装、Retention Batch、Invitation配送・Token実装、Expense／Settlementの実fence、DB／Migration、本番Persistence、GraphQL／UI、非同期Event／Projection。Group終了は別Contextの未精算・進行中確認を要するため、#75では公開Portとfake contractまでとし、実Context Adapterを本番へwireしない。
 
 ## 2. System Context
 
@@ -23,7 +23,7 @@
 | Participant / 招待された利用者 | Actor | 本人の参加・脱退、脱退後は既存支払責務が残る | current-model: 途中参加・脱退 |
 | 共有割り勘System | Target System | Group内の役割と在籍時点を管理する | ADR #24 |
 | 本人性を確認する仕組み | External boundary（方式未決） | 操作者を識別する信頼済み結果を渡す | 認可ADR Decision。認証製品は選定しない |
-| Expense Recording / Settlement | System内の別Context | 登録時のParticipantを固定し、過去の責務を所有する | ADR #24 / current-model |
+| Expense Recording / Settlement | System内の別Context | 登録時のParticipantと過去の責務を所有し、Group終了時は各書込み境界でfenceを設置してversion付きReceiptを返す | ADR #24 / ADR #73 / current-model |
 
 ## 3. Use Cases / Commands
 
@@ -37,8 +37,11 @@ CreateGroup、TransferGroupOwnership、LeaveGroupのCommand名・入力・戻り
 | 参加 / AcceptInvitation（#57） | 招待された本人が参加意思を示す | 宛先Actor一致、Pending、7日以内、Active Group、空き枠、Active重複なし | Invitation消費、新Participant、単調joinOrder、履歴、版、operation結果が同時成立 | 他Actor、取消・期限切れ、人数超過、競合は部分反映なし。Owner代理参加経路は作らない |
 | 管理責任を渡す / TransferGroupOwnership | 現在OwnerがtargetParticipantIdを指定 | Active Group、同じGroupのActiveな譲渡先 | Owner参照を原子的に切替。旧OwnerはParticipantのまま | 別Group・脱退者・非Owner拒否。自己譲渡は変更なし |
 | 自分が脱退 / LeaveGroup | Active Participant本人が離れる | Active Group、現在Ownerではない | ParticipantをLeftにし時刻を固定。過去のMembership・支払責務は残る | Active GroupのOwnerは拒否。Ownerによる他人の除名は対象外。別operationでの再脱退はAlreadyLeft |
+| 終了開始 / StartGroupClosing（#75） | 現在OwnerがGroup終了を開始 | Active Group、現在Owner、期待版一致 | `Closing`、closeIntentId、cutoffを同一版で固定し、Context fenceを要求 | 非Owner、古い版、Archived、別Intentを拒否 |
+| 終了確定 / ArchiveGroup（#75） | 現在Ownerが終了を確定 | Closing、両Contextの一致する終了可能Receipt、Owner／Group version／Intent一致 | `Archived`、owner-at-archive、archivedAt、deleteEligibleAtを一括固定 | Receipt欠落／不一致、未精算、進行中、非Owner、古い版を変更なしで拒否 |
+| 終了取消 / CancelGroupClosing（#75） | 現在Ownerが終了処理を取り消す | Closing、現在Owner、期待版一致 | unfence前にCASで`Canceling` phaseを予約し、両Contextの一致するunfence Receipt後だけ`Active`へ戻す | 非Owner、片方未解除、別Group／Intent、Archive先勝ちを拒否。取消予約先勝ち後はArchive不可 |
 
-初回契約はActive Groupに限定し、Archivedでの譲渡・脱退はGroupNotActiveとして状態変更を拒否する。Archive後にOwner Roleを維持・変更する別Use CaseとCSV責任は未決であり、既存の履歴参照・CSV権限を狭める判断ではない。Group名等の表示属性は最初の境界に必須とせず、必要になれば制約を別途確定する。
+通常のMembership／Owner変更契約はActive Groupに限定し、Closing／ArchivedではGroupNotActiveとして状態変更を拒否する。Closing中は従来許可された既存履歴のread-only参照とcurrent Ownerによる取消だけを許可する。Archive時に`ownerAtArchiveParticipantId`を固定し、保持期限までの履歴参照とCSV責任を持つ。Group名等の表示属性は最初の境界に必須とせず、必要になれば制約を別途確定する。
 
 ## 4. Concrete Examples / Object Model
 
@@ -60,7 +63,7 @@ CreateGroup、TransferGroupOwnership、LeaveGroupのCommand名・入力・戻り
 
 | Concept | Meaning / Identity・代表属性 | Lifecycle / Relationships | State |
 | --- | --- | --- | --- |
-| Group | 割り勘の共同単位。GroupId、state、ownerParticipantId、version | Active→Archived→期限削除はConfirmed。Active Participant 1〜4、過去の在籍記録0..nを保持。最初の実装はActiveでの操作のみ | 概念Confirmed、属性・所有境界Accepted |
+| Group | 割り勘の共同単位。GroupId、state、ownerParticipantId、version | Active→Closing→Archived→期限削除。Closing内に取消を予約する`Canceling` phaseを持つ。Active Participant 1〜4、過去の在籍記録0..nを保持 | 概念・属性・所有境界・終了Lifecycle Accepted |
 | Participant | Groupに参加した主体。ParticipantId、subjectRef、joinedAt、leftAt、joinOrder | Groupに必ず1つ所属。Active→Left。再参加は新ParticipantIdと単調joinOrder。利用者1人は複数Groupに別の参加関係を持つ | 概念・時間境界・再参加ID寿命Accepted |
 | Invitation | Group Ownerが特定のtrusted Actorへ発行する参加機会。InvitationId、target、issuer、createdAt、expiryAt、status | Group Aggregate内でPending→Consumed／Cancelled／Expired。Participantでも人数枠予約でもない | ADR #52でAccepted / #57で内部契約を実装 |
 | Group Owner | Groupを管理するParticipantのRole | Active Group→Active Participantへの必須参照がちょうど1。独立Entity／Repositoryを作らない | 一意性Confirmed、参照表現Accepted |
@@ -102,6 +105,9 @@ Group→Participantの所有方向を採用する。削除はRetention全体の�
 | GM-10 | Actorと対象Participantの対応は信頼済み本人性とGroup状態から判定 | ADR #36 | Accepted | Application認可 / なりすまし・他Group ID差替え拒否。本番本人性は未決 |
 | GM-11 | 現在Ownerだけが7日期限の宛先Actor束縛Invitationを作成・取消でき、Pendingは人数枠を予約しない | ADR #52 | Accepted | Aggregate＋Application認可 / 4人、Active重複、Archived、旧Ownerを拒否 |
 | GM-12 | Accept時に宛先・期限・Active・空き枠・重複を再検証し、消費と新Participantを同一版で成立させる。Left Actorの旧Participantは変更しない | ADR #52 | Accepted | Aggregate＋Repository Port / 同時受諾の片方だけ成功、再参加は新ID・単調joinOrder |
+| GM-13 | Group終了は現在Ownerが開始し、両Contextの同一Group／Intent／cutoffに束縛した有効Receiptが揃う場合だけ確定する | ADR #73 | Accepted | Application coordination＋Aggregate / 他Context Tableを直接参照しない |
+| GM-14 | Closingでは既存履歴read-onlyとcurrent Ownerの取消だけを許可し、access-affecting mutationを拒否する | ADR #73 | Accepted | Domain＋Access Policy / fence後の新規業務Commandを拒否 |
+| GM-15 | Archive時のOwner、UTC時刻、Asia/Tokyo基準1暦年後の期限を固定し、2月29日は翌年2月28日へclampする | ADR #73 | Accepted | Aggregate＋Clock / Archive後の変更と再計算を禁止 |
 
 ## 7. Aggregate / Repository Port
 
@@ -125,11 +131,13 @@ operationIdはActor内で全Group・Command共通の一意な名前空間とし�
 
 ActorSubject解決、Clock、ID発行はApplication境界で注入可能にする。業務Entityへ認証Tokenを渡さない。Invitationのtrusted Actor内部契約は#57で導入するが、本番宛先解決・配送・公開経路からの接続は別Security Decisionまで行わない。
 
-他Context向けの照会候補はversion付きGroupMembershipView（GroupId、groupState、ParticipantId、active、joinOrder、ownerParticipantId）。用途は「この時点の在籍」であり、Settlementの過去支払責務の判定には使わない。照会後の脱退とExpense作成の競合を解く契約は未決。これをAcceptedなContext間Portとして公開・実装しない。
+Group終了ではApplicationがExpense RecordingとSettlementのClose Fence Portを呼び、各Contextが原子的なfence、進行中Commandのdrain／rollback、判定、Receipt発行、unfenceを所有する。Group Managementは型付きReceiptのgroupId、Intent、cutoff、context、fence versionを検証する。取消は最初のunfence前にGroupRepositoryのCASで`Canceling` phaseを予約し、Archive先勝ちならunfenceを呼ばず、取消予約先勝ちならArchiveを拒否する。実配送、Outbox、Receipt保護、監視、回復Runbookは後続Taskまで本番へ接続しない。
+
+他Context向けの照会候補はversion付きGroupMembershipView（GroupId、groupState、ParticipantId、active、joinOrder、ownerParticipantId）。用途は「この時点の在籍」であり、Settlementの過去支払責務の判定には使わない。Group終了のfence PortはADR #73でAcceptedしたが、通常時の照会後に起きる脱退とExpense作成の競合を解く契約は未決である。終了Portを一般的なMembership Portとして拡張しない。
 
 ## 8. Confirmed Decisions
 
-ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query分離を維持する。GM-02〜07、人数1〜4、複数Group所属、参加・脱退履歴はcurrent-modelのConfirmed Rule。ADR #35／#36によりGroup Root、Repository Port、内部Command認可と冪等再送を条件付きAcceptedとし、ADR #52によりInvitation lifecycle、受諾原子性、新Participantによる再参加をAcceptedとした。PR #27はADR #24のAccepted文書統合記録で、C1の証拠は後続のADR #55、正式Security Review、PR #70である。
+ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query分離を維持する。GM-02〜07、人数1〜4、複数Group所属、参加・脱退履歴はcurrent-modelのConfirmed Rule。ADR #35／#36によりGroup Root、Repository Port、内部Command認可と冪等再送を条件付きAcceptedとし、ADR #52によりInvitation lifecycle、受諾原子性、新Participantによる再参加、ADR #73によりGroup終了のClose Intent、Context fence／Receipt、Closing認可、owner-at-archive、2月29日clampをAcceptedした。PR #27はADR #24のAccepted文書統合記録で、C1の証拠は後続のADR #55、正式Security Review、PR #70である。
 
 ## 9. Remaining Assumptions / External gaps
 
@@ -144,8 +152,8 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 | ID | Type | Question | Impact / Required Evidence |
 | --- | --- | --- | --- |
 | OQ-G2 | Open Question | 本番本人性の信頼元、宛先解決、Token、配送、公開Errorをどうするか | 別Security Decisionまで参加Commandの公開接続はBlocked |
-| OQ-G3 | Open Question | 脱退・Owner変更と他Context操作の認可判定時点 | 版付き照会だけで解決済みにしない。後続Context間整合性ADRが必要 |
-| OQ-G4 | Open Question | Archivedでの譲渡・脱退・Owner不在とCSV責任 | 初回Scope外。Group終了・Retention実装前に別Decision |
+| OQ-G3 | Partially resolved 2026-09-21 | 脱退・Owner変更と他Context操作の認可判定時点 | Group終了はADR #73のfenceで解決。通常時のContext間認可は版付き照会だけで解決済みにせず、Task #76と後続契約に従う |
+| OQ-G4 | Resolved 2026-09-21 | Archivedでの譲渡・脱退・Owner不在とCSV責任 | ADR #73でArchive後の変更拒否、owner-at-archive固定、保持期限までのread／CSV責任をDecision済み |
 | OQ-G5 | Resolved 2026-09-20 | 冪等記録の保存期限・最小化・削除・本人性との関係 | ADR #55でDecision済み。実装証拠はS1〜S3／#42で追加する |
 | C1 | Resolved 2026-09-20 | Snapshot平文禁止と業務必須情報保存の解釈・保護 | ADR #55＋Owner Accepted＋独立Security Review＋PR #70。実装証拠はS0〜S3／#42で追加する |
 
@@ -153,7 +161,7 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 
 1. ADR #35／#36の条件付きAccepted記録は[PR #44](https://github.com/takeshi-arihori/kakei_app/pull/44)でRepositoryとGitHubへ統合済み。各実装Taskは一括昇格せず、Requirement・DCと実依存を個別にReady評価する。
 2. [#38](https://github.com/takeshi-arihori/kakei_app/issues/38)、[#39](https://github.com/takeshi-arihori/kakei_app/issues/39)、[#40](https://github.com/takeshi-arihori/kakei_app/issues/40)の初回Domain／Application契約は完了。本番Adapterへ接続しない。
-3. #57でInvitation／再参加の内部契約を実装し、C1はADR #55と正式Security Reviewで充足した。次はS0〜S3を順に実装し、その後#42を個別Ready評価する。本番本人性・配送とProduction Gateは別作業とする。
+3. #57でInvitation／再参加の内部契約を実装し、C1はADR #55と正式Security Reviewで充足した。ADR #73のRepository同期と正式Security Review後に#75（S0）を個別Ready評価し、#76（S3）、その後#42を進める。本番本人性・配送、実Context fence、Production Gateは別作業とする。
 
 ## GitHub delivery map
 
@@ -167,7 +175,10 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 | [#40 Application・Port](https://github.com/takeshi-arihori/kakei_app/issues/40) | 2日 | PR #51 Merge済み / Done | fakeによる認可・競合・再送契約検証 |
 | [#41 招待・再参加設計](https://github.com/takeshi-arihori/kakei_app/issues/41) | 1日 | PR #53 Merge済み / Done | [比較表とADR](group-invitation-rejoin-proposal.md)。ADR #52は2026-09-13にAccepted |
 | [#57 Invitation内部契約](https://github.com/takeshi-arihori/kakei_app/issues/57) | 2日 | PR #59 Merge済み / Done | Invitation lifecycle、受諾原子性、再参加をDomain／Applicationとfakeで検証。本番Persistenceは対象外 |
-| S0〜S3 | 2日＋各1日 | ADR #55、C1充足 / 起票・実装待ち | Archive invariant、Schema／Migration、protected record codec、access policy／blind index契約 |
+| [#75 S0: Group終了](https://github.com/takeshi-arihori/kakei_app/issues/75) | 2日 | ADR #73同期・正式Review後にReady評価 | Close Intent、Context fence／Receipt、Archive／取消、保持期限のDomain／Application契約 |
+| [#74 S1: Schema／Migration](https://github.com/takeshi-arihori/kakei_app/issues/74) | 1日 | PR #78 Merge済み / Done | PostgreSQL Schema、Migration、runtime `pg` |
+| [#77 S2: protected record codec](https://github.com/takeshi-arihori/kakei_app/issues/77) | 1日 | PR #79 Merge済み / Done | Canonical TLV、AEAD Envelope、Key／Nonce Port |
+| [#76 S3: Access Policy](https://github.com/takeshi-arihori/kakei_app/issues/76) | 1日 | #75完了後にReady評価 | access policy／blind index／transaction contract |
 | [#42 保存Adapter](https://github.com/takeshi-arihori/kakei_app/issues/42) | 2日 | S0〜S3 / Backlog・Blocked Yes | PostgreSQL Repository Integration。Production Gate完了まで本番wiring禁止 |
 
-ADR [#35](https://github.com/takeshi-arihori/kakei_app/issues/35)と[#36](https://github.com/takeshi-arihori/kakei_app/issues/36)は2026-09-08に条件付きAcceptedされ、記録はPR #44でdevelopへ統合済み。ADR [#52](https://github.com/takeshi-arihori/kakei_app/issues/52)は2026-09-13にAcceptedされ、記録はPR #58でdevelopへ統合済み。C1は[#55](https://github.com/takeshi-arihori/kakei_app/issues/55)の正式ReviewとPR #70統合により2026-09-20に充足し、残る実装はS0〜S3と#42で追跡する。
+ADR [#35](https://github.com/takeshi-arihori/kakei_app/issues/35)と[#36](https://github.com/takeshi-arihori/kakei_app/issues/36)は2026-09-08に条件付きAcceptedされ、記録はPR #44でdevelopへ統合済み。ADR [#52](https://github.com/takeshi-arihori/kakei_app/issues/52)は2026-09-13にAcceptedされ、記録はPR #58でdevelopへ統合済み。C1は[#55](https://github.com/takeshi-arihori/kakei_app/issues/55)の正式ReviewとPR #70統合により2026-09-20に充足した。ADR [#73](https://github.com/takeshi-arihori/kakei_app/issues/73)は2026-09-21にAcceptedされ、Repository同期と正式Security Reviewの完了後に#75をReady評価する。#74／#77はDone、残る実装は#75／#76／#42で追跡する。
