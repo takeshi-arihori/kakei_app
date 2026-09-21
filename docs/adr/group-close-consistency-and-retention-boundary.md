@@ -6,6 +6,7 @@
 - Decision record: [GitHub ADR Issue #73](https://github.com/takeshi-arihori/kakei_app/issues/73)
 - Owner decision evidence: [Issue comment](https://github.com/takeshi-arihori/kakei_app/issues/73#issuecomment-5755615829)
 - Security review evidence: [Author-separated formal review pass](https://github.com/takeshi-arihori/kakei_app/issues/73#issuecomment-5755728805)（`findings=[]`、`missingEvidence=[]`）
+- Activation evidence: [PR #80](https://github.com/takeshi-arihori/kakei_app/pull/80)、merge commit `57bf974905b6de152a4bf5d566eba78f222d62ae`
 - Amends: [Group Managementの整合性境界](group-management-consistency-boundary.md)、[Snapshot Revisionの保護と保持境界](snapshot-revision-security-and-retention.md)
 - Related implementation: [Task #75](https://github.com/takeshi-arihori/kakei_app/issues/75)
 
