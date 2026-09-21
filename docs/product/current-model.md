@@ -157,11 +157,16 @@
 - 「Group削除」は即時の物理削除ではなく、業務上はGroupを終了してArchiveする操作として扱う。
 - 未精算Group Expenseまたは進行中Settlement Snapshotが存在するGroupは終了できない。
 - Groupの終了は利用者の明示操作で行う。Settlement SnapshotがArchiveされても、継続利用するGroupは自動終了しない。
+- Group終了は現在のOwnerがClose Intentを開始する。Groupは`Active`から`Closing`へ遷移し、Expense RecordingとSettlementが同じIntent／cutoffに束縛したclose fenceを各Contextの書込み境界で原子的に設置する。
+- fenceより前にcommitした業務Commandは終了可否へ含め、fence設置と競合するCommandはcommit／rollback確定までReceiptを発行しない。fence後の新規業務Commandは拒否する。
+- Group Managementは、未精算ExpenseがないReceiptと進行中SettlementがないReceiptの両方、Group version、current Owner、closeIntentIdが一致する場合だけArchiveする。他ContextのTableを直接参照しない。
+- 片Contextだけ成功した場合やtimeoutではClosingと成功済みfenceを維持し、同じIntentで再試行する。取消はcurrent Ownerだけが開始でき、unfence前にGroup version CASで`Canceling` phaseを予約してArchiveを失効させる。両ContextのGroupへ束縛したunfence Receiptが揃うまでActiveへ戻さない。
+- `Closing`中は従来許可されていた既存履歴のread-only参照だけを許可し、Invitation、Membership、Owner譲渡、Leave、Rejoin、新しいExpense／Settlementなどのaccess-affecting mutationを拒否する。
 - Archive済みGroupでは、新しいGroup Expenseの登録、招待、参加、精算開始を禁止する。
-- Archive済みGroupの履歴参照とCSV出力は許可する。
+- Archive時のcurrent Ownerを`ownerAtArchiveParticipantId`として固定し、Archive後のOwner変更・Leave・Rejoin・Membership変更を禁止する。保持期限までの既存履歴参照とGroup CSV出力はowner-at-archiveだけに許可する。
 - 利用者がGroupを物理削除する機能は提供しない。
 - Archive済みGroupは`archivedAt`から1年間、読み取り専用で保持する。
-- `deleteEligibleAt`はAsia/Tokyo基準で`archivedAt`の1暦年後とし、内部TimestampはUTCで保持する。
+- `deleteEligibleAt`はAsia/Tokyo基準で`archivedAt`の同じ現地時刻の1暦年後とし、内部TimestampはUTCで保持する。翌年に同じ月日がない2月29日は2月28日へclampし、3月1日へrollしない。
 - `deleteEligibleAt`を経過したGroupは、定期Batchの次回正常実行時に物理削除する。Batchの具体的な実行頻度・時刻は実装設計で決める。
 - Batchは再実行可能かつ冪等にし、一部失敗時に未削除Groupを次回以降再試行できるようにする。
 - 物理削除前のEmail・Pushなどによる個別通知は行わない。

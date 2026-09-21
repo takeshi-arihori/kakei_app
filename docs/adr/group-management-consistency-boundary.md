@@ -9,6 +9,7 @@
 - Owner Decision: 案Aを条件付きで採用
 - Accepted Date: 2026-09-08
 - Related ADR: [ADR #24](shared-expense-domain-boundaries.md)、[認可・再試行Decision](group-management-command-authorization.md)
+- Amended By: [Group終了の整合性と保持期限境界](group-close-consistency-and-retention-boundary.md)
 - Analysis: [最初の実装境界](../domain/group-management-first-boundary.md)
 - Decision Check: 方針変更あり（未決のData Owner、Aggregate、Repository Portを具体化する）
 - Relationship: ADR #24の未決詳細を補完する。Supersedesではない。Acceptance時点ではC1未充足だった。
@@ -57,6 +58,10 @@ Acceptance時点では、Active人数の解釈、重複禁止、操作分離、N
 ## Subsequent resolution（2026-09-20）
 
 上記のC1未充足表現はAcceptance時点の履歴である。ADR #55のOwner Accepted、正式Security Review pass、PR #70のdevelop統合によりC1は充足した。PersistenceはS0〜S3完了後に#42を個別Ready評価する。
+
+## Group終了の追補（2026-09-21）
+
+Archived操作を初回契約外とした記録はAcceptance時点の履歴である。[ADR #73](group-close-consistency-and-retention-boundary.md)で、`Active → Closing → Archived`、Closing内の取消予約phase、現在OwnerによるClose Intent、Expense Recording／Settlementが所有する原子的fenceとGroupへ束縛したversion付きReceipt、取消、`ownerAtArchiveParticipantId`、2月29日を2月28日へclampする保持期限境界をAcceptedした。Group Rootの所有境界とRepository Portは維持し、他ContextのTableをGroup Managementから直接参照しない。
 
 正常作成、4人境界、Owner脱退、他Group・Leftへの譲渡、競合の勝者双方、応答喪失と二重送信を契約テストの受入例にする。拒否時は版・状態・履歴を変えない。
 
