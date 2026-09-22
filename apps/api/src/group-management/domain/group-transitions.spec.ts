@@ -239,6 +239,9 @@ describe('Group.transferOwnership', () => {
 
     expect(result.result).toBe('Transferred');
     expect(result.group.ownerParticipantId?.value).toBe('p-target');
+    expect(result.group.accessPolicyVersion).toBe(
+      original.accessPolicyVersion + 1,
+    );
     expect(result.group.activeParticipantCount).toBe(2);
     expect(
       result.group.participants.find(({ id }) => id.value === 'p-owner')
@@ -311,6 +314,9 @@ describe('Group.leave', () => {
 
     expect(result.result).toBe('Left');
     expect(result.group.activeParticipantCount).toBe(1);
+    expect(result.group.accessPolicyVersion).toBe(
+      original.accessPolicyVersion + 1,
+    );
     expect(result.group.participants[1]).toEqual({
       ...active('p-member', 'member-subject', 2),
       status: 'Left',

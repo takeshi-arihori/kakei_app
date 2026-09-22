@@ -180,6 +180,9 @@ describe('Group.inviteParticipant', () => {
       resultingParticipantId: null,
     });
     expect(result.group.invitations).toEqual([result.invitation]);
+    expect(result.group.accessPolicyVersion).toBe(
+      original.accessPolicyVersion + 1,
+    );
     expect(result.group.activeParticipantCount).toBe(3);
     expect(original.invitations).toEqual([]);
   });
@@ -254,6 +257,9 @@ describe('Group.cancelInvitation', () => {
       cancelledAt: acceptedAt,
     });
     expect(cancelled.invitation.status).toBe('Cancelled');
+    expect(cancelled.group.accessPolicyVersion).toBe(
+      transferred.accessPolicyVersion + 1,
+    );
     expect(cancelled.group.invitations[0]?.status).toBe('Cancelled');
     expect(transferred.invitations[0]?.status).toBe('Pending');
   });
@@ -283,6 +289,9 @@ describe('Group.acceptInvitation', () => {
       ParticipantId.from('p-new'),
     );
     expect(result.group.activeParticipantCount).toBe(4);
+    expect(result.group.accessPolicyVersion).toBe(
+      invited.accessPolicyVersion + 1,
+    );
     expect(invited.activeParticipantCount).toBe(3);
     expect(invited.invitations[0]?.status).toBe('Pending');
   });

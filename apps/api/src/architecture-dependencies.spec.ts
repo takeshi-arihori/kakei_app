@@ -10,6 +10,7 @@ const acceptedContexts = new Set([
   'expense-recording',
   'settlement',
 ]);
+const applicationFoundationDependencies = new Set(['@kakei/protected-record']);
 
 type ContextLayer =
   'domain' | 'application' | 'presentation' | 'infrastructure';
@@ -175,6 +176,13 @@ const validateDependency = (
   }
 
   if (isExternalSpecifier(specifier)) {
+    if (
+      source.kind === 'context' &&
+      source.layer === 'application' &&
+      applicationFoundationDependencies.has(specifier)
+    ) {
+      return null;
+    }
     if (
       source.kind === 'shared-domain' ||
       (source.kind === 'context' &&
