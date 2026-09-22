@@ -9,6 +9,7 @@
 - Owner Decision: 案Aを条件付きで採用
 - Accepted Date: 2026-09-08
 - Related ADR: [ADR #24](shared-expense-domain-boundaries.md)、[整合性境界Decision](group-management-consistency-boundary.md)
+- Amended By: [Group operation locatorとGroup IDの保存契約](group-operation-locator-and-group-id-contract.md)
 - Analysis: [最初の実装境界](../domain/group-management-first-boundary.md)
 - Decision Check: 方針変更あり（認可・再試行方式を具体化する）
 - Relationship: ADR #24の未決詳細を補完する。本ADR自体はC1のSecurity ADR／充足証拠を代替しない。

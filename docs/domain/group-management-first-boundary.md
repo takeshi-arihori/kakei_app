@@ -1,10 +1,10 @@
 # Group Managementの最初の実装境界（設計案）
 
-- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptance、2026-09-13のADR #52 Acceptance、Task #57の内部契約実装、2026-09-20のC1充足、2026-09-21のADR #73 Acceptanceを反映。残るOpen QuestionとBlockedを分離する。
+- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptance、2026-09-13のADR #52 Acceptance、Task #57の内部契約実装、2026-09-20のC1充足、2026-09-21のADR #73 Acceptance、2026-09-22のADR #85 Acceptanceを反映。残るOpen QuestionとBlockedを分離する。
 - Baseline: [実装開始時のdevelop固定Commit](https://github.com/takeshi-arihori/kakei_app/tree/68d9c469605f554306f773a929250d8b1f642d05)
 - 根拠: [現行業務モデル](../product/current-model.md)、[Accepted ADR #24](../adr/shared-expense-domain-boundaries.md)
-- Decision: [整合性境界](../adr/group-management-consistency-boundary.md)、[本人性・認可・再試行](../adr/group-management-command-authorization.md)、[招待・再参加](../adr/group-invitation-and-rejoin.md)、[Group終了](../adr/group-close-consistency-and-retention-boundary.md)
-- 条件C1は充足済み。Group終了のRepository同期と正式Security Reviewを完了し、S0の#75はReady評価済み。Persistence実装はS0〜S3が完了するまで段階的に進め、#42はBacklog / Blocked Yesを維持する。以下のPortはApplication契約としてAcceptedだが、本番保存Adapterは#42で個別Ready評価する。
+- Decision: [整合性境界](../adr/group-management-consistency-boundary.md)、[本人性・認可・再試行](../adr/group-management-command-authorization.md)、[招待・再参加](../adr/group-invitation-and-rejoin.md)、[Group終了](../adr/group-close-consistency-and-retention-boundary.md)、[operation locator／Group ID](../adr/group-operation-locator-and-group-id-contract.md)
+- 条件C1とS0〜S3は充足済み。#42は#86がActor内全Group共通locatorとcanonical Group IDのApplication／Domain契約を同期するまでBlocked Yesとする。以下のPortはApplication契約としてAcceptedだが、本番保存Adapterは#42で個別Ready評価する。
 
 ## 1. Problem / Scope
 
@@ -76,7 +76,7 @@ Group→Participantの所有方向を採用する。削除はRetention全体の�
 | Model / Rule | Evidence（上記固定Commit） | Alignment | Feedback / State |
 | --- | --- | --- | --- |
 | Group / Participant / Owner / Invitation | apps/api/src/group-management/domain/group.ts | Aligned（#38／#39／#57） | Group生成、Active／Left履歴、Owner譲渡、本人脱退、Invitation lifecycle、受諾、新Participantによる再参加を純粋Domainで実装。Archive invariantはS0、PersistenceはS1〜S3後の#42へ分離 |
-| 認可・Command | apps/api/src/group-management/application | Aligned（#40／#57の内部契約） | 信頼済みActor入力、最新Group状態によるDomain認可、期待版競合、InvitationとMembershipの原子的変更集合、Actor単位のoperation再送、応答喪失回復をApplicationとin-memory fakeで検証。本番本人性・保存Adapter・公開APIは未実装で、S0〜S3と#42のGateを維持 |
+| 認可・Command | apps/api/src/group-management/application | Aligned（#40／#57の内部契約） | 信頼済みActor入力、最新Group状態によるDomain認可、期待版競合、InvitationとMembershipの原子的変更集合、Actor単位のoperation再送、応答喪失回復をApplicationとin-memory fakeで検証。本番本人性・保存Adapter・公開APIは未実装で、#86と#42のGateを維持 |
 | JPY整数 | apps/api/src/shared/domain/money.ts | Aligned | 金額は今回対象外。実装事実は新業務Ruleの根拠にしない |
 
 ### Ubiquitous Language
@@ -145,7 +145,7 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 | --- | --- | --- | --- |
 | テスト内のActorSubjectは架空で、認証済みと仮定 | Assumption | 本番認証なしでも純粋モデルを検証するため | 本番接続前に別途認証方式のAccepted Decision |
 | 本番のInviteParticipant／CancelInvitation／AcceptInvitation接続 | External gap | 内部契約から本番Actor本人性・宛先解決・公開Errorへ接続するDecisionが未Accepted | 別Security DecisionまでGraphQL／HTTPへ公開しない |
-| Invitation／operation結果の保存 | Security / Persistence implementation gap | 最小保存、暗号化、Retention、削除のDecisionと独立Security Reviewは完了。実装は未完了 | S1〜S3を完了するまで#42をBacklog / Blocked Yesで維持 |
+| Invitation／operation結果の保存 | Security / Persistence implementation gap | 最小保存、暗号化、Retention、削除のDecisionと独立Security Reviewは完了。ADR #85がlocator keyとGroup IDの保存契約を追補した。実装は未完了 | #86完了まで#42をBacklog / Blocked Yesで維持 |
 
 ## 10. Open Questions / Conflicts
 
@@ -154,14 +154,14 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 | OQ-G2 | Open Question | 本番本人性の信頼元、宛先解決、Token、配送、公開Errorをどうするか | 別Security Decisionまで参加Commandの公開接続はBlocked |
 | OQ-G3 | Partially resolved 2026-09-21 | 脱退・Owner変更と他Context操作の認可判定時点 | Group終了はADR #73のfenceで解決。通常時のContext間認可は版付き照会だけで解決済みにせず、Task #76と後続契約に従う |
 | OQ-G4 | Resolved 2026-09-21 | Archivedでの譲渡・脱退・Owner不在とCSV責任 | ADR #73でArchive後の変更拒否、owner-at-archive固定、保持期限までのread／CSV責任をDecision済み |
-| OQ-G5 | Resolved 2026-09-20 | 冪等記録の保存期限・最小化・削除・本人性との関係 | ADR #55でDecision済み。実装証拠はS1〜S3／#42で追加する |
-| C1 | Resolved 2026-09-20 | Snapshot平文禁止と業務必須情報保存の解釈・保護 | ADR #55＋Owner Accepted＋独立Security Review＋PR #70。実装証拠はS0〜S3／#42で追加する |
+| OQ-G5 | Resolved 2026-09-22 | 冪等記録の保存期限・最小化・削除・本人性との関係 | ADR #55とADR #85でDecision済み。実装証拠は#86／#42で追加する |
+| C1 | Resolved 2026-09-20 | Snapshot平文禁止と業務必須情報保存の解釈・保護 | ADR #55＋Owner Accepted＋独立Security Review＋PR #70。S0〜S3実装証拠は完了済みで、#86／#42が残る契約・Adapter証拠を追加する |
 
 ## 11. Next Modeling Step / Delivery Gate
 
 1. ADR #35／#36の条件付きAccepted記録は[PR #44](https://github.com/takeshi-arihori/kakei_app/pull/44)でRepositoryとGitHubへ統合済み。各実装Taskは一括昇格せず、Requirement・DCと実依存を個別にReady評価する。
 2. [#38](https://github.com/takeshi-arihori/kakei_app/issues/38)、[#39](https://github.com/takeshi-arihori/kakei_app/issues/39)、[#40](https://github.com/takeshi-arihori/kakei_app/issues/40)の初回Domain／Application契約は完了。本番Adapterへ接続しない。
-3. #57でInvitation／再参加の内部契約を実装し、C1はADR #55と正式Security Reviewで充足した。ADR #73のRepository同期と正式Security Reviewを完了し、#75（S0）はDone。#76（S3）はこのPRが`develop`へmerge後にDoneとなり、#42はS0〜S3の完了後に個別Ready評価して進める。本番本人性・配送、実Context fence、Production Gateは別作業とする。
+3. #57でInvitation／再参加の内部契約を実装し、C1はADR #55と正式Security Reviewで充足した。S0〜S3はDoneであり、ADR #85に従う#86を完了後に#42を個別Ready評価して進める。本番本人性・配送、実Context fence、Production Gateは別作業とする。
 
 ## GitHub delivery map
 
@@ -178,7 +178,8 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 | [#75 S0: Group終了](https://github.com/takeshi-arihori/kakei_app/issues/75) | 2日 | PR #82 Merge済み / Done | Close Intent、Context fence／Receipt、Archive／取消、保持期限のDomain／Application契約 |
 | [#74 S1: Schema／Migration](https://github.com/takeshi-arihori/kakei_app/issues/74) | 1日 | PR #78 Merge済み / Done | PostgreSQL Schema、Migration、runtime `pg` |
 | [#77 S2: protected record codec](https://github.com/takeshi-arihori/kakei_app/issues/77) | 1日 | PR #79 Merge済み / Done | Canonical TLV、AEAD Envelope、Key／Nonce Port |
-| [#76 S3: Access Policy](https://github.com/takeshi-arihori/kakei_app/issues/76) | 1日 | 本PRの`develop` merge後 Done | access policy／blind index／transaction contract |
-| [#42 保存Adapter](https://github.com/takeshi-arihori/kakei_app/issues/42) | 2日 | S0〜S3完了後に個別Ready評価 | PostgreSQL Repository Integration。Production Gate完了まで本番wiring禁止 |
+| [#76 S3: Access Policy](https://github.com/takeshi-arihori/kakei_app/issues/76) | 1日 | PR #83 Merge済み / Done | access policy／blind index／transaction contract |
+| [#86 locator／Group ID契約](https://github.com/takeshi-arihori/kakei_app/issues/86) | 2日 | ADR #85統合後にReady評価 | Application locator contract、fake、UUID fixture。PostgreSQLは対象外 |
+| [#42 保存Adapter](https://github.com/takeshi-arihori/kakei_app/issues/42) | 2日 | #86完了後に個別Ready評価 | PostgreSQL Repository Integration。Production Gate完了まで本番wiring禁止 |
 
-ADR [#35](https://github.com/takeshi-arihori/kakei_app/issues/35)と[#36](https://github.com/takeshi-arihori/kakei_app/issues/36)は2026-09-08に条件付きAcceptedされ、記録はPR #44でdevelopへ統合済み。ADR [#52](https://github.com/takeshi-arihori/kakei_app/issues/52)は2026-09-13にAcceptedされ、記録はPR #58でdevelopへ統合済み。C1は[#55](https://github.com/takeshi-arihori/kakei_app/issues/55)の正式ReviewとPR #70統合により2026-09-20に充足した。ADR [#73](https://github.com/takeshi-arihori/kakei_app/issues/73)は2026-09-21にAcceptedされ、正式Security ReviewとPR #80統合を完了した。#74／#75／#77はDoneであり、#76はこのPRの`develop` merge後にDoneとなる。残る保存Adapterは#42で追跡する。
+ADR [#35](https://github.com/takeshi-arihori/kakei_app/issues/35)と[#36](https://github.com/takeshi-arihori/kakei_app/issues/36)は2026-09-08に条件付きAcceptedされ、記録はPR #44でdevelopへ統合済み。ADR [#52](https://github.com/takeshi-arihori/kakei_app/issues/52)は2026-09-13にAcceptedされ、記録はPR #58でdevelopへ統合済み。C1は[#55](https://github.com/takeshi-arihori/kakei_app/issues/55)の正式ReviewとPR #70統合により2026-09-20に充足した。ADR [#73](https://github.com/takeshi-arihori/kakei_app/issues/73)は2026-09-21にAcceptedされ、正式Security ReviewとPR #80統合を完了した。#74／#75／#76／#77はDoneであり、残るApplication契約は#86、保存Adapterは#42で追跡する。
