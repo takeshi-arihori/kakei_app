@@ -94,17 +94,43 @@ export const membershipDigestInput = (
     { tag: 0x04, value: participantId.value },
   ]);
 
+/**
+ * Operation locators deliberately have no Group ID: CreateGroup needs the
+ * replay lookup before a Group exists. Their key namespace is context-only.
+ */
+export type GroupOperationLocatorDigestInput = Readonly<{
+  purpose: 'group-operation-locator/v2';
+  canonicalInput: Uint8Array;
+}>;
+
+export type GroupOperationLocatorCandidate = Readonly<{
+  digest: GroupPolicyDigest;
+  digestKeyVersion: string;
+}>;
+
+export interface GroupOperationLocatorKeyPort {
+  currentDigest(
+    input: GroupOperationLocatorDigestInput,
+  ): Promise<GroupOperationLocatorCandidate>;
+
+  candidateDigests(
+    input: GroupOperationLocatorDigestInput,
+  ): Promise<readonly GroupOperationLocatorCandidate[]>;
+}
+
 export const operationLocatorDigestInput = (
-  groupId: GroupId,
   actorSubject: ActorSubject,
   operationId: OperationId,
-): GroupPolicyDigestInput =>
-  digestInput('group-operation-locator/v1', groupId.value, [
-    { tag: 0x01, value: 'group-access-policy/v1' },
-    { tag: 0x02, value: 'operation-locator' },
-    { tag: 0x03, value: actorSubject.value },
-    { tag: 0x05, value: operationId.value },
-  ]);
+): GroupOperationLocatorDigestInput =>
+  Object.freeze({
+    purpose: 'group-operation-locator/v2',
+    canonicalInput: encodeCanonicalTlv([
+      { tag: 0x01, value: 'group-operation-locator/v2' },
+      { tag: 0x02, value: 'operation-locator' },
+      { tag: 0x03, value: actorSubject.value },
+      { tag: 0x05, value: operationId.value },
+    ]),
+  });
 
 export const operationFingerprintDigestInput = (
   groupId: GroupId,
@@ -266,7 +292,7 @@ export type OperationReplayLookup<T> =
 /** Durable storage is #42; this port keeps locator lookup independent of its adapter. */
 export interface GroupOperationReplayPort<T> {
   findOperation(input: {
-    locator: GroupPolicyDigest;
+    locatorCandidates: readonly GroupOperationLocatorCandidate[];
   }): Promise<OperationReplayLookup<T>>;
 }
 

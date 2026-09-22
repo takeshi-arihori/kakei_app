@@ -45,7 +45,7 @@ const snapshot = (
   participants: readonly ParticipantSnapshot[],
   options: Partial<Pick<GroupSnapshot, 'status' | 'ownerParticipantId'>> = {},
 ): GroupSnapshot => ({
-  id: GroupId.from('group-a'),
+  id: GroupId.from('00000000-0000-4000-8000-000000000001'),
   status: options.status ?? 'Active',
   ownerParticipantId:
     options.ownerParticipantId === undefined

@@ -65,7 +65,7 @@ const group = (
   status: GroupSnapshot['status'] = 'Active',
 ): Group =>
   Group.restore({
-    id: GroupId.from('group-a'),
+    id: GroupId.from('00000000-0000-4000-8000-000000000001'),
     status,
     ownerParticipantId:
       status === 'Active' ? ParticipantId.from('p-owner') : null,

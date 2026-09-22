@@ -21,7 +21,7 @@ import type { GroupCloseContextPort } from './group-close-context-port.js';
 import { OperationId } from './group-repository.js';
 
 const instant = (value: string): UtcInstant => UtcInstant.from(new Date(value));
-const groupId = GroupId.from('group-a');
+const groupId = GroupId.from('00000000-0000-4000-8000-000000000001');
 const closeIntentId = CloseIntentId.from('close-intent-a');
 const cutoff = instant('2026-09-21T00:00:00.000Z');
 
@@ -169,7 +169,7 @@ describe('GroupCloseCoordinator', () => {
         fenceReceipts: [
           fenceReceipt('ExpenseRecording'),
           fenceReceipt('Settlement', {
-            groupId: GroupId.from('another-group'),
+            groupId: GroupId.from('00000000-0000-4000-8000-00000000000a'),
           }),
         ],
       }),

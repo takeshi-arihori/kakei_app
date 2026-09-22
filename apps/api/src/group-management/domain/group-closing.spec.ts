@@ -17,7 +17,7 @@ import {
 const instant = (value: string): UtcInstant => UtcInstant.from(new Date(value));
 const owner = ParticipantId.from('participant-owner');
 const ownerSubject = ActorSubject.from('owner-subject');
-const groupId = GroupId.from('group-a');
+const groupId = GroupId.from('00000000-0000-4000-8000-000000000001');
 const intentId = CloseIntentId.from('close-intent-a');
 const cutoff = instant('2026-09-21T00:00:00.000Z');
 
@@ -130,7 +130,7 @@ describe('Group close lifecycle', () => {
       () =>
         closing.recordCloseFenceReceipt(
           fenceReceipt('ExpenseRecording', {
-            groupId: GroupId.from('another-group'),
+            groupId: GroupId.from('00000000-0000-4000-8000-00000000000a'),
           }),
         ),
       'CLOSE_RECEIPT_MISMATCH',
