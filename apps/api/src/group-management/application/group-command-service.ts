@@ -1,6 +1,9 @@
 import {
   Group,
   type ActorSubject,
+  type CloseFenceReceipt,
+  type CloseIntentId,
+  type CloseUnfenceReceipt,
   type GroupId,
   type InvitationId,
   type ParticipantId,
@@ -11,6 +14,12 @@ import {
   type CommitGroupOutcome,
   type CommitGroupRequest,
   type GroupCommandResult,
+  type GroupArchivedResult,
+  type GroupCloseFenceReceiptRecordedResult,
+  type GroupCloseUnfenceReceiptRecordedResult,
+  type GroupClosingCancellationReservedResult,
+  type GroupClosingCancelledResult,
+  type GroupClosingStartedResult,
   type GroupCreatedResult,
   type GroupRepository,
   type InvitationAcceptedResult,
@@ -23,6 +32,7 @@ import {
 } from './group-repository.js';
 
 export type GroupCommandApplicationErrorCode =
+  | 'CLOSE_INTENT_ALREADY_EXISTS'
   | 'CONFLICT'
   | 'GROUP_ALREADY_EXISTS'
   | 'GROUP_NOT_FOUND'
@@ -44,6 +54,7 @@ export type GroupCommandDependencies = Readonly<{
   nextGroupId: () => GroupId;
   nextParticipantId: () => ParticipantId;
   nextInvitationId: () => InvitationId;
+  nextCloseIntentId: () => CloseIntentId;
   now: () => UtcInstant;
 }>;
 
@@ -92,6 +103,53 @@ export type AcceptInvitationCommand = Readonly<{
   expectedVersion: number;
 }>;
 
+export type StartGroupClosingCommand = Readonly<{
+  actorSubject: ActorSubject;
+  operationId: OperationId;
+  groupId: GroupId;
+  expectedVersion: number;
+}>;
+
+export type RecordGroupCloseFenceReceiptCommand = Readonly<{
+  actorSubject: ActorSubject;
+  operationId: OperationId;
+  groupId: GroupId;
+  expectedVersion: number;
+  receipt: CloseFenceReceipt;
+}>;
+
+export type ArchiveGroupCommand = Readonly<{
+  actorSubject: ActorSubject;
+  operationId: OperationId;
+  groupId: GroupId;
+  closeIntentId: CloseIntentId;
+  expectedVersion: number;
+}>;
+
+export type ReserveGroupClosingCancellationCommand = Readonly<{
+  actorSubject: ActorSubject;
+  operationId: OperationId;
+  groupId: GroupId;
+  closeIntentId: CloseIntentId;
+  expectedVersion: number;
+}>;
+
+export type RecordGroupCloseUnfenceReceiptCommand = Readonly<{
+  actorSubject: ActorSubject;
+  operationId: OperationId;
+  groupId: GroupId;
+  expectedVersion: number;
+  receipt: CloseUnfenceReceipt;
+}>;
+
+export type CompleteGroupClosingCancellationCommand = Readonly<{
+  actorSubject: ActorSubject;
+  operationId: OperationId;
+  groupId: GroupId;
+  closeIntentId: CloseIntentId;
+  expectedVersion: number;
+}>;
+
 export class GroupCommandService {
   constructor(
     private readonly repository: GroupRepository,
@@ -127,6 +185,7 @@ export class GroupCommandService {
         },
       ],
       invitationChanges: [],
+      groupCloseChanges: [],
       operation: {
         actorSubject: command.actorSubject,
         operationId: command.operationId,
@@ -175,6 +234,7 @@ export class GroupCommandService {
       stateChanged: transferred,
       membershipChanges: [],
       invitationChanges: [],
+      groupCloseChanges: [],
       operation: {
         actorSubject: command.actorSubject,
         operationId: command.operationId,
@@ -234,6 +294,7 @@ export class GroupCommandService {
         },
       ],
       invitationChanges: [],
+      groupCloseChanges: [],
       operation: {
         actorSubject: command.actorSubject,
         operationId: command.operationId,
@@ -291,6 +352,7 @@ export class GroupCommandService {
           expiryAt: invited.invitation.expiryAt,
         },
       ],
+      groupCloseChanges: [],
       operation: {
         actorSubject: command.actorSubject,
         operationId: command.operationId,
@@ -343,6 +405,7 @@ export class GroupCommandService {
           at: cancelledAt,
         },
       ],
+      groupCloseChanges: [],
       operation: {
         actorSubject: command.actorSubject,
         operationId: command.operationId,
@@ -404,6 +467,7 @@ export class GroupCommandService {
           at: acceptedAt,
         },
       ],
+      groupCloseChanges: [],
       operation: {
         actorSubject: command.actorSubject,
         operationId: command.operationId,
@@ -417,6 +481,331 @@ export class GroupCommandService {
       },
     });
     return this.expectResultKind(result, ['InvitationAccepted']);
+  }
+
+  async startGroupClosing(
+    command: StartGroupClosingCommand,
+  ): Promise<GroupClosingStartedResult> {
+    this.assertExpectedVersion(command.expectedVersion);
+    const fingerprint = this.fingerprint([
+      'StartGroupClosing',
+      command.groupId.value,
+      command.expectedVersion,
+    ]);
+    const replay = await this.findReplay(command, fingerprint);
+    if (replay !== null) {
+      return this.expectResultKind(replay, ['GroupClosingStarted']);
+    }
+
+    const loaded = await this.loadExpectedVersion(
+      command.groupId,
+      command.expectedVersion,
+    );
+    const closeIntentId = this.dependencies.nextCloseIntentId();
+    const cutoff = this.dependencies.now();
+    const closing = loaded.group.startClosing({
+      actorSubject: command.actorSubject,
+      closeIntentId,
+      cutoff,
+    });
+    const result = await this.commit({
+      group: closing.group,
+      expectedVersion: loaded.version,
+      stateChanged: true,
+      membershipChanges: [],
+      invitationChanges: [],
+      groupCloseChanges: [
+        {
+          kind: 'ClosingStarted',
+          closeIntentId,
+          cutoff,
+          startedBy: command.actorSubject,
+          startedFromVersion: loaded.version,
+        },
+      ],
+      operation: {
+        actorSubject: command.actorSubject,
+        operationId: command.operationId,
+        fingerprint,
+      },
+      result: {
+        kind: 'GroupClosingStarted',
+        groupId: command.groupId,
+        closeIntentId,
+      },
+    });
+    return this.expectResultKind(result, ['GroupClosingStarted']);
+  }
+
+  async recordGroupCloseFenceReceipt(
+    command: RecordGroupCloseFenceReceiptCommand,
+  ): Promise<GroupCloseFenceReceiptRecordedResult> {
+    this.assertExpectedVersion(command.expectedVersion);
+    const { receipt } = command;
+    const fingerprint = this.fingerprint([
+      'RecordGroupCloseFenceReceipt',
+      command.groupId.value,
+      command.expectedVersion,
+      ...this.fenceReceiptFingerprint(receipt),
+    ]);
+    const replay = await this.findReplay(command, fingerprint);
+    if (replay !== null) {
+      return this.expectResultKind(replay, ['GroupCloseFenceReceiptRecorded']);
+    }
+
+    const loaded = await this.loadExpectedVersion(
+      command.groupId,
+      command.expectedVersion,
+    );
+    const recorded = loaded.group.recordCloseFenceReceipt(receipt);
+    const changed = recorded.group !== loaded.group;
+    const result = await this.commit({
+      group: recorded.group,
+      expectedVersion: loaded.version,
+      stateChanged: changed,
+      membershipChanges: [],
+      invitationChanges: [],
+      groupCloseChanges: changed
+        ? [{ kind: 'CloseFenceReceiptRecorded', receipt }]
+        : [],
+      operation: {
+        actorSubject: command.actorSubject,
+        operationId: command.operationId,
+        fingerprint,
+      },
+      result: {
+        kind: 'GroupCloseFenceReceiptRecorded',
+        groupId: command.groupId,
+        closeIntentId: receipt.closeIntentId,
+      },
+    });
+    return this.expectResultKind(result, ['GroupCloseFenceReceiptRecorded']);
+  }
+
+  async archiveGroup(
+    command: ArchiveGroupCommand,
+  ): Promise<GroupArchivedResult> {
+    this.assertExpectedVersion(command.expectedVersion);
+    const fingerprint = this.fingerprint([
+      'ArchiveGroup',
+      command.groupId.value,
+      command.closeIntentId.value,
+      command.expectedVersion,
+    ]);
+    const replay = await this.findReplay(command, fingerprint);
+    if (replay !== null) {
+      return this.expectResultKind(replay, ['GroupArchived']);
+    }
+
+    const loaded = await this.loadExpectedVersion(
+      command.groupId,
+      command.expectedVersion,
+    );
+    const archivedAt = this.dependencies.now();
+    const receipts = new Map(
+      loaded.group.closing?.fenceReceipts.map((receipt) => [
+        receipt.context,
+        receipt,
+      ]) ?? [],
+    );
+    const archived = loaded.group.archive({
+      actorSubject: command.actorSubject,
+      closeIntentId: command.closeIntentId,
+      archivedAt,
+    });
+    const ownerAtArchiveParticipantId =
+      archived.group.ownerAtArchiveParticipantId;
+    const deleteEligibleAt = archived.group.deleteEligibleAt;
+    if (ownerAtArchiveParticipantId === null || deleteEligibleAt === null) {
+      throw new GroupCommandApplicationError(
+        'UNAVAILABLE',
+        'The archived Group did not produce immutable archive metadata',
+      );
+    }
+    const expenseReceipt = receipts.get('ExpenseRecording');
+    const settlementReceipt = receipts.get('Settlement');
+    if (expenseReceipt === undefined || settlementReceipt === undefined) {
+      throw new GroupCommandApplicationError(
+        'UNAVAILABLE',
+        'The archived Group did not provide both Context Receipt versions',
+      );
+    }
+    const result = await this.commit({
+      group: archived.group,
+      expectedVersion: loaded.version,
+      stateChanged: true,
+      membershipChanges: [],
+      invitationChanges: [],
+      groupCloseChanges: [
+        {
+          kind: 'GroupArchived',
+          closeIntentId: command.closeIntentId,
+          ownerAtArchiveParticipantId,
+          archivedAt,
+          deleteEligibleAt,
+          archivedFromVersion: loaded.version,
+          receiptVersions: {
+            ExpenseRecording: expenseReceipt.fenceVersion,
+            Settlement: settlementReceipt.fenceVersion,
+          },
+        },
+      ],
+      operation: {
+        actorSubject: command.actorSubject,
+        operationId: command.operationId,
+        fingerprint,
+      },
+      result: {
+        kind: 'GroupArchived',
+        groupId: command.groupId,
+        closeIntentId: command.closeIntentId,
+      },
+    });
+    return this.expectResultKind(result, ['GroupArchived']);
+  }
+
+  async reserveGroupClosingCancellation(
+    command: ReserveGroupClosingCancellationCommand,
+  ): Promise<GroupClosingCancellationReservedResult> {
+    this.assertExpectedVersion(command.expectedVersion);
+    const fingerprint = this.fingerprint([
+      'ReserveGroupClosingCancellation',
+      command.groupId.value,
+      command.closeIntentId.value,
+      command.expectedVersion,
+    ]);
+    const replay = await this.findReplay(command, fingerprint);
+    if (replay !== null) {
+      return this.expectResultKind(replay, [
+        'GroupClosingCancellationReserved',
+      ]);
+    }
+
+    const loaded = await this.loadExpectedVersion(
+      command.groupId,
+      command.expectedVersion,
+    );
+    const reserved = loaded.group.reserveClosingCancellation({
+      actorSubject: command.actorSubject,
+      closeIntentId: command.closeIntentId,
+    });
+    const result = await this.commit({
+      group: reserved.group,
+      expectedVersion: loaded.version,
+      stateChanged: true,
+      membershipChanges: [],
+      invitationChanges: [],
+      groupCloseChanges: [
+        {
+          kind: 'ClosingCancellationReserved',
+          closeIntentId: command.closeIntentId,
+        },
+      ],
+      operation: {
+        actorSubject: command.actorSubject,
+        operationId: command.operationId,
+        fingerprint,
+      },
+      result: {
+        kind: 'GroupClosingCancellationReserved',
+        groupId: command.groupId,
+        closeIntentId: command.closeIntentId,
+      },
+    });
+    return this.expectResultKind(result, ['GroupClosingCancellationReserved']);
+  }
+
+  async recordGroupCloseUnfenceReceipt(
+    command: RecordGroupCloseUnfenceReceiptCommand,
+  ): Promise<GroupCloseUnfenceReceiptRecordedResult> {
+    this.assertExpectedVersion(command.expectedVersion);
+    const { receipt } = command;
+    const fingerprint = this.fingerprint([
+      'RecordGroupCloseUnfenceReceipt',
+      command.groupId.value,
+      command.expectedVersion,
+      ...this.unfenceReceiptFingerprint(receipt),
+    ]);
+    const replay = await this.findReplay(command, fingerprint);
+    if (replay !== null) {
+      return this.expectResultKind(replay, [
+        'GroupCloseUnfenceReceiptRecorded',
+      ]);
+    }
+
+    const loaded = await this.loadExpectedVersion(
+      command.groupId,
+      command.expectedVersion,
+    );
+    const recorded = loaded.group.recordCloseUnfenceReceipt(receipt);
+    const changed = recorded.group !== loaded.group;
+    const result = await this.commit({
+      group: recorded.group,
+      expectedVersion: loaded.version,
+      stateChanged: changed,
+      membershipChanges: [],
+      invitationChanges: [],
+      groupCloseChanges: changed
+        ? [{ kind: 'CloseUnfenceReceiptRecorded', receipt }]
+        : [],
+      operation: {
+        actorSubject: command.actorSubject,
+        operationId: command.operationId,
+        fingerprint,
+      },
+      result: {
+        kind: 'GroupCloseUnfenceReceiptRecorded',
+        groupId: command.groupId,
+        closeIntentId: receipt.closeIntentId,
+      },
+    });
+    return this.expectResultKind(result, ['GroupCloseUnfenceReceiptRecorded']);
+  }
+
+  async completeGroupClosingCancellation(
+    command: CompleteGroupClosingCancellationCommand,
+  ): Promise<GroupClosingCancelledResult> {
+    this.assertExpectedVersion(command.expectedVersion);
+    const fingerprint = this.fingerprint([
+      'CompleteGroupClosingCancellation',
+      command.groupId.value,
+      command.closeIntentId.value,
+      command.expectedVersion,
+    ]);
+    const replay = await this.findReplay(command, fingerprint);
+    if (replay !== null) {
+      return this.expectResultKind(replay, ['GroupClosingCancelled']);
+    }
+
+    const loaded = await this.loadExpectedVersion(
+      command.groupId,
+      command.expectedVersion,
+    );
+    const cancelled = loaded.group.completeClosingCancellation({
+      actorSubject: command.actorSubject,
+      closeIntentId: command.closeIntentId,
+    });
+    const result = await this.commit({
+      group: cancelled.group,
+      expectedVersion: loaded.version,
+      stateChanged: true,
+      membershipChanges: [],
+      invitationChanges: [],
+      groupCloseChanges: [
+        { kind: 'ClosingCancelled', closeIntentId: command.closeIntentId },
+      ],
+      operation: {
+        actorSubject: command.actorSubject,
+        operationId: command.operationId,
+        fingerprint,
+      },
+      result: {
+        kind: 'GroupClosingCancelled',
+        groupId: command.groupId,
+        closeIntentId: command.closeIntentId,
+      },
+    });
+    return this.expectResultKind(result, ['GroupClosingCancelled']);
   }
 
   private async findReplay(
@@ -519,6 +908,11 @@ export class GroupCommandService {
           'GROUP_ALREADY_EXISTS',
           'The generated Group ID already exists',
         );
+      case 'CloseIntentAlreadyExists':
+        return new GroupCommandApplicationError(
+          'CLOSE_INTENT_ALREADY_EXISTS',
+          'The generated close Intent ID already exists',
+        );
       case 'OperationMismatch':
         return new GroupCommandApplicationError(
           'OPERATION_MISMATCH',
@@ -538,6 +932,33 @@ export class GroupCommandService {
 
   private fingerprint(parts: readonly (string | number)[]): CommandFingerprint {
     return CommandFingerprint.from(JSON.stringify(parts));
+  }
+
+  private fenceReceiptFingerprint(
+    receipt: CloseFenceReceipt,
+  ): readonly (string | number)[] {
+    return [
+      receipt.groupId.value,
+      receipt.closeIntentId.value,
+      receipt.context,
+      receipt.cutoff.value,
+      receipt.fenceVersion,
+      receipt.eligible ? 'eligible' : 'ineligible',
+      receipt.completedAt.value,
+    ];
+  }
+
+  private unfenceReceiptFingerprint(
+    receipt: CloseUnfenceReceipt,
+  ): readonly (string | number)[] {
+    return [
+      receipt.groupId.value,
+      receipt.closeIntentId.value,
+      receipt.context,
+      receipt.cutoff.value,
+      receipt.fenceVersion,
+      receipt.completedAt.value,
+    ];
   }
 
   private expectResultKind<Kind extends GroupCommandResult['kind']>(

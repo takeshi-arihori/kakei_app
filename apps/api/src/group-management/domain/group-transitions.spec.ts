@@ -14,6 +14,8 @@ import {
 const instant = (value: string): UtcInstant => UtcInstant.from(new Date(value));
 const joinedAt = instant('2026-09-07T00:00:00.000Z');
 const later = instant('2026-09-08T00:00:00.000Z');
+const archivedAt = instant('2026-09-09T00:00:00.000Z');
+const deleteEligibleAt = archivedAt.plusCalendarYearInTokyo();
 
 const active = (
   id: string,
@@ -51,6 +53,12 @@ const snapshot = (
       : options.ownerParticipantId,
   participants,
   invitations: [],
+  accessPolicyVersion: 1,
+  closing: null,
+  ownerAtArchiveParticipantId:
+    options.status === 'Archived' ? (participants[0]?.id ?? null) : null,
+  archivedAt: options.status === 'Archived' ? archivedAt : null,
+  deleteEligibleAt: options.status === 'Archived' ? deleteEligibleAt : null,
 });
 
 const expectViolation = (
@@ -374,11 +382,24 @@ describe('Group.leave', () => {
 describe('Archived Group', () => {
   const archived = (): Group =>
     Group.restore(
-      snapshot([left('p-1', 's-1', 1)], {
+      snapshot([active('p-1', 's-1', 1)], {
         status: 'Archived',
         ownerParticipantId: null,
       }),
     );
+
+  it('Left Participantをowner-at-archiveとする復元を拒否する', () => {
+    expectViolation(
+      () =>
+        Group.restore(
+          snapshot([left('p-1', 's-1', 1)], {
+            status: 'Archived',
+            ownerParticipantId: null,
+          }),
+        ),
+      'ARCHIVE_STATE_INVALID',
+    );
+  });
 
   it('Owner譲渡をGroupNotActiveとして拒否する', () => {
     expectViolation(

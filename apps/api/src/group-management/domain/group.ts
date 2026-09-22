@@ -28,7 +28,15 @@ export type GroupInvariantViolationCode =
   | 'INVITATION_EXPIRY_INVALID'
   | 'INVITATION_RESULT_INVALID'
   | 'INVITATION_ISSUER_NOT_FOUND'
-  | 'INVITATION_ACTION_BEFORE_CREATED';
+  | 'INVITATION_ACTION_BEFORE_CREATED'
+  | 'ACCESS_POLICY_VERSION_INVALID'
+  | 'CLOSE_STATE_INVALID'
+  | 'CLOSE_INTENT_MISMATCH'
+  | 'CLOSE_RECEIPT_MISMATCH'
+  | 'CLOSE_RECEIPT_DUPLICATED'
+  | 'CLOSE_RECEIPT_MISSING'
+  | 'CLOSE_NOT_ELIGIBLE'
+  | 'ARCHIVE_STATE_INVALID';
 
 export class GroupInvariantViolation extends Error {
   constructor(
@@ -93,6 +101,20 @@ export class InvitationId {
   }
 }
 
+export class CloseIntentId {
+  private constructor(readonly value: string) {
+    Object.freeze(this);
+  }
+
+  static from(value: string): CloseIntentId {
+    return new CloseIntentId(requireNonEmpty(value));
+  }
+
+  equals(other: CloseIntentId): boolean {
+    return this.value === other.value;
+  }
+}
+
 export class ActorSubject {
   private constructor(readonly value: string) {
     Object.freeze(this);
@@ -150,11 +172,37 @@ export class UtcInstant {
       new Date(this.epochMilliseconds + days * 24 * 60 * 60 * 1_000),
     );
   }
+
+  plusCalendarYearInTokyo(): UtcInstant {
+    const tokyoOffsetMilliseconds = 9 * 60 * 60 * 1_000;
+    const local = new Date(this.epochMilliseconds + tokyoOffsetMilliseconds);
+    const targetYear = local.getUTCFullYear() + 1;
+    const month = local.getUTCMonth();
+    const lastDayOfTargetMonth = new Date(
+      Date.UTC(targetYear, month + 1, 0),
+    ).getUTCDate();
+    const day = Math.min(local.getUTCDate(), lastDayOfTargetMonth);
+    const targetLocalMilliseconds = Date.UTC(
+      targetYear,
+      month,
+      day,
+      local.getUTCHours(),
+      local.getUTCMinutes(),
+      local.getUTCSeconds(),
+      local.getUTCMilliseconds(),
+    );
+
+    return UtcInstant.from(
+      new Date(targetLocalMilliseconds - tokyoOffsetMilliseconds),
+    );
+  }
 }
 
-export type GroupStatus = 'Active' | 'Archived';
+export type GroupStatus = 'Active' | 'Closing' | 'Archived';
 export type ParticipantStatus = 'Active' | 'Left';
 export type InvitationStatus = 'Pending' | 'Consumed' | 'Cancelled' | 'Expired';
+export type GroupCloseContext = 'ExpenseRecording' | 'Settlement';
+export type GroupClosePhase = 'Fencing' | 'Canceling';
 
 export type ParticipantSnapshot = Readonly<{
   id: ParticipantId;
@@ -175,12 +223,47 @@ export type InvitationSnapshot = Readonly<{
   resultingParticipantId: ParticipantId | null;
 }>;
 
+type CloseReceiptBase = Readonly<{
+  groupId: GroupId;
+  closeIntentId: CloseIntentId;
+  context: GroupCloseContext;
+  cutoff: UtcInstant;
+  fenceVersion: number;
+  completedAt: UtcInstant;
+}>;
+
+export type CloseFenceReceipt = Readonly<
+  CloseReceiptBase & {
+    kind: 'CloseFenceInstalled';
+    eligible: boolean;
+  }
+>;
+
+export type CloseUnfenceReceipt = Readonly<
+  CloseReceiptBase & {
+    kind: 'CloseFenceRemoved';
+  }
+>;
+
+export type GroupClosingSnapshot = Readonly<{
+  closeIntentId: CloseIntentId;
+  cutoff: UtcInstant;
+  phase: GroupClosePhase;
+  fenceReceipts: readonly CloseFenceReceipt[];
+  unfenceReceipts: readonly CloseUnfenceReceipt[];
+}>;
+
 export type GroupSnapshot = Readonly<{
   id: GroupId;
   status: GroupStatus;
   ownerParticipantId: ParticipantId | null;
   participants: readonly ParticipantSnapshot[];
   invitations: readonly InvitationSnapshot[];
+  accessPolicyVersion: number;
+  closing: GroupClosingSnapshot | null;
+  ownerAtArchiveParticipantId: ParticipantId | null;
+  archivedAt: UtcInstant | null;
+  deleteEligibleAt: UtcInstant | null;
 }>;
 
 export type CreateGroupInput = Readonly<{
@@ -212,6 +295,30 @@ const freezeInvitation = (invitation: InvitationSnapshot): InvitationSnapshot =>
     status: invitation.status,
     resultingParticipantId: invitation.resultingParticipantId,
   });
+
+const freezeFenceReceipt = (receipt: CloseFenceReceipt): CloseFenceReceipt =>
+  Object.freeze({ ...receipt });
+
+const freezeUnfenceReceipt = (
+  receipt: CloseUnfenceReceipt,
+): CloseUnfenceReceipt => Object.freeze({ ...receipt });
+
+const freezeClosing = (
+  closing: GroupClosingSnapshot | null,
+): GroupClosingSnapshot | null =>
+  closing === null
+    ? null
+    : Object.freeze({
+        closeIntentId: closing.closeIntentId,
+        cutoff: closing.cutoff,
+        phase: closing.phase,
+        fenceReceipts: Object.freeze(
+          closing.fenceReceipts.map(freezeFenceReceipt),
+        ),
+        unfenceReceipts: Object.freeze(
+          closing.unfenceReceipts.map(freezeUnfenceReceipt),
+        ),
+      });
 
 export type TransferOwnershipInput = Readonly<{
   actorSubject: ActorSubject;
@@ -270,9 +377,31 @@ export type AcceptInvitationResult = Readonly<{
   participant: ParticipantSnapshot;
 }>;
 
+export type StartGroupClosingInput = Readonly<{
+  actorSubject: ActorSubject;
+  closeIntentId: CloseIntentId;
+  cutoff: UtcInstant;
+}>;
+
+export type ArchiveGroupInput = Readonly<{
+  actorSubject: ActorSubject;
+  closeIntentId: CloseIntentId;
+  archivedAt: UtcInstant;
+}>;
+
+export type ReserveClosingCancellationInput = Readonly<{
+  actorSubject: ActorSubject;
+  closeIntentId: CloseIntentId;
+}>;
+
+export type CompleteClosingCancellationInput = ReserveClosingCancellationInput;
+
+export type GroupTransitionResult = Readonly<{ group: Group }>;
+
 export class Group {
   private readonly participantStates: readonly ParticipantSnapshot[];
   private readonly invitationStates: readonly InvitationSnapshot[];
+  private readonly closingState: GroupClosingSnapshot | null;
 
   private constructor(
     readonly id: GroupId,
@@ -280,9 +409,15 @@ export class Group {
     readonly ownerParticipantId: ParticipantId | null,
     participants: readonly ParticipantSnapshot[],
     invitations: readonly InvitationSnapshot[],
+    readonly accessPolicyVersion: number,
+    closing: GroupClosingSnapshot | null,
+    readonly ownerAtArchiveParticipantId: ParticipantId | null,
+    readonly archivedAt: UtcInstant | null,
+    readonly deleteEligibleAt: UtcInstant | null,
   ) {
     this.participantStates = Object.freeze(participants.map(freezeParticipant));
     this.invitationStates = Object.freeze(invitations.map(freezeInvitation));
+    this.closingState = freezeClosing(closing);
   }
 
   static create(input: CreateGroupInput): Group {
@@ -301,6 +436,11 @@ export class Group {
         },
       ],
       invitations: [],
+      accessPolicyVersion: 1,
+      closing: null,
+      ownerAtArchiveParticipantId: null,
+      archivedAt: null,
+      deleteEligibleAt: null,
     });
   }
 
@@ -309,7 +449,17 @@ export class Group {
       ({ status }) => status === 'Active',
     );
 
-    if (snapshot.status === 'Active') {
+    if (
+      !Number.isSafeInteger(snapshot.accessPolicyVersion) ||
+      snapshot.accessPolicyVersion < 1
+    ) {
+      throw new GroupInvariantViolation(
+        'ACCESS_POLICY_VERSION_INVALID',
+        'Access policy version must be a positive safe integer',
+      );
+    }
+
+    if (snapshot.status === 'Active' || snapshot.status === 'Closing') {
       if (activeParticipants.length < 1 || activeParticipants.length > 4) {
         throw new GroupInvariantViolation(
           'ACTIVE_PARTICIPANT_COUNT_OUT_OF_RANGE',
@@ -351,6 +501,62 @@ export class Group {
       }
     }
 
+    if (snapshot.status === 'Active') {
+      if (
+        snapshot.closing !== null ||
+        snapshot.ownerAtArchiveParticipantId !== null ||
+        snapshot.archivedAt !== null ||
+        snapshot.deleteEligibleAt !== null
+      ) {
+        throw new GroupInvariantViolation(
+          'CLOSE_STATE_INVALID',
+          'An active Group must not retain close or archive state',
+        );
+      }
+    }
+
+    if (snapshot.status === 'Closing') {
+      if (
+        snapshot.closing === null ||
+        snapshot.ownerAtArchiveParticipantId !== null ||
+        snapshot.archivedAt !== null ||
+        snapshot.deleteEligibleAt !== null
+      ) {
+        throw new GroupInvariantViolation(
+          'CLOSE_STATE_INVALID',
+          'A closing Group must have only active close state',
+        );
+      }
+      Group.assertClosingInvariants(snapshot.id, snapshot.closing);
+    }
+
+    if (snapshot.status === 'Archived') {
+      const ownerAtArchiveParticipantId = snapshot.ownerAtArchiveParticipantId;
+      const archiveOwnerMatches =
+        ownerAtArchiveParticipantId === null
+          ? []
+          : snapshot.participants.filter(({ id }) =>
+              id.equals(ownerAtArchiveParticipantId),
+            );
+      if (
+        snapshot.ownerParticipantId !== null ||
+        snapshot.closing !== null ||
+        ownerAtArchiveParticipantId === null ||
+        archiveOwnerMatches.length !== 1 ||
+        archiveOwnerMatches[0]?.status !== 'Active' ||
+        snapshot.archivedAt === null ||
+        snapshot.deleteEligibleAt === null ||
+        !snapshot.deleteEligibleAt.equals(
+          snapshot.archivedAt.plusCalendarYearInTokyo(),
+        )
+      ) {
+        throw new GroupInvariantViolation(
+          'ARCHIVE_STATE_INVALID',
+          'An archived Group must preserve one archive owner and its fixed retention boundary',
+        );
+      }
+    }
+
     Group.assertParticipantInvariants(snapshot.participants);
     Group.assertInvitationInvariants(
       snapshot.invitations,
@@ -363,6 +569,11 @@ export class Group {
       snapshot.ownerParticipantId,
       snapshot.participants,
       snapshot.invitations,
+      snapshot.accessPolicyVersion,
+      snapshot.closing,
+      snapshot.ownerAtArchiveParticipantId,
+      snapshot.archivedAt,
+      snapshot.deleteEligibleAt,
     );
   }
 
@@ -377,6 +588,10 @@ export class Group {
 
   get invitations(): readonly InvitationSnapshot[] {
     return this.invitationStates;
+  }
+
+  get closing(): GroupClosingSnapshot | null {
+    return this.closingState;
   }
 
   transferOwnership(input: TransferOwnershipInput): TransferOwnershipResult {
@@ -423,6 +638,11 @@ export class Group {
         target.id,
         this.participantStates,
         this.invitationStates,
+        this.accessPolicyVersion,
+        this.closingState,
+        this.ownerAtArchiveParticipantId,
+        this.archivedAt,
+        this.deleteEligibleAt,
       ),
       result: 'Transferred',
     });
@@ -482,11 +702,8 @@ export class Group {
 
     return Object.freeze({
       group: Group.restore({
-        id: this.id,
-        status: this.status,
-        ownerParticipantId: this.ownerParticipantId,
+        ...this.toSnapshot(),
         participants,
-        invitations: this.invitationStates,
       }),
       result: 'Left',
     });
@@ -652,6 +869,175 @@ export class Group {
     return Object.freeze({ group, invitation: consumed, participant });
   }
 
+  startClosing(input: StartGroupClosingInput): GroupTransitionResult {
+    this.assertActive();
+    this.currentOwnerFor(input.actorSubject);
+
+    return Object.freeze({
+      group: Group.restore({
+        ...this.toSnapshot(),
+        status: 'Closing',
+        accessPolicyVersion: this.nextAccessPolicyVersion(),
+        closing: {
+          closeIntentId: input.closeIntentId,
+          cutoff: input.cutoff,
+          phase: 'Fencing',
+          fenceReceipts: [],
+          unfenceReceipts: [],
+        },
+      }),
+    });
+  }
+
+  recordCloseFenceReceipt(receipt: CloseFenceReceipt): GroupTransitionResult {
+    const closing = this.requireClosing('Fencing');
+    this.assertReceiptMatchesClosing(receipt, closing);
+    const existing = closing.fenceReceipts.find(
+      ({ context }) => context === receipt.context,
+    );
+    if (existing !== undefined) {
+      if (Group.sameFenceReceipt(existing, receipt)) {
+        return Object.freeze({ group: this });
+      }
+      throw new GroupInvariantViolation(
+        'CLOSE_RECEIPT_DUPLICATED',
+        'A Context may contribute only one fence Receipt to a close Intent',
+      );
+    }
+
+    return Object.freeze({
+      group: Group.restore({
+        ...this.toSnapshot(),
+        accessPolicyVersion: this.nextAccessPolicyVersion(),
+        closing: {
+          ...closing,
+          fenceReceipts: [...closing.fenceReceipts, receipt],
+        },
+      }),
+    });
+  }
+
+  archive(input: ArchiveGroupInput): GroupTransitionResult {
+    const closing = this.requireClosing('Fencing');
+    this.assertCloseIntent(input.closeIntentId, closing);
+    const owner = this.currentOwnerFor(input.actorSubject);
+    const receipts = new Map(
+      closing.fenceReceipts.map((receipt) => [receipt.context, receipt]),
+    );
+    const expense = receipts.get('ExpenseRecording');
+    const settlement = receipts.get('Settlement');
+    if (expense === undefined || settlement === undefined) {
+      throw new GroupInvariantViolation(
+        'CLOSE_RECEIPT_MISSING',
+        'Both Context fence Receipts are required to archive a Group',
+      );
+    }
+    if (!expense.eligible || !settlement.eligible) {
+      throw new GroupInvariantViolation(
+        'CLOSE_NOT_ELIGIBLE',
+        'A Group cannot be archived while a Context reports unfinished work',
+      );
+    }
+
+    return Object.freeze({
+      group: Group.restore({
+        ...this.toSnapshot(),
+        status: 'Archived',
+        ownerParticipantId: null,
+        accessPolicyVersion: this.nextAccessPolicyVersion(),
+        closing: null,
+        ownerAtArchiveParticipantId: owner.id,
+        archivedAt: input.archivedAt,
+        deleteEligibleAt: input.archivedAt.plusCalendarYearInTokyo(),
+      }),
+    });
+  }
+
+  reserveClosingCancellation(
+    input: ReserveClosingCancellationInput,
+  ): GroupTransitionResult {
+    const closing = this.requireClosing('Fencing');
+    this.assertCloseIntent(input.closeIntentId, closing);
+    this.currentOwnerFor(input.actorSubject);
+
+    return Object.freeze({
+      group: Group.restore({
+        ...this.toSnapshot(),
+        accessPolicyVersion: this.nextAccessPolicyVersion(),
+        closing: { ...closing, phase: 'Canceling' },
+      }),
+    });
+  }
+
+  recordCloseUnfenceReceipt(
+    receipt: CloseUnfenceReceipt,
+  ): GroupTransitionResult {
+    const closing = this.requireClosing('Canceling');
+    this.assertReceiptMatchesClosing(receipt, closing);
+    const fenceReceipt = closing.fenceReceipts.find(
+      ({ context }) => context === receipt.context,
+    );
+    if (
+      fenceReceipt === undefined ||
+      fenceReceipt.fenceVersion !== receipt.fenceVersion ||
+      receipt.completedAt.isBefore(fenceReceipt.completedAt)
+    ) {
+      throw new GroupInvariantViolation(
+        'CLOSE_RECEIPT_MISMATCH',
+        'An unfence Receipt must match the installed Context fence version',
+      );
+    }
+    const existing = closing.unfenceReceipts.find(
+      ({ context }) => context === receipt.context,
+    );
+    if (existing !== undefined) {
+      if (Group.sameUnfenceReceipt(existing, receipt)) {
+        return Object.freeze({ group: this });
+      }
+      throw new GroupInvariantViolation(
+        'CLOSE_RECEIPT_DUPLICATED',
+        'A Context may contribute only one unfence Receipt to a close Intent',
+      );
+    }
+
+    return Object.freeze({
+      group: Group.restore({
+        ...this.toSnapshot(),
+        accessPolicyVersion: this.nextAccessPolicyVersion(),
+        closing: {
+          ...closing,
+          unfenceReceipts: [...closing.unfenceReceipts, receipt],
+        },
+      }),
+    });
+  }
+
+  completeClosingCancellation(
+    input: CompleteClosingCancellationInput,
+  ): GroupTransitionResult {
+    const closing = this.requireClosing('Canceling');
+    this.assertCloseIntent(input.closeIntentId, closing);
+    this.currentOwnerFor(input.actorSubject);
+    const contexts = new Set(
+      closing.unfenceReceipts.map(({ context }) => context),
+    );
+    if (!contexts.has('ExpenseRecording') || !contexts.has('Settlement')) {
+      throw new GroupInvariantViolation(
+        'CLOSE_RECEIPT_MISSING',
+        'Both Context unfence Receipts are required to reactivate a Group',
+      );
+    }
+
+    return Object.freeze({
+      group: Group.restore({
+        ...this.toSnapshot(),
+        status: 'Active',
+        accessPolicyVersion: this.nextAccessPolicyVersion(),
+        closing: null,
+      }),
+    });
+  }
+
   toSnapshot(): GroupSnapshot {
     return Object.freeze({
       id: this.id,
@@ -659,6 +1045,11 @@ export class Group {
       ownerParticipantId: this.ownerParticipantId,
       participants: this.participantStates,
       invitations: this.invitationStates,
+      accessPolicyVersion: this.accessPolicyVersion,
+      closing: this.closingState,
+      ownerAtArchiveParticipantId: this.ownerAtArchiveParticipantId,
+      archivedAt: this.archivedAt,
+      deleteEligibleAt: this.deleteEligibleAt,
     });
   }
 
@@ -797,6 +1188,165 @@ export class Group {
         }
       }
     }
+  }
+
+  private static assertClosingInvariants(
+    groupId: GroupId,
+    closing: GroupClosingSnapshot,
+  ): void {
+    const seenFenceContexts = new Set<GroupCloseContext>();
+    for (const receipt of closing.fenceReceipts) {
+      Group.assertReceiptShape(receipt);
+      if (
+        !receipt.groupId.equals(groupId) ||
+        !receipt.closeIntentId.equals(closing.closeIntentId) ||
+        !receipt.cutoff.equals(closing.cutoff)
+      ) {
+        throw new GroupInvariantViolation(
+          'CLOSE_RECEIPT_MISMATCH',
+          'A fence Receipt must be bound to its Group and close Intent',
+        );
+      }
+      if (seenFenceContexts.has(receipt.context)) {
+        throw new GroupInvariantViolation(
+          'CLOSE_RECEIPT_DUPLICATED',
+          'A close Intent must not contain duplicate Context fence Receipts',
+        );
+      }
+      seenFenceContexts.add(receipt.context);
+    }
+
+    const seenUnfenceContexts = new Set<GroupCloseContext>();
+    for (const receipt of closing.unfenceReceipts) {
+      Group.assertReceiptShape(receipt);
+      const fenceReceipt = closing.fenceReceipts.find(
+        ({ context }) => context === receipt.context,
+      );
+      if (
+        !receipt.groupId.equals(groupId) ||
+        !receipt.closeIntentId.equals(closing.closeIntentId) ||
+        !receipt.cutoff.equals(closing.cutoff) ||
+        fenceReceipt === undefined ||
+        fenceReceipt.fenceVersion !== receipt.fenceVersion ||
+        receipt.completedAt.isBefore(fenceReceipt.completedAt)
+      ) {
+        throw new GroupInvariantViolation(
+          'CLOSE_RECEIPT_MISMATCH',
+          'An unfence Receipt must match its Group, close Intent, and Context fence version',
+        );
+      }
+      if (seenUnfenceContexts.has(receipt.context)) {
+        throw new GroupInvariantViolation(
+          'CLOSE_RECEIPT_DUPLICATED',
+          'A close Intent must not contain duplicate Context unfence Receipts',
+        );
+      }
+      seenUnfenceContexts.add(receipt.context);
+    }
+
+    if (closing.phase === 'Fencing' && closing.unfenceReceipts.length > 0) {
+      throw new GroupInvariantViolation(
+        'CLOSE_STATE_INVALID',
+        'Unfence Receipts are valid only after cancellation is reserved',
+      );
+    }
+  }
+
+  private static assertReceiptShape(receipt: CloseReceiptBase): void {
+    if (
+      !Number.isSafeInteger(receipt.fenceVersion) ||
+      receipt.fenceVersion < 1
+    ) {
+      throw new GroupInvariantViolation(
+        'CLOSE_RECEIPT_MISMATCH',
+        'A fence version must be a positive safe integer',
+      );
+    }
+  }
+
+  private static sameFenceReceipt(
+    left: CloseFenceReceipt,
+    right: CloseFenceReceipt,
+  ): boolean {
+    return (
+      Group.sameReceiptBase(left, right) && left.eligible === right.eligible
+    );
+  }
+
+  private static sameUnfenceReceipt(
+    left: CloseUnfenceReceipt,
+    right: CloseUnfenceReceipt,
+  ): boolean {
+    return Group.sameReceiptBase(left, right);
+  }
+
+  private static sameReceiptBase(
+    left: CloseReceiptBase,
+    right: CloseReceiptBase,
+  ): boolean {
+    return (
+      left.groupId.equals(right.groupId) &&
+      left.closeIntentId.equals(right.closeIntentId) &&
+      left.context === right.context &&
+      left.cutoff.equals(right.cutoff) &&
+      left.fenceVersion === right.fenceVersion &&
+      left.completedAt.equals(right.completedAt)
+    );
+  }
+
+  private requireClosing(phase: GroupClosePhase): GroupClosingSnapshot {
+    const closing = this.closingState;
+    if (
+      this.status !== 'Closing' ||
+      closing === null ||
+      closing.phase !== phase
+    ) {
+      throw new GroupInvariantViolation(
+        'CLOSE_STATE_INVALID',
+        `The Group must be Closing in ${phase} phase`,
+      );
+    }
+    return closing;
+  }
+
+  private assertCloseIntent(
+    closeIntentId: CloseIntentId,
+    closing: GroupClosingSnapshot,
+  ): void {
+    if (!closing.closeIntentId.equals(closeIntentId)) {
+      throw new GroupInvariantViolation(
+        'CLOSE_INTENT_MISMATCH',
+        'The close Intent does not match the Group closing state',
+      );
+    }
+  }
+
+  private assertReceiptMatchesClosing(
+    receipt: CloseReceiptBase,
+    closing: GroupClosingSnapshot,
+  ): void {
+    Group.assertReceiptShape(receipt);
+    if (
+      !receipt.groupId.equals(this.id) ||
+      !receipt.closeIntentId.equals(closing.closeIntentId) ||
+      !receipt.cutoff.equals(closing.cutoff)
+    ) {
+      throw new GroupInvariantViolation(
+        'CLOSE_RECEIPT_MISMATCH',
+        'The Receipt does not match the Group close Intent',
+      );
+    }
+  }
+
+  private nextAccessPolicyVersion(): number {
+    const next = this.accessPolicyVersion + 1;
+    if (!Number.isSafeInteger(next)) {
+      throw new GroupInvariantViolation(
+        'ACCESS_POLICY_VERSION_INVALID',
+        'Access policy version must remain a safe integer',
+      );
+    }
+    return next;
   }
 
   private currentOwnerFor(actorSubject: ActorSubject): ParticipantSnapshot {
