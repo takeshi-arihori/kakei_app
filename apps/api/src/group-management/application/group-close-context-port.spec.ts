@@ -172,7 +172,7 @@ class InMemoryCloseFenceContextFake implements GroupCloseContextPort {
   }
 }
 
-const groupId = GroupId.from('group-a');
+const groupId = GroupId.from('00000000-0000-4000-8000-000000000001');
 const closeIntentId = CloseIntentId.from('close-intent-a');
 const cutoff = instant('2026-09-21T00:00:00.000Z');
 const now = (): UtcInstant => instant('2026-09-21T00:01:00.000Z');
@@ -317,11 +317,13 @@ describe.each(['ExpenseRecording', 'Settlement'] as const)(
       await expect(
         fake.installFence({
           ...request,
-          groupId: GroupId.from('another-group'),
+          groupId: GroupId.from('00000000-0000-4000-8000-00000000000a'),
         }),
       ).rejects.toBeInstanceOf(FenceBindingError);
       expect(fake.fenceVersion(groupId)).toBe(1);
-      expect(fake.fenceVersion(GroupId.from('another-group'))).toBe(0);
+      expect(
+        fake.fenceVersion(GroupId.from('00000000-0000-4000-8000-00000000000a')),
+      ).toBe(0);
       await expect(
         fake.write(
           groupId,

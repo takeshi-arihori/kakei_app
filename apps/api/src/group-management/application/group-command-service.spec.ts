@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -36,6 +38,18 @@ import {
 const instant = (value: string): UtcInstant => UtcInstant.from(new Date(value));
 const createdAt = instant('2026-09-07T00:00:00.000Z');
 
+describe('Group ID generator', () => {
+  it('信頼済み生成口はcanonical lowercase UUIDv4を発行する', () => {
+    const nextGroupId: GroupCommandDependencies['nextGroupId'] = () =>
+      GroupId.from(randomUUID());
+    const id = nextGroupId();
+    expect(id.value).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(GroupId.from(id.value)).toEqual(id);
+  });
+});
+
 const activeParticipant = (
   id: string,
   subject: string,
@@ -51,7 +65,7 @@ const activeParticipant = (
 
 const existingGroup = (): Group =>
   Group.restore({
-    id: GroupId.from('group-a'),
+    id: GroupId.from('00000000-0000-4000-8000-000000000001'),
     status: 'Active',
     ownerParticipantId: ParticipantId.from('p-owner'),
     participants: [
@@ -239,7 +253,9 @@ class InMemoryGroupRepository implements GroupRepository {
 }
 
 const dependencies = (): GroupCommandDependencies => ({
-  nextGroupId: vi.fn(() => GroupId.from('generated-group')),
+  nextGroupId: vi.fn(() =>
+    GroupId.from('00000000-0000-4000-8000-000000000008'),
+  ),
   nextParticipantId: vi.fn(() => ParticipantId.from('generated-participant')),
   nextInvitationId: vi.fn(() => InvitationId.from('generated-invitation')),
   nextCloseIntentId: vi.fn(() => CloseIntentId.from('generated-close-intent')),
@@ -273,6 +289,27 @@ const expectDomainError = async (
 };
 
 describe('GroupCommandService.createGroup', () => {
+  it('非canonicalな生成Group IDはRepositoryへ保存する前に拒否する', async () => {
+    const repository = new InMemoryGroupRepository();
+    const commit = vi.spyOn(repository, 'commit');
+    const injected: GroupCommandDependencies = {
+      ...dependencies(),
+      nextGroupId: () => GroupId.from('group-a'),
+    };
+    const service = new GroupCommandService(repository, injected);
+
+    await expectDomainError(
+      () =>
+        service.createGroup({
+          actorSubject: ActorSubject.from('creator-subject'),
+          operationId: OperationId.from('operation-1'),
+        }),
+      'GROUP_ID_INVALID',
+    );
+    expect(commit).not.toHaveBeenCalled();
+    expect(repository.groupCount()).toBe(0);
+  });
+
   it('作成者のGroup状態・参加履歴・operation結果を同時に保存する', async () => {
     const repository = new InMemoryGroupRepository();
     const service = new GroupCommandService(repository, dependencies());
@@ -284,7 +321,7 @@ describe('GroupCommandService.createGroup', () => {
 
     expect(result).toEqual({
       kind: 'GroupCreated',
-      groupId: GroupId.from('generated-group'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000008'),
       participantId: ParticipantId.from('generated-participant'),
       version: 1,
     });
@@ -364,7 +401,7 @@ describe('GroupCommandService.createGroup', () => {
     const repository = new InMemoryGroupRepository();
     repository.seed(
       Group.create({
-        id: GroupId.from('generated-group'),
+        id: GroupId.from('00000000-0000-4000-8000-000000000008'),
         initialParticipantId: ParticipantId.from('existing-participant'),
         creatorSubject: ActorSubject.from('existing-subject'),
         createdAt,
@@ -410,8 +447,12 @@ describe('GroupCommandService.createGroup', () => {
     const injected: GroupCommandDependencies = {
       nextGroupId: vi
         .fn<() => GroupId>()
-        .mockReturnValueOnce(GroupId.from('group-one'))
-        .mockReturnValueOnce(GroupId.from('group-two')),
+        .mockReturnValueOnce(
+          GroupId.from('00000000-0000-4000-8000-000000000003'),
+        )
+        .mockReturnValueOnce(
+          GroupId.from('00000000-0000-4000-8000-000000000004'),
+        ),
       nextParticipantId: vi
         .fn<() => ParticipantId>()
         .mockReturnValueOnce(ParticipantId.from('participant-one'))
@@ -434,8 +475,12 @@ describe('GroupCommandService.createGroup', () => {
       operationId: OperationId.from('b:c'),
     });
 
-    expect(first.groupId).toEqual(GroupId.from('group-one'));
-    expect(second.groupId).toEqual(GroupId.from('group-two'));
+    expect(first.groupId).toEqual(
+      GroupId.from('00000000-0000-4000-8000-000000000003'),
+    );
+    expect(second.groupId).toEqual(
+      GroupId.from('00000000-0000-4000-8000-000000000004'),
+    );
     expect(repository.groupCount()).toBe(2);
     expect(repository.operationCount()).toBe(2);
   });
@@ -445,7 +490,7 @@ describe('GroupCommandServiceのInvitation Command', () => {
   const invitationCommand = {
     actorSubject: ActorSubject.from('owner-subject'),
     operationId: OperationId.from('invite-1'),
-    groupId: GroupId.from('group-a'),
+    groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
     targetSubject: ActorSubject.from('invited-subject'),
     expectedVersion: 1,
   };
@@ -480,7 +525,7 @@ describe('GroupCommandServiceのInvitation Command', () => {
 
     expect(result).toEqual({
       kind: 'InvitationCreated',
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       invitationId: InvitationId.from('generated-invitation'),
       version: 2,
     });
@@ -532,14 +577,14 @@ describe('GroupCommandServiceのInvitation Command', () => {
     const result = await service.cancelInvitation({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('cancel-1'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       invitationId: InvitationId.from('invitation-a'),
       expectedVersion: 1,
     });
 
     expect(result).toEqual({
       kind: 'InvitationCancelled',
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       invitationId: InvitationId.from('invitation-a'),
       version: 2,
     });
@@ -559,14 +604,14 @@ describe('GroupCommandServiceのInvitation Command', () => {
     const result = await service.acceptInvitation({
       actorSubject: ActorSubject.from('invited-subject'),
       operationId: OperationId.from('accept-1'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       invitationId: InvitationId.from('invitation-a'),
       expectedVersion: 1,
     });
 
     expect(result).toEqual({
       kind: 'InvitationAccepted',
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       invitationId: InvitationId.from('invitation-a'),
       participantId: ParticipantId.from('generated-participant'),
       version: 2,
@@ -586,7 +631,9 @@ describe('GroupCommandServiceのInvitation Command', () => {
         at: createdAt,
       },
     ]);
-    const saved = await repository.load(GroupId.from('group-a'));
+    const saved = await repository.load(
+      GroupId.from('00000000-0000-4000-8000-000000000001'),
+    );
     expect(saved?.group.activeParticipantCount).toBe(4);
     expect(saved?.group.invitations[0]?.status).toBe('Consumed');
     expect(repository.operationCount()).toBe(1);
@@ -599,7 +646,7 @@ describe('GroupCommandServiceのInvitation Command', () => {
     const command = {
       actorSubject: ActorSubject.from('invited-subject'),
       operationId: OperationId.from('accept-1'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       invitationId: InvitationId.from('invitation-a'),
       expectedVersion: 1,
     };
@@ -623,16 +670,20 @@ describe('GroupCommandServiceのInvitation Command', () => {
         service.acceptInvitation({
           actorSubject: ActorSubject.from('invited-subject'),
           operationId: OperationId.from('accept-1'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           invitationId: InvitationId.from('invitation-a'),
           expectedVersion: 1,
         }),
       'UNAVAILABLE',
     );
 
-    expect((await repository.load(GroupId.from('group-a')))?.group).toEqual(
-      pending,
-    );
+    expect(
+      (
+        await repository.load(
+          GroupId.from('00000000-0000-4000-8000-000000000001'),
+        )
+      )?.group,
+    ).toEqual(pending);
     expect(repository.changes()).toEqual([]);
     expect(repository.invitationHistory()).toEqual([]);
     expect(repository.operationCount()).toBe(0);
@@ -650,7 +701,7 @@ describe('GroupCommandServiceのInvitation Command', () => {
     const delayed = service.acceptInvitation({
       actorSubject: ActorSubject.from('first-subject'),
       operationId: OperationId.from('accept-first'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       invitationId: InvitationId.from('invitation-a'),
       expectedVersion: 1,
     });
@@ -660,7 +711,7 @@ describe('GroupCommandServiceのInvitation Command', () => {
       service.acceptInvitation({
         actorSubject: ActorSubject.from('second-subject'),
         operationId: OperationId.from('accept-second'),
-        groupId: GroupId.from('group-a'),
+        groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
         invitationId: InvitationId.from('invitation-b'),
         expectedVersion: 1,
       }),
@@ -668,7 +719,9 @@ describe('GroupCommandServiceのInvitation Command', () => {
     barrier.release();
     await expectApplicationError(() => delayed, 'CONFLICT');
 
-    const saved = await repository.load(GroupId.from('group-a'));
+    const saved = await repository.load(
+      GroupId.from('00000000-0000-4000-8000-000000000001'),
+    );
     expect(saved?.group.activeParticipantCount).toBe(4);
     expect(repository.changes()).toHaveLength(1);
     expect(repository.invitationHistory()).toHaveLength(1);
@@ -682,7 +735,7 @@ describe('GroupCommandServiceのInvitation Command', () => {
     await service.acceptInvitation({
       actorSubject: ActorSubject.from('invited-subject'),
       operationId,
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       invitationId: InvitationId.from('invitation-a'),
       expectedVersion: 1,
     });
@@ -704,7 +757,7 @@ describe('GroupCommandServiceのInvitation Command', () => {
         service.cancelInvitation({
           actorSubject: ActorSubject.from('member-subject'),
           operationId: OperationId.from('cancel-1'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           invitationId: InvitationId.from('invitation-a'),
           expectedVersion: 1,
         }),
@@ -715,16 +768,20 @@ describe('GroupCommandServiceのInvitation Command', () => {
         service.acceptInvitation({
           actorSubject: ActorSubject.from('different-subject'),
           operationId: OperationId.from('accept-1'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           invitationId: InvitationId.from('invitation-a'),
           expectedVersion: 1,
         }),
       'INVITATION_TARGET_MISMATCH',
     );
 
-    expect((await repository.load(GroupId.from('group-a')))?.group).toEqual(
-      pending,
-    );
+    expect(
+      (
+        await repository.load(
+          GroupId.from('00000000-0000-4000-8000-000000000001'),
+        )
+      )?.group,
+    ).toEqual(pending);
     expect(repository.changes()).toEqual([]);
     expect(repository.invitationHistory()).toEqual([]);
     expect(repository.operationCount()).toBe(0);
@@ -755,7 +812,7 @@ describe('GroupCommandServiceのInvitation Command', () => {
       leftAt: createdAt,
     };
     const rejoinable = Group.restore({
-      id: GroupId.from('group-a'),
+      id: GroupId.from('00000000-0000-4000-8000-000000000001'),
       status: 'Active',
       ownerParticipantId: ParticipantId.from('p-owner'),
       participants: [
@@ -780,12 +837,14 @@ describe('GroupCommandServiceのInvitation Command', () => {
     const result = await service.acceptInvitation({
       actorSubject: ActorSubject.from('returning-subject'),
       operationId: OperationId.from('accept-return'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       invitationId: InvitationId.from('invitation-return'),
       expectedVersion: 1,
     });
 
-    const saved = await repository.load(GroupId.from('group-a'));
+    const saved = await repository.load(
+      GroupId.from('00000000-0000-4000-8000-000000000001'),
+    );
     expect(result.participantId).not.toEqual(previousParticipant.id);
     expect(saved?.group.participants).toContainEqual(previousParticipant);
     expect(
@@ -818,20 +877,23 @@ describe('GroupCommandServiceの更新Command', () => {
     const result = await service.transferGroupOwnership({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('transfer-1'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       targetParticipantId: ParticipantId.from('p-member'),
       expectedVersion: 1,
     });
 
     expect(result).toEqual({
       kind: 'OwnershipTransferred',
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       ownerParticipantId: ParticipantId.from('p-member'),
       version: 2,
     });
     expect(
-      (await repository.load(GroupId.from('group-a')))?.group
-        .ownerParticipantId,
+      (
+        await repository.load(
+          GroupId.from('00000000-0000-4000-8000-000000000001'),
+        )
+      )?.group.ownerParticipantId,
     ).toEqual(ParticipantId.from('p-member'));
     expect(repository.operationCount()).toBe(1);
   });
@@ -841,7 +903,7 @@ describe('GroupCommandServiceの更新Command', () => {
     const command = {
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('transfer-no-op'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       targetParticipantId: ParticipantId.from('p-owner'),
       expectedVersion: 1,
     };
@@ -851,7 +913,7 @@ describe('GroupCommandServiceの更新Command', () => {
 
     expect(first).toEqual({
       kind: 'OwnershipTransferNoOp',
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       ownerParticipantId: ParticipantId.from('p-owner'),
       version: 1,
     });
@@ -865,7 +927,7 @@ describe('GroupCommandServiceの更新Command', () => {
     const command = {
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('transfer-1'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       targetParticipantId: ParticipantId.from('p-member'),
       expectedVersion: 1,
     };
@@ -884,14 +946,14 @@ describe('GroupCommandServiceの更新Command', () => {
     const result = await service.leaveGroup({
       actorSubject: ActorSubject.from('member-subject'),
       operationId: OperationId.from('leave-1'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       participantId: ParticipantId.from('p-member'),
       expectedVersion: 1,
     });
 
     expect(result).toEqual({
       kind: 'ParticipantLeft',
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       participantId: ParticipantId.from('p-member'),
       version: 2,
     });
@@ -913,7 +975,7 @@ describe('GroupCommandServiceの更新Command', () => {
         service.transferGroupOwnership({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('transfer-1'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           targetParticipantId: ParticipantId.from('p-member'),
           expectedVersion: 1,
         });
@@ -921,7 +983,7 @@ describe('GroupCommandServiceの更新Command', () => {
         service.leaveGroup({
           actorSubject: ActorSubject.from('member-subject'),
           operationId: OperationId.from('leave-1'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           participantId: ParticipantId.from('p-member'),
           expectedVersion: 1,
         });
@@ -942,7 +1004,13 @@ describe('GroupCommandServiceの更新Command', () => {
       barrier.release();
       await expectApplicationError(() => loser, 'CONFLICT');
 
-      expect((await repository.load(GroupId.from('group-a')))?.version).toBe(2);
+      expect(
+        (
+          await repository.load(
+            GroupId.from('00000000-0000-4000-8000-000000000001'),
+          )
+        )?.version,
+      ).toBe(2);
       expect(repository.operationCount()).toBe(1);
 
       if (winner === 'transfer-first') {
@@ -951,7 +1019,7 @@ describe('GroupCommandServiceの更新Command', () => {
             service.leaveGroup({
               actorSubject: ActorSubject.from('member-subject'),
               operationId: OperationId.from('leave-2'),
-              groupId: GroupId.from('group-a'),
+              groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
               participantId: ParticipantId.from('p-member'),
               expectedVersion: 2,
             }),
@@ -963,7 +1031,7 @@ describe('GroupCommandServiceの更新Command', () => {
             service.transferGroupOwnership({
               actorSubject: ActorSubject.from('owner-subject'),
               operationId: OperationId.from('transfer-2'),
-              groupId: GroupId.from('group-a'),
+              groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
               targetParticipantId: ParticipantId.from('p-member'),
               expectedVersion: 2,
             }),
@@ -979,25 +1047,31 @@ describe('GroupCommandServiceの更新Command', () => {
     await service.transferGroupOwnership({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('transfer-1'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       targetParticipantId: ParticipantId.from('p-member'),
       expectedVersion: 1,
     });
-    const before = await repository.load(GroupId.from('group-a'));
+    const before = await repository.load(
+      GroupId.from('00000000-0000-4000-8000-000000000001'),
+    );
 
     await expectDomainError(
       () =>
         service.transferGroupOwnership({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('transfer-2'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           targetParticipantId: ParticipantId.from('p-third'),
           expectedVersion: 2,
         }),
       'NOT_CURRENT_OWNER',
     );
 
-    expect(await repository.load(GroupId.from('group-a'))).toEqual(before);
+    expect(
+      await repository.load(
+        GroupId.from('00000000-0000-4000-8000-000000000001'),
+      ),
+    ).toEqual(before);
     expect(repository.operationCount()).toBe(1);
   });
 
@@ -1010,7 +1084,7 @@ describe('GroupCommandServiceの更新Command', () => {
         service.transferGroupOwnership({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('transfer-1'),
-          groupId: GroupId.from('missing-group'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000006'),
           targetParticipantId: ParticipantId.from('p-member'),
           expectedVersion: 1,
         }),
@@ -1030,7 +1104,7 @@ describe('GroupCommandServiceの更新Command', () => {
           service.transferGroupOwnership({
             actorSubject: ActorSubject.from('owner-subject'),
             operationId: OperationId.from('transfer-1'),
-            groupId: GroupId.from('group-a'),
+            groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
             targetParticipantId: ParticipantId.from('p-member'),
             expectedVersion,
           }),
@@ -1038,7 +1112,13 @@ describe('GroupCommandServiceの更新Command', () => {
       );
 
       expect(repository.operationCount()).toBe(0);
-      expect((await repository.load(GroupId.from('group-a')))?.version).toBe(1);
+      expect(
+        (
+          await repository.load(
+            GroupId.from('00000000-0000-4000-8000-000000000001'),
+          )
+        )?.version,
+      ).toBe(1);
     },
   );
 
@@ -1048,7 +1128,7 @@ describe('GroupCommandServiceの更新Command', () => {
     await service.transferGroupOwnership({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId,
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       targetParticipantId: ParticipantId.from('p-member'),
       expectedVersion: 1,
     });
@@ -1058,7 +1138,7 @@ describe('GroupCommandServiceの更新Command', () => {
         service.transferGroupOwnership({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId,
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           targetParticipantId: ParticipantId.from('p-third'),
           expectedVersion: 1,
         }),
@@ -1069,20 +1149,26 @@ describe('GroupCommandServiceの更新Command', () => {
 
   it('他GroupのParticipant ID差替えを拒否して保存しない', async () => {
     const { repository, service } = setup();
-    const before = await repository.load(GroupId.from('group-a'));
+    const before = await repository.load(
+      GroupId.from('00000000-0000-4000-8000-000000000001'),
+    );
 
     await expectDomainError(
       () =>
         service.transferGroupOwnership({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('transfer-1'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           targetParticipantId: ParticipantId.from('another-group-member'),
           expectedVersion: 1,
         }),
       'TARGET_PARTICIPANT_NOT_ACTIVE',
     );
-    expect(await repository.load(GroupId.from('group-a'))).toEqual(before);
+    expect(
+      await repository.load(
+        GroupId.from('00000000-0000-4000-8000-000000000001'),
+      ),
+    ).toEqual(before);
     expect(repository.operationCount()).toBe(0);
   });
 
@@ -1094,7 +1180,7 @@ describe('GroupCommandServiceの更新Command', () => {
         service.leaveGroup({
           actorSubject: ActorSubject.from('another-subject'),
           operationId: OperationId.from('leave-1'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           participantId: ParticipantId.from('p-member'),
           expectedVersion: 1,
         }),
@@ -1109,7 +1195,7 @@ describe('GroupCommandServiceの更新Command', () => {
     await service.leaveGroup({
       actorSubject: ActorSubject.from('member-subject'),
       operationId: OperationId.from('leave-1'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       participantId: ParticipantId.from('p-member'),
       expectedVersion: 1,
     });
@@ -1119,7 +1205,7 @@ describe('GroupCommandServiceの更新Command', () => {
         service.leaveGroup({
           actorSubject: ActorSubject.from('member-subject'),
           operationId: OperationId.from('leave-2'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           participantId: ParticipantId.from('p-member'),
           expectedVersion: 2,
         }),
@@ -1136,7 +1222,7 @@ const closeFenceReceipt = (
   eligible = true,
 ): CloseFenceReceipt => ({
   kind: 'CloseFenceInstalled',
-  groupId: GroupId.from('group-a'),
+  groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
   closeIntentId,
   context,
   cutoff: createdAt,
@@ -1150,7 +1236,7 @@ const closeUnfenceReceipt = (
   context: CloseUnfenceReceipt['context'],
 ): CloseUnfenceReceipt => ({
   kind: 'CloseFenceRemoved',
-  groupId: GroupId.from('group-a'),
+  groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
   closeIntentId,
   context,
   cutoff: createdAt,
@@ -1174,7 +1260,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
     service.startGroupClosing({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('close-start'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       expectedVersion: 1,
     });
 
@@ -1187,7 +1273,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
     expect(replay).toEqual(first);
     expect(first).toEqual({
       kind: 'GroupClosingStarted',
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       closeIntentId: CloseIntentId.from('generated-close-intent'),
       version: 2,
     });
@@ -1212,7 +1298,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
     await start(service);
     repository.seed(
       Group.create({
-        id: GroupId.from('group-b'),
+        id: GroupId.from('00000000-0000-4000-8000-000000000002'),
         initialParticipantId: ParticipantId.from('owner-b'),
         creatorSubject: ActorSubject.from('owner-b-subject'),
         createdAt,
@@ -1225,14 +1311,18 @@ describe('GroupCommandServiceのGroup close Command', () => {
         service.startGroupClosing({
           actorSubject: ActorSubject.from('owner-b-subject'),
           operationId: OperationId.from('close-start-b'),
-          groupId: GroupId.from('group-b'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000002'),
           expectedVersion: 1,
         }),
       'CLOSE_INTENT_ALREADY_EXISTS',
     );
-    expect((await repository.load(GroupId.from('group-b')))?.group.status).toBe(
-      'Active',
-    );
+    expect(
+      (
+        await repository.load(
+          GroupId.from('00000000-0000-4000-8000-000000000002'),
+        )
+      )?.group.status,
+    ).toBe('Active');
     expect(repository.groupCloseHistory()).toHaveLength(1);
   });
 
@@ -1248,14 +1338,14 @@ describe('GroupCommandServiceのGroup close Command', () => {
     await service.recordGroupCloseFenceReceipt({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('expense-receipt'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       expectedVersion: 2,
       receipt: expense,
     });
     await service.recordGroupCloseFenceReceipt({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('settlement-receipt'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       expectedVersion: 3,
       receipt: settlement,
     });
@@ -1264,7 +1354,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
         service.archiveGroup({
           actorSubject: ActorSubject.from('member-subject'),
           operationId: OperationId.from('archive-non-owner'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           closeIntentId: started.closeIntentId,
           expectedVersion: 4,
         }),
@@ -1273,13 +1363,17 @@ describe('GroupCommandServiceのGroup close Command', () => {
     const archived = await service.archiveGroup({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('archive'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       closeIntentId: started.closeIntentId,
       expectedVersion: 4,
     });
 
     expect(archived.version).toBe(5);
-    const saved = (await repository.load(GroupId.from('group-a')))?.group;
+    const saved = (
+      await repository.load(
+        GroupId.from('00000000-0000-4000-8000-000000000001'),
+      )
+    )?.group;
     expect(saved?.status).toBe('Archived');
     expect(saved?.ownerAtArchiveParticipantId).toEqual(
       ParticipantId.from('p-owner'),
@@ -1303,7 +1397,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
         service.archiveGroup({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('archive-twice'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           closeIntentId: started.closeIntentId,
           expectedVersion: 5,
         }),
@@ -1314,7 +1408,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
         service.reserveGroupClosingCancellation({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('cancel-after-archive'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           closeIntentId: started.closeIntentId,
           expectedVersion: 5,
         }),
@@ -1330,7 +1424,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
     await service.recordGroupCloseFenceReceipt({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('expense-ineligible'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       expectedVersion: 2,
       receipt: closeFenceReceipt(
         started.closeIntentId,
@@ -1341,24 +1435,30 @@ describe('GroupCommandServiceのGroup close Command', () => {
     await service.recordGroupCloseFenceReceipt({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('settlement-eligible'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       expectedVersion: 3,
       receipt: closeFenceReceipt(started.closeIntentId, 'Settlement'),
     });
-    const before = await repository.load(GroupId.from('group-a'));
+    const before = await repository.load(
+      GroupId.from('00000000-0000-4000-8000-000000000001'),
+    );
 
     await expectDomainError(
       () =>
         service.archiveGroup({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('archive-ineligible'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           closeIntentId: started.closeIntentId,
           expectedVersion: 4,
         }),
       'CLOSE_NOT_ELIGIBLE',
     );
-    expect(await repository.load(GroupId.from('group-a'))).toEqual(before);
+    expect(
+      await repository.load(
+        GroupId.from('00000000-0000-4000-8000-000000000001'),
+      ),
+    ).toEqual(before);
     expect(repository.groupCloseHistory()).toHaveLength(3);
     expect(repository.operationCount()).toBe(3);
   });
@@ -1366,14 +1466,18 @@ describe('GroupCommandServiceのGroup close Command', () => {
   it('証拠欠落・終了不可・古いversion・非Ownerを状態と履歴を変えず拒否する', async () => {
     const { repository, service } = setup();
     const started = await start(service);
-    const before = (await repository.load(GroupId.from('group-a')))?.group;
+    const before = (
+      await repository.load(
+        GroupId.from('00000000-0000-4000-8000-000000000001'),
+      )
+    )?.group;
 
     await expectDomainError(
       () =>
         service.archiveGroup({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('archive-missing'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           closeIntentId: started.closeIntentId,
           expectedVersion: 2,
         }),
@@ -1384,7 +1488,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
         service.reserveGroupClosingCancellation({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('cancel-stale'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           closeIntentId: started.closeIntentId,
           expectedVersion: 1,
         }),
@@ -1395,16 +1499,20 @@ describe('GroupCommandServiceのGroup close Command', () => {
         service.reserveGroupClosingCancellation({
           actorSubject: ActorSubject.from('member-subject'),
           operationId: OperationId.from('cancel-non-owner'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           closeIntentId: started.closeIntentId,
           expectedVersion: 2,
         }),
       'NOT_CURRENT_OWNER',
     );
 
-    expect((await repository.load(GroupId.from('group-a')))?.group).toEqual(
-      before,
-    );
+    expect(
+      (
+        await repository.load(
+          GroupId.from('00000000-0000-4000-8000-000000000001'),
+        )
+      )?.group,
+    ).toEqual(before);
     expect(repository.groupCloseHistory()).toHaveLength(1);
     expect(repository.operationCount()).toBe(1);
   });
@@ -1415,21 +1523,21 @@ describe('GroupCommandServiceのGroup close Command', () => {
     await service.recordGroupCloseFenceReceipt({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('expense-fence-before-cancel'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       expectedVersion: 2,
       receipt: closeFenceReceipt(started.closeIntentId, 'ExpenseRecording'),
     });
     await service.recordGroupCloseFenceReceipt({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('settlement-fence-before-cancel'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       expectedVersion: 3,
       receipt: closeFenceReceipt(started.closeIntentId, 'Settlement'),
     });
     await service.reserveGroupClosingCancellation({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('cancel-reserve'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       closeIntentId: started.closeIntentId,
       expectedVersion: 4,
     });
@@ -1439,7 +1547,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
         service.archiveGroup({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('archive-lost-race'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           closeIntentId: started.closeIntentId,
           expectedVersion: 4,
         }),
@@ -1449,7 +1557,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
     await service.recordGroupCloseUnfenceReceipt({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('expense-unfence'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       expectedVersion: 5,
       receipt: closeUnfenceReceipt(started.closeIntentId, 'ExpenseRecording'),
     });
@@ -1458,20 +1566,24 @@ describe('GroupCommandServiceのGroup close Command', () => {
         service.completeGroupClosingCancellation({
           actorSubject: ActorSubject.from('owner-subject'),
           operationId: OperationId.from('cancel-incomplete'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           closeIntentId: started.closeIntentId,
           expectedVersion: 6,
         }),
       'CLOSE_RECEIPT_MISSING',
     );
-    expect((await repository.load(GroupId.from('group-a')))?.group.status).toBe(
-      'Closing',
-    );
+    expect(
+      (
+        await repository.load(
+          GroupId.from('00000000-0000-4000-8000-000000000001'),
+        )
+      )?.group.status,
+    ).toBe('Closing');
 
     await service.recordGroupCloseUnfenceReceipt({
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('settlement-unfence'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       expectedVersion: 6,
       receipt: closeUnfenceReceipt(started.closeIntentId, 'Settlement'),
     });
@@ -1480,7 +1592,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
         service.completeGroupClosingCancellation({
           actorSubject: ActorSubject.from('member-subject'),
           operationId: OperationId.from('cancel-complete-non-owner'),
-          groupId: GroupId.from('group-a'),
+          groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
           closeIntentId: started.closeIntentId,
           expectedVersion: 7,
         }),
@@ -1490,7 +1602,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
     const command = {
       actorSubject: ActorSubject.from('owner-subject'),
       operationId: OperationId.from('cancel-complete'),
-      groupId: GroupId.from('group-a'),
+      groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
       closeIntentId: started.closeIntentId,
       expectedVersion: 7,
     };
@@ -1499,9 +1611,13 @@ describe('GroupCommandServiceのGroup close Command', () => {
 
     expect(replay).toEqual(recovered);
     expect(recovered.version).toBe(8);
-    expect((await repository.load(GroupId.from('group-a')))?.group.status).toBe(
-      'Active',
-    );
+    expect(
+      (
+        await repository.load(
+          GroupId.from('00000000-0000-4000-8000-000000000001'),
+        )
+      )?.group.status,
+    ).toBe('Active');
     expect(repository.groupCloseHistory().map(({ kind }) => kind)).toEqual([
       'ClosingStarted',
       'CloseFenceReceiptRecorded',

@@ -1,5 +1,6 @@
 export type GroupInvariantViolationCode =
   | 'IDENTIFIER_EMPTY'
+  | 'GROUP_ID_INVALID'
   | 'UTC_INSTANT_INVALID'
   | 'OWNER_MISSING'
   | 'OWNER_DUPLICATED'
@@ -65,7 +66,17 @@ export class GroupId {
   }
 
   static from(value: string): GroupId {
-    return new GroupId(requireNonEmpty(value));
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+        value,
+      )
+    ) {
+      throw new GroupInvariantViolation(
+        'GROUP_ID_INVALID',
+        'Group ID must be a lowercase canonical UUID',
+      );
+    }
+    return new GroupId(value);
   }
 
   equals(other: GroupId): boolean {

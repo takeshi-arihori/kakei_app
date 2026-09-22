@@ -30,7 +30,7 @@ const groupSnapshot = (
   participants: readonly ParticipantSnapshot[],
   ownerParticipantId: ParticipantId | null = participants[0]?.id ?? null,
 ): GroupSnapshot => ({
-  id: GroupId.from('group-a'),
+  id: GroupId.from('00000000-0000-4000-8000-000000000001'),
   status: 'Active',
   ownerParticipantId,
   participants,
@@ -58,13 +58,13 @@ const expectViolation = (
 describe('Group', () => {
   it('作成者1人を参加順1の唯一のOwnerとしてGroupを生成する', () => {
     const group = Group.create({
-      id: GroupId.from('group-a'),
+      id: GroupId.from('00000000-0000-4000-8000-000000000001'),
       initialParticipantId: ParticipantId.from('participant-a'),
       creatorSubject: ActorSubject.from('subject-a'),
       createdAt: joinedAt,
     });
 
-    expect(group.id.value).toBe('group-a');
+    expect(group.id.value).toBe('00000000-0000-4000-8000-000000000001');
     expect(group.ownerParticipantId?.value).toBe('participant-a');
     expect(group.participants).toEqual([
       {
@@ -83,20 +83,20 @@ describe('Group', () => {
     const subject = ActorSubject.from('subject-a');
 
     const first = Group.create({
-      id: GroupId.from('group-a'),
+      id: GroupId.from('00000000-0000-4000-8000-000000000001'),
       initialParticipantId: ParticipantId.from('participant-a'),
       creatorSubject: subject,
       createdAt: joinedAt,
     });
     const second = Group.create({
-      id: GroupId.from('group-b'),
+      id: GroupId.from('00000000-0000-4000-8000-000000000002'),
       initialParticipantId: ParticipantId.from('participant-b'),
       creatorSubject: subject,
       createdAt: joinedAt,
     });
 
-    expect(first.id.value).toBe('group-a');
-    expect(second.id.value).toBe('group-b');
+    expect(first.id.value).toBe('00000000-0000-4000-8000-000000000001');
+    expect(second.id.value).toBe('00000000-0000-4000-8000-000000000002');
     expect(first.participants[0]?.subject.equals(subject)).toBe(true);
     expect(second.participants[0]?.subject.equals(subject)).toBe(true);
   });
@@ -219,7 +219,7 @@ describe('Group', () => {
 
   it('不正な復元を拒否しても入力と既存Groupを変更しない', () => {
     const existing = Group.create({
-      id: GroupId.from('existing-group'),
+      id: GroupId.from('00000000-0000-4000-8000-000000000009'),
       initialParticipantId: ParticipantId.from('existing-participant'),
       creatorSubject: ActorSubject.from('existing-subject'),
       createdAt: joinedAt,
@@ -250,11 +250,27 @@ describe('Group', () => {
 
 describe('Groupの値', () => {
   it.each([
-    ['GroupId', () => GroupId.from('   ')],
     ['ParticipantId', () => ParticipantId.from('')],
     ['ActorSubject', () => ActorSubject.from('\t')],
   ])('%sの空値を拒否する', (_label, action) => {
     expectViolation(action, 'IDENTIFIER_EMPTY');
+  });
+
+  it('GroupIdはlowercase canonical UUIDだけを受け入れる', () => {
+    const valid = '00000000-0000-4000-8000-000000000001';
+    expect(GroupId.from(valid).value).toBe(valid);
+    expect(GroupId.from('00000000-0000-0000-0000-000000000001').value).toBe(
+      '00000000-0000-0000-0000-000000000001',
+    );
+
+    for (const invalid of [
+      '   ',
+      '00000000-0000-4000-8000-00000000000A',
+      '{00000000-0000-4000-8000-000000000001}',
+      '00000000-0000-0000-8000-00000000001',
+    ]) {
+      expectViolation(() => GroupId.from(invalid), 'GROUP_ID_INVALID');
+    }
   });
 
   it('注入された時刻をUTCの標準形式で保持する', () => {

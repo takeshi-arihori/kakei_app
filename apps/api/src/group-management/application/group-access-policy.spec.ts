@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import { ActorSubject, GroupId, ParticipantId } from '../domain/group.js';
@@ -11,6 +13,8 @@ import {
   type GroupAccessPolicyPort,
   type GroupPolicyDigest,
   type GroupPolicyDigestPort,
+  type GroupOperationLocatorKeyPort,
+  type GroupOperationLocatorCandidate,
   type GroupOperationReplayPort,
   membershipDigestInput,
   operationFingerprintDigestInput,
@@ -22,7 +26,7 @@ import {
   type SnapshotReadResult,
 } from './group-access-policy.js';
 
-const groupId = GroupId.from('group-a');
+const groupId = GroupId.from('00000000-0000-4000-8000-000000000001');
 const owner = ParticipantId.from('participant-owner');
 const active = ParticipantId.from('participant-active');
 const left = ParticipantId.from('participant-left');
@@ -94,6 +98,56 @@ class FakeGroupPolicyDigestPort implements GroupPolicyDigestPort {
       ),
       digestKeyVersion: 'fake-key-v1',
     });
+  }
+}
+
+class FakeOperationLocatorKeyPort implements GroupOperationLocatorKeyPort {
+  readonly calls: { purpose: string; canonicalInput: Uint8Array }[] = [];
+
+  constructor(
+    private readonly versions: readonly string[] = ['current', 'retired'],
+  ) {}
+
+  currentDigest(input: {
+    purpose: 'group-operation-locator/v2';
+    canonicalInput: Uint8Array;
+  }): Promise<GroupOperationLocatorCandidate> {
+    this.calls.push(input);
+    return Promise.resolve(
+      this.makeCandidate(input, this.versions[0] ?? 'current'),
+    );
+  }
+
+  candidateDigests(input: {
+    purpose: 'group-operation-locator/v2';
+    canonicalInput: Uint8Array;
+  }): Promise<
+    readonly { digest: GroupPolicyDigest; digestKeyVersion: string }[]
+  > {
+    this.calls.push(input);
+    return Promise.resolve(
+      this.versions.map((version) => this.makeCandidate(input, version)),
+    );
+  }
+
+  private makeCandidate(
+    input: {
+      purpose: 'group-operation-locator/v2';
+      canonicalInput: Uint8Array;
+    },
+    digestKeyVersion: string,
+  ): GroupOperationLocatorCandidate {
+    return {
+      digest: digest(
+        Array.from(
+          createHmac('sha256', `fake-locator-key:${digestKeyVersion}`)
+            .update(input.purpose)
+            .update(input.canonicalInput)
+            .digest(),
+        ),
+      ),
+      digestKeyVersion,
+    };
   }
 }
 
@@ -322,13 +376,14 @@ class FakeGroupAccessPolicyPort implements GroupAccessPolicyPort {
 
 class FakeOperationReplayIndex<T> implements GroupOperationReplayPort<T> {
   decryptCalls = 0;
+  dataKeyReads = 0;
   private readonly records = new Map<
     string,
     { fingerprint: GroupPolicyDigest; result: T }
   >();
 
   constructor(
-    locator: GroupPolicyDigest | null,
+    locator: GroupOperationLocatorCandidate | null,
     record: {
       fingerprint: GroupPolicyDigest;
       result: T;
@@ -340,22 +395,28 @@ class FakeOperationReplayIndex<T> implements GroupOperationReplayPort<T> {
   }
 
   findOperation(input: {
-    locator: GroupPolicyDigest;
+    locatorCandidates: readonly {
+      digest: GroupPolicyDigest;
+      digestKeyVersion: string;
+    }[];
   }): Promise<
     | { kind: 'Missing' }
     | { kind: 'Found'; record: { fingerprint: GroupPolicyDigest; result: T } }
   > {
-    expect(input.locator.length).toBeGreaterThan(0);
-    const record = this.records.get(this.key(input.locator));
+    expect(input.locatorCandidates.length).toBeGreaterThan(0);
+    const record = input.locatorCandidates
+      .map((candidate) => this.records.get(this.key(candidate)))
+      .find((candidate) => candidate !== undefined);
     if (record === undefined) {
       return Promise.resolve({ kind: 'Missing' });
     }
+    this.dataKeyReads += 1;
     this.decryptCalls += 1;
     return Promise.resolve({ kind: 'Found', record });
   }
 
-  private key(locator: GroupPolicyDigest): string {
-    return Buffer.from(locator).toString('base64');
+  private key(locator: GroupOperationLocatorCandidate): string {
+    return `${locator.digestKeyVersion}:${Buffer.from(locator.digest).toString('base64')}`;
   }
 }
 
@@ -379,7 +440,6 @@ describe('Group access policy digest contract', () => {
     );
     const membership = membershipDigestInput(groupId, active);
     const locator = operationLocatorDigestInput(
-      groupId,
       ActorSubject.from('a'),
       OperationId.from('b:c'),
     );
@@ -397,13 +457,23 @@ describe('Group access policy digest contract', () => {
     ]).toEqual([
       'group-actor-access-index/v1',
       'group-membership-index/v1',
-      'group-operation-locator/v1',
+      'group-operation-locator/v2',
       'group-operation-fingerprint/v1',
     ]);
     expect(actor.canonicalInput).not.toEqual(locator.canonicalInput);
     expect(locator.canonicalInput).toEqual(
       operationLocatorDigestInput(
-        groupId,
+        ActorSubject.from('a'),
+        OperationId.from('b:c'),
+      ).canonicalInput,
+    );
+    expect(
+      operationLocatorDigestInput(
+        ActorSubject.from('a:b'),
+        OperationId.from('c'),
+      ).canonicalInput,
+    ).not.toEqual(
+      operationLocatorDigestInput(
         ActorSubject.from('a'),
         OperationId.from('b:c'),
       ).canonicalInput,
@@ -497,7 +567,7 @@ describe('GroupAccessPolicyPort fake contract', () => {
     expect(fake.policyDecryptCalls).toBe(0);
     await expect(
       fake.withSnapshotRead({
-        groupId: GroupId.from('unknown-group'),
+        groupId: GroupId.from('00000000-0000-4000-8000-000000000007'),
         actorSubject: activeSubject,
         callback: () =>
           Promise.resolve({
@@ -593,7 +663,7 @@ describe('GroupAccessPolicyPort fake contract', () => {
       fake.withExclusiveMutation({
         expectedPolicies: [
           {
-            groupId: GroupId.from('group-z'),
+            groupId: GroupId.from('00000000-0000-4000-8000-000000000005'),
             groupVersion: 7,
             accessPolicyVersion: 3,
           },
@@ -675,9 +745,9 @@ describe('GroupAccessPolicyPort fake contract', () => {
 describe('operation replay contract', () => {
   it('index missではdecryptせず、同じlocatorの完全一致fingerprintだけをreplayする', async () => {
     const digestPort = new FakeGroupPolicyDigestPort();
-    const locator = await digestPort.digest(
+    const locatorKeyPort = new FakeOperationLocatorKeyPort();
+    const locator = await locatorKeyPort.candidateDigests(
       operationLocatorDigestInput(
-        groupId,
         ActorSubject.from('actor-a'),
         OperationId.from('operation-a'),
       ),
@@ -694,44 +764,45 @@ describe('operation replay contract', () => {
     const missing = new FakeOperationReplayIndex<string>(null, null);
     expect(
       resolveOperationReplay(
-        await missing.findOperation({ locator: locator.digest }),
+        await missing.findOperation({ locatorCandidates: locator }),
         stored,
       ),
     ).toEqual({ kind: 'Execute' });
     expect(missing.decryptCalls).toBe(0);
+    expect(missing.dataKeyReads).toBe(0);
 
-    const found = new FakeOperationReplayIndex(locator.digest, {
+    const found = new FakeOperationReplayIndex(locator[0] ?? null, {
       fingerprint: stored,
       result: 'result-a',
     });
     expect(
       resolveOperationReplay(
-        await found.findOperation({ locator: locator.digest }),
+        await found.findOperation({ locatorCandidates: locator }),
         stored,
       ),
     ).toEqual({ kind: 'Replay', result: 'result-a' });
     expect(found.decryptCalls).toBe(1);
-    const otherActorLocator = await digestPort.digest(
+    expect(found.dataKeyReads).toBe(1);
+    const otherActorLocator = await locatorKeyPort.candidateDigests(
       operationLocatorDigestInput(
-        groupId,
         ActorSubject.from('actor-b'),
         OperationId.from('operation-a'),
       ),
     );
-    const otherOperationLocator = await digestPort.digest(
+    const otherOperationLocator = await locatorKeyPort.candidateDigests(
       operationLocatorDigestInput(
-        groupId,
         ActorSubject.from('actor-a'),
         OperationId.from('operation-b'),
       ),
     );
     await expect(
-      found.findOperation({ locator: otherActorLocator.digest }),
+      found.findOperation({ locatorCandidates: otherActorLocator }),
     ).resolves.toEqual({ kind: 'Missing' });
     await expect(
-      found.findOperation({ locator: otherOperationLocator.digest }),
+      found.findOperation({ locatorCandidates: otherOperationLocator }),
     ).resolves.toEqual({ kind: 'Missing' });
     expect(found.decryptCalls).toBe(1);
+    expect(found.dataKeyReads).toBe(1);
     expect(
       resolveOperationReplay(
         { kind: 'Found', record: { fingerprint: stored, result: 'result-a' } },
@@ -746,11 +817,48 @@ describe('operation replay contract', () => {
         ).digest,
       ),
     ).toEqual({ kind: 'Mismatch', alert: 'OperationFingerprintMismatch' });
-    expect(digestPort.calls.map(({ purpose }) => purpose)).toContain(
-      'group-operation-locator/v1',
+    expect(locatorKeyPort.calls.map(({ purpose }) => purpose)).toContain(
+      'group-operation-locator/v2',
     );
     expect(digestPort.calls.map(({ purpose }) => purpose)).toContain(
       'group-operation-fingerprint/v1',
     );
+  });
+
+  it('current keyだけを新規書込みに使い、retired keyの結果はread candidateで再送照合する', async () => {
+    const keyPort = new FakeOperationLocatorKeyPort();
+    const input = operationLocatorDigestInput(
+      ActorSubject.from('actor-a'),
+      OperationId.from('create-group-a'),
+    );
+    const current = await keyPort.currentDigest(input);
+    const candidates = await keyPort.candidateDigests(input);
+    expect(current).toEqual(candidates[0]);
+    expect(candidates.map(({ digestKeyVersion }) => digestKeyVersion)).toEqual([
+      'current',
+      'retired',
+    ]);
+    expect(candidates[0]?.digest).not.toEqual(candidates[1]?.digest);
+
+    const fingerprint = digest([1, 2, 3]);
+    const replay = new FakeOperationReplayIndex(candidates[1] ?? null, {
+      fingerprint,
+      result: 'existing-group',
+    });
+    expect(
+      resolveOperationReplay(
+        await replay.findOperation({ locatorCandidates: candidates }),
+        fingerprint,
+      ),
+    ).toEqual({ kind: 'Replay', result: 'existing-group' });
+    expect(replay.dataKeyReads).toBe(1);
+    expect(replay.decryptCalls).toBe(1);
+
+    const missing = new FakeOperationReplayIndex<string>(null, null);
+    await expect(
+      missing.findOperation({ locatorCandidates: candidates }),
+    ).resolves.toEqual({ kind: 'Missing' });
+    expect(missing.dataKeyReads).toBe(0);
+    expect(missing.decryptCalls).toBe(0);
   });
 });

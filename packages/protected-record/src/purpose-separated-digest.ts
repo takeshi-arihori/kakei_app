@@ -3,7 +3,6 @@ declare const purposeSeparatedDigestBrand: unique symbol;
 export type DigestPurpose =
   | 'group-actor-access-index/v1'
   | 'group-membership-index/v1'
-  | 'group-operation-locator/v1'
   | 'group-operation-fingerprint/v1';
 
 export type PurposeSeparatedDigest = Uint8Array & {

@@ -51,6 +51,7 @@ export class GroupCommandApplicationError extends Error {
 }
 
 export type GroupCommandDependencies = Readonly<{
+  /** The trusted production callback creates a GroupId from crypto.randomUUID(). */
   nextGroupId: () => GroupId;
   nextParticipantId: () => ParticipantId;
   nextInvitationId: () => InvitationId;
