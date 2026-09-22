@@ -2,12 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   ActorSubject,
+  CloseIntentId,
   Group,
   GroupId,
   GroupInvariantViolation,
   InvitationId,
   ParticipantId,
   UtcInstant,
+  type CloseFenceReceipt,
+  type CloseUnfenceReceipt,
   type ParticipantSnapshot,
 } from '../domain/group.js';
 import {
@@ -22,6 +25,7 @@ import {
   type CommitGroupRequest,
   type FindOperationResult,
   type GroupCommandResult,
+  type GroupCloseChange,
   type GroupRepository,
   type InvitationChange,
   type LoadedGroup,
@@ -56,6 +60,11 @@ const existingGroup = (): Group =>
       activeParticipant('p-third', 'third-subject', 3),
     ],
     invitations: [],
+    accessPolicyVersion: 1,
+    closing: null,
+    ownerAtArchiveParticipantId: null,
+    archivedAt: null,
+    deleteEligibleAt: null,
   });
 
 type CommitFault = 'BeforeWriteUnavailable' | 'AfterWriteUnavailable';
@@ -82,6 +91,8 @@ class InMemoryGroupRepository implements GroupRepository {
   >();
   private readonly membershipChanges: MembershipChange[] = [];
   private readonly invitationChanges: InvitationChange[] = [];
+  private readonly groupCloseChanges: GroupCloseChange[] = [];
+  private readonly closeIntentIds = new Set<string>();
   private nextFault: CommitFault | null = null;
   private nextBarrier: PendingCommitBarrier | null = null;
 
@@ -154,6 +165,16 @@ class InMemoryGroupRepository implements GroupRepository {
     const current = this.groups.get(request.group.id.value);
     let version: number;
 
+    const starting = request.groupCloseChanges.find(
+      (change) => change.kind === 'ClosingStarted',
+    );
+    if (
+      starting?.kind === 'ClosingStarted' &&
+      this.closeIntentIds.has(starting.closeIntentId.value)
+    ) {
+      return { kind: 'CloseIntentAlreadyExists' };
+    }
+
     if (request.expectedVersion === 'Absent') {
       if (current !== undefined) {
         return { kind: 'AlreadyExists' };
@@ -173,6 +194,10 @@ class InMemoryGroupRepository implements GroupRepository {
     this.groups.set(request.group.id.value, { group: request.group, version });
     this.membershipChanges.push(...request.membershipChanges);
     this.invitationChanges.push(...request.invitationChanges);
+    this.groupCloseChanges.push(...request.groupCloseChanges);
+    if (starting?.kind === 'ClosingStarted') {
+      this.closeIntentIds.add(starting.closeIntentId.value);
+    }
     actorOperations.set(request.operation.operationId.value, {
       actorSubject: request.operation.actorSubject,
       operationId: request.operation.operationId,
@@ -207,12 +232,17 @@ class InMemoryGroupRepository implements GroupRepository {
   invitationHistory(): readonly InvitationChange[] {
     return [...this.invitationChanges];
   }
+
+  groupCloseHistory(): readonly GroupCloseChange[] {
+    return [...this.groupCloseChanges];
+  }
 }
 
 const dependencies = (): GroupCommandDependencies => ({
   nextGroupId: vi.fn(() => GroupId.from('generated-group')),
   nextParticipantId: vi.fn(() => ParticipantId.from('generated-participant')),
   nextInvitationId: vi.fn(() => InvitationId.from('generated-invitation')),
+  nextCloseIntentId: vi.fn(() => CloseIntentId.from('generated-close-intent')),
   now: vi.fn(() => createdAt),
 });
 
@@ -387,6 +417,7 @@ describe('GroupCommandService.createGroup', () => {
         .mockReturnValueOnce(ParticipantId.from('participant-one'))
         .mockReturnValueOnce(ParticipantId.from('participant-two')),
       nextInvitationId: vi.fn(() => InvitationId.from('unused-invitation')),
+      nextCloseIntentId: vi.fn(() => CloseIntentId.from('unused-close-intent')),
       now: vi.fn(() => createdAt),
     };
     const service = new GroupCommandService(repository, injected);
@@ -733,6 +764,11 @@ describe('GroupCommandServiceのInvitation Command', () => {
         previousParticipant,
       ],
       invitations: [],
+      accessPolicyVersion: 1,
+      closing: null,
+      ownerAtArchiveParticipantId: null,
+      archivedAt: null,
+      deleteEligibleAt: null,
     });
     const pending = withInvitation(
       'invitation-return',
@@ -1091,6 +1127,390 @@ describe('GroupCommandServiceの更新Command', () => {
     );
     expect(repository.operationCount()).toBe(1);
     expect(repository.changes()).toHaveLength(1);
+  });
+});
+
+const closeFenceReceipt = (
+  closeIntentId: CloseIntentId,
+  context: CloseFenceReceipt['context'],
+  eligible = true,
+): CloseFenceReceipt => ({
+  kind: 'CloseFenceInstalled',
+  groupId: GroupId.from('group-a'),
+  closeIntentId,
+  context,
+  cutoff: createdAt,
+  fenceVersion: 1,
+  eligible,
+  completedAt: createdAt,
+});
+
+const closeUnfenceReceipt = (
+  closeIntentId: CloseIntentId,
+  context: CloseUnfenceReceipt['context'],
+): CloseUnfenceReceipt => ({
+  kind: 'CloseFenceRemoved',
+  groupId: GroupId.from('group-a'),
+  closeIntentId,
+  context,
+  cutoff: createdAt,
+  fenceVersion: 1,
+  completedAt: createdAt,
+});
+
+describe('GroupCommandServiceのGroup close Command', () => {
+  const setup = () => {
+    const repository = new InMemoryGroupRepository();
+    repository.seed(existingGroup(), 1);
+    const injected = dependencies();
+    return {
+      repository,
+      injected,
+      service: new GroupCommandService(repository, injected),
+    };
+  };
+
+  const start = async (service: GroupCommandService) =>
+    service.startGroupClosing({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('close-start'),
+      groupId: GroupId.from('group-a'),
+      expectedVersion: 1,
+    });
+
+  it('開始状態・一意Intent・履歴・operation結果を同じCASで保存し再送する', async () => {
+    const { repository, injected, service } = setup();
+
+    const first = await start(service);
+    const replay = await start(service);
+
+    expect(replay).toEqual(first);
+    expect(first).toEqual({
+      kind: 'GroupClosingStarted',
+      groupId: GroupId.from('group-a'),
+      closeIntentId: CloseIntentId.from('generated-close-intent'),
+      version: 2,
+    });
+    expect((await repository.load(first.groupId))?.group.status).toBe(
+      'Closing',
+    );
+    expect(repository.groupCloseHistory()).toEqual([
+      {
+        kind: 'ClosingStarted',
+        closeIntentId: first.closeIntentId,
+        cutoff: createdAt,
+        startedBy: ActorSubject.from('owner-subject'),
+        startedFromVersion: 1,
+      },
+    ]);
+    expect(injected.nextCloseIntentId).toHaveBeenCalledTimes(1);
+    expect(injected.now).toHaveBeenCalledTimes(1);
+  });
+
+  it('同じcloseIntentIdを別GroupへCommitせず全Group一意性を守る', async () => {
+    const { repository, service } = setup();
+    await start(service);
+    repository.seed(
+      Group.create({
+        id: GroupId.from('group-b'),
+        initialParticipantId: ParticipantId.from('owner-b'),
+        creatorSubject: ActorSubject.from('owner-b-subject'),
+        createdAt,
+      }),
+      1,
+    );
+
+    await expectApplicationError(
+      () =>
+        service.startGroupClosing({
+          actorSubject: ActorSubject.from('owner-b-subject'),
+          operationId: OperationId.from('close-start-b'),
+          groupId: GroupId.from('group-b'),
+          expectedVersion: 1,
+        }),
+      'CLOSE_INTENT_ALREADY_EXISTS',
+    );
+    expect((await repository.load(GroupId.from('group-b')))?.group.status).toBe(
+      'Active',
+    );
+    expect(repository.groupCloseHistory()).toHaveLength(1);
+  });
+
+  it('両Contextの終了可Receipt反映後だけArchiveし不変metadataを履歴へ保存する', async () => {
+    const { repository, service } = setup();
+    const started = await start(service);
+    const expense = closeFenceReceipt(
+      started.closeIntentId,
+      'ExpenseRecording',
+    );
+    const settlement = closeFenceReceipt(started.closeIntentId, 'Settlement');
+
+    await service.recordGroupCloseFenceReceipt({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('expense-receipt'),
+      groupId: GroupId.from('group-a'),
+      expectedVersion: 2,
+      receipt: expense,
+    });
+    await service.recordGroupCloseFenceReceipt({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('settlement-receipt'),
+      groupId: GroupId.from('group-a'),
+      expectedVersion: 3,
+      receipt: settlement,
+    });
+    await expectDomainError(
+      () =>
+        service.archiveGroup({
+          actorSubject: ActorSubject.from('member-subject'),
+          operationId: OperationId.from('archive-non-owner'),
+          groupId: GroupId.from('group-a'),
+          closeIntentId: started.closeIntentId,
+          expectedVersion: 4,
+        }),
+      'NOT_CURRENT_OWNER',
+    );
+    const archived = await service.archiveGroup({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('archive'),
+      groupId: GroupId.from('group-a'),
+      closeIntentId: started.closeIntentId,
+      expectedVersion: 4,
+    });
+
+    expect(archived.version).toBe(5);
+    const saved = (await repository.load(GroupId.from('group-a')))?.group;
+    expect(saved?.status).toBe('Archived');
+    expect(saved?.ownerAtArchiveParticipantId).toEqual(
+      ParticipantId.from('p-owner'),
+    );
+    expect(saved?.archivedAt).toEqual(createdAt);
+    expect(saved?.deleteEligibleAt?.value).toBe('2027-09-07T00:00:00.000Z');
+    expect(repository.groupCloseHistory().map(({ kind }) => kind)).toEqual([
+      'ClosingStarted',
+      'CloseFenceReceiptRecorded',
+      'CloseFenceReceiptRecorded',
+      'GroupArchived',
+    ]);
+    expect(repository.groupCloseHistory().at(-1)).toMatchObject({
+      kind: 'GroupArchived',
+      archivedFromVersion: 4,
+      receiptVersions: { ExpenseRecording: 1, Settlement: 1 },
+    });
+
+    await expectDomainError(
+      () =>
+        service.archiveGroup({
+          actorSubject: ActorSubject.from('owner-subject'),
+          operationId: OperationId.from('archive-twice'),
+          groupId: GroupId.from('group-a'),
+          closeIntentId: started.closeIntentId,
+          expectedVersion: 5,
+        }),
+      'CLOSE_STATE_INVALID',
+    );
+    await expectDomainError(
+      () =>
+        service.reserveGroupClosingCancellation({
+          actorSubject: ActorSubject.from('owner-subject'),
+          operationId: OperationId.from('cancel-after-archive'),
+          groupId: GroupId.from('group-a'),
+          closeIntentId: started.closeIntentId,
+          expectedVersion: 5,
+        }),
+      'CLOSE_STATE_INVALID',
+    );
+    expect(repository.groupCloseHistory()).toHaveLength(4);
+    expect(repository.operationCount()).toBe(4);
+  });
+
+  it('終了不可ReceiptではArchiveせず履歴とoperation結果を増やさない', async () => {
+    const { repository, service } = setup();
+    const started = await start(service);
+    await service.recordGroupCloseFenceReceipt({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('expense-ineligible'),
+      groupId: GroupId.from('group-a'),
+      expectedVersion: 2,
+      receipt: closeFenceReceipt(
+        started.closeIntentId,
+        'ExpenseRecording',
+        false,
+      ),
+    });
+    await service.recordGroupCloseFenceReceipt({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('settlement-eligible'),
+      groupId: GroupId.from('group-a'),
+      expectedVersion: 3,
+      receipt: closeFenceReceipt(started.closeIntentId, 'Settlement'),
+    });
+    const before = await repository.load(GroupId.from('group-a'));
+
+    await expectDomainError(
+      () =>
+        service.archiveGroup({
+          actorSubject: ActorSubject.from('owner-subject'),
+          operationId: OperationId.from('archive-ineligible'),
+          groupId: GroupId.from('group-a'),
+          closeIntentId: started.closeIntentId,
+          expectedVersion: 4,
+        }),
+      'CLOSE_NOT_ELIGIBLE',
+    );
+    expect(await repository.load(GroupId.from('group-a'))).toEqual(before);
+    expect(repository.groupCloseHistory()).toHaveLength(3);
+    expect(repository.operationCount()).toBe(3);
+  });
+
+  it('証拠欠落・終了不可・古いversion・非Ownerを状態と履歴を変えず拒否する', async () => {
+    const { repository, service } = setup();
+    const started = await start(service);
+    const before = (await repository.load(GroupId.from('group-a')))?.group;
+
+    await expectDomainError(
+      () =>
+        service.archiveGroup({
+          actorSubject: ActorSubject.from('owner-subject'),
+          operationId: OperationId.from('archive-missing'),
+          groupId: GroupId.from('group-a'),
+          closeIntentId: started.closeIntentId,
+          expectedVersion: 2,
+        }),
+      'CLOSE_RECEIPT_MISSING',
+    );
+    await expectApplicationError(
+      () =>
+        service.reserveGroupClosingCancellation({
+          actorSubject: ActorSubject.from('owner-subject'),
+          operationId: OperationId.from('cancel-stale'),
+          groupId: GroupId.from('group-a'),
+          closeIntentId: started.closeIntentId,
+          expectedVersion: 1,
+        }),
+      'CONFLICT',
+    );
+    await expectDomainError(
+      () =>
+        service.reserveGroupClosingCancellation({
+          actorSubject: ActorSubject.from('member-subject'),
+          operationId: OperationId.from('cancel-non-owner'),
+          groupId: GroupId.from('group-a'),
+          closeIntentId: started.closeIntentId,
+          expectedVersion: 2,
+        }),
+      'NOT_CURRENT_OWNER',
+    );
+
+    expect((await repository.load(GroupId.from('group-a')))?.group).toEqual(
+      before,
+    );
+    expect(repository.groupCloseHistory()).toHaveLength(1);
+    expect(repository.operationCount()).toBe(1);
+  });
+
+  it('Cancelingを先にCAS予約し、片Context解除では維持して両解除後だけActiveへ戻す', async () => {
+    const { repository, service } = setup();
+    const started = await start(service);
+    await service.recordGroupCloseFenceReceipt({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('expense-fence-before-cancel'),
+      groupId: GroupId.from('group-a'),
+      expectedVersion: 2,
+      receipt: closeFenceReceipt(started.closeIntentId, 'ExpenseRecording'),
+    });
+    await service.recordGroupCloseFenceReceipt({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('settlement-fence-before-cancel'),
+      groupId: GroupId.from('group-a'),
+      expectedVersion: 3,
+      receipt: closeFenceReceipt(started.closeIntentId, 'Settlement'),
+    });
+    await service.reserveGroupClosingCancellation({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('cancel-reserve'),
+      groupId: GroupId.from('group-a'),
+      closeIntentId: started.closeIntentId,
+      expectedVersion: 4,
+    });
+
+    await expectApplicationError(
+      () =>
+        service.archiveGroup({
+          actorSubject: ActorSubject.from('owner-subject'),
+          operationId: OperationId.from('archive-lost-race'),
+          groupId: GroupId.from('group-a'),
+          closeIntentId: started.closeIntentId,
+          expectedVersion: 4,
+        }),
+      'CONFLICT',
+    );
+
+    await service.recordGroupCloseUnfenceReceipt({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('expense-unfence'),
+      groupId: GroupId.from('group-a'),
+      expectedVersion: 5,
+      receipt: closeUnfenceReceipt(started.closeIntentId, 'ExpenseRecording'),
+    });
+    await expectDomainError(
+      () =>
+        service.completeGroupClosingCancellation({
+          actorSubject: ActorSubject.from('owner-subject'),
+          operationId: OperationId.from('cancel-incomplete'),
+          groupId: GroupId.from('group-a'),
+          closeIntentId: started.closeIntentId,
+          expectedVersion: 6,
+        }),
+      'CLOSE_RECEIPT_MISSING',
+    );
+    expect((await repository.load(GroupId.from('group-a')))?.group.status).toBe(
+      'Closing',
+    );
+
+    await service.recordGroupCloseUnfenceReceipt({
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('settlement-unfence'),
+      groupId: GroupId.from('group-a'),
+      expectedVersion: 6,
+      receipt: closeUnfenceReceipt(started.closeIntentId, 'Settlement'),
+    });
+    await expectDomainError(
+      () =>
+        service.completeGroupClosingCancellation({
+          actorSubject: ActorSubject.from('member-subject'),
+          operationId: OperationId.from('cancel-complete-non-owner'),
+          groupId: GroupId.from('group-a'),
+          closeIntentId: started.closeIntentId,
+          expectedVersion: 7,
+        }),
+      'NOT_CURRENT_OWNER',
+    );
+    repository.failNextCommit('AfterWriteUnavailable');
+    const command = {
+      actorSubject: ActorSubject.from('owner-subject'),
+      operationId: OperationId.from('cancel-complete'),
+      groupId: GroupId.from('group-a'),
+      closeIntentId: started.closeIntentId,
+      expectedVersion: 7,
+    };
+    const recovered = await service.completeGroupClosingCancellation(command);
+    const replay = await service.completeGroupClosingCancellation(command);
+
+    expect(replay).toEqual(recovered);
+    expect(recovered.version).toBe(8);
+    expect((await repository.load(GroupId.from('group-a')))?.group.status).toBe(
+      'Active',
+    );
+    expect(repository.groupCloseHistory().map(({ kind }) => kind)).toEqual([
+      'ClosingStarted',
+      'CloseFenceReceiptRecorded',
+      'CloseFenceReceiptRecorded',
+      'ClosingCancellationReserved',
+      'CloseUnfenceReceiptRecorded',
+      'CloseUnfenceReceiptRecorded',
+      'ClosingCancelled',
+    ]);
   });
 });
 

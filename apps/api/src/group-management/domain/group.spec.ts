@@ -35,6 +35,11 @@ const groupSnapshot = (
   ownerParticipantId,
   participants,
   invitations: [],
+  accessPolicyVersion: 1,
+  closing: null,
+  ownerAtArchiveParticipantId: null,
+  archivedAt: null,
+  deleteEligibleAt: null,
 });
 
 const expectViolation = (

@@ -1,5 +1,8 @@
 import type {
   ActorSubject,
+  CloseFenceReceipt,
+  CloseIntentId,
+  CloseUnfenceReceipt,
   Group,
   GroupId,
   InvitationId,
@@ -85,6 +88,43 @@ export type InvitationChange =
       at: UtcInstant;
     }>;
 
+export type GroupCloseChange =
+  | Readonly<{
+      kind: 'ClosingStarted';
+      closeIntentId: CloseIntentId;
+      cutoff: UtcInstant;
+      startedBy: ActorSubject;
+      startedFromVersion: number;
+    }>
+  | Readonly<{
+      kind: 'CloseFenceReceiptRecorded';
+      receipt: CloseFenceReceipt;
+    }>
+  | Readonly<{
+      kind: 'ClosingCancellationReserved';
+      closeIntentId: CloseIntentId;
+    }>
+  | Readonly<{
+      kind: 'CloseUnfenceReceiptRecorded';
+      receipt: CloseUnfenceReceipt;
+    }>
+  | Readonly<{
+      kind: 'GroupArchived';
+      closeIntentId: CloseIntentId;
+      ownerAtArchiveParticipantId: ParticipantId;
+      archivedAt: UtcInstant;
+      deleteEligibleAt: UtcInstant;
+      archivedFromVersion: number;
+      receiptVersions: Readonly<{
+        ExpenseRecording: number;
+        Settlement: number;
+      }>;
+    }>
+  | Readonly<{
+      kind: 'ClosingCancelled';
+      closeIntentId: CloseIntentId;
+    }>;
+
 export type UnversionedGroupCommandResult =
   | Readonly<{
       kind: 'GroupCreated';
@@ -121,6 +161,36 @@ export type UnversionedGroupCommandResult =
       groupId: GroupId;
       invitationId: InvitationId;
       participantId: ParticipantId;
+    }>
+  | Readonly<{
+      kind: 'GroupClosingStarted';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+    }>
+  | Readonly<{
+      kind: 'GroupCloseFenceReceiptRecorded';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+    }>
+  | Readonly<{
+      kind: 'GroupClosingCancellationReserved';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+    }>
+  | Readonly<{
+      kind: 'GroupCloseUnfenceReceiptRecorded';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+    }>
+  | Readonly<{
+      kind: 'GroupArchived';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+    }>
+  | Readonly<{
+      kind: 'GroupClosingCancelled';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
     }>;
 
 export type GroupCommandResult =
@@ -166,6 +236,42 @@ export type GroupCommandResult =
       invitationId: InvitationId;
       participantId: ParticipantId;
       version: number;
+    }>
+  | Readonly<{
+      kind: 'GroupClosingStarted';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+      version: number;
+    }>
+  | Readonly<{
+      kind: 'GroupCloseFenceReceiptRecorded';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+      version: number;
+    }>
+  | Readonly<{
+      kind: 'GroupClosingCancellationReserved';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+      version: number;
+    }>
+  | Readonly<{
+      kind: 'GroupCloseUnfenceReceiptRecorded';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+      version: number;
+    }>
+  | Readonly<{
+      kind: 'GroupArchived';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+      version: number;
+    }>
+  | Readonly<{
+      kind: 'GroupClosingCancelled';
+      groupId: GroupId;
+      closeIntentId: CloseIntentId;
+      version: number;
     }>;
 
 export type GroupCreatedResult = Extract<
@@ -198,6 +304,31 @@ export type InvitationAcceptedResult = Extract<
   { kind: 'InvitationAccepted' }
 >;
 
+export type GroupClosingStartedResult = Extract<
+  GroupCommandResult,
+  { kind: 'GroupClosingStarted' }
+>;
+export type GroupCloseFenceReceiptRecordedResult = Extract<
+  GroupCommandResult,
+  { kind: 'GroupCloseFenceReceiptRecorded' }
+>;
+export type GroupClosingCancellationReservedResult = Extract<
+  GroupCommandResult,
+  { kind: 'GroupClosingCancellationReserved' }
+>;
+export type GroupCloseUnfenceReceiptRecordedResult = Extract<
+  GroupCommandResult,
+  { kind: 'GroupCloseUnfenceReceiptRecorded' }
+>;
+export type GroupArchivedResult = Extract<
+  GroupCommandResult,
+  { kind: 'GroupArchived' }
+>;
+export type GroupClosingCancelledResult = Extract<
+  GroupCommandResult,
+  { kind: 'GroupClosingCancelled' }
+>;
+
 export type OperationContext = Readonly<{
   actorSubject: ActorSubject;
   operationId: OperationId;
@@ -216,6 +347,7 @@ export type CommitGroupRequest = Readonly<{
   stateChanged: boolean;
   membershipChanges: readonly MembershipChange[];
   invitationChanges: readonly InvitationChange[];
+  groupCloseChanges: readonly GroupCloseChange[];
   operation: OperationContext;
   result: UnversionedGroupCommandResult;
 }>;
@@ -224,6 +356,7 @@ export type CommitGroupOutcome =
   | Readonly<{ kind: 'Committed'; result: GroupCommandResult }>
   | Readonly<{ kind: 'Conflict' }>
   | Readonly<{ kind: 'AlreadyExists' }>
+  | Readonly<{ kind: 'CloseIntentAlreadyExists' }>
   | Readonly<{ kind: 'OperationMismatch' }>
   | Readonly<{ kind: 'Unavailable' }>;
 

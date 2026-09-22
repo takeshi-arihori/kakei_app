@@ -16,6 +16,7 @@ import {
 const instant = (value: string): UtcInstant => UtcInstant.from(new Date(value));
 const createdAt = instant('2026-09-13T00:00:00.000Z');
 const acceptedAt = instant('2026-09-14T00:00:00.000Z');
+const deleteEligibleAt = acceptedAt.plusCalendarYearInTokyo();
 
 const active = (
   id: string,
@@ -70,6 +71,12 @@ const group = (
       status === 'Active' ? ParticipantId.from('p-owner') : null,
     participants,
     invitations,
+    accessPolicyVersion: 1,
+    closing: null,
+    ownerAtArchiveParticipantId:
+      status === 'Archived' ? (participants[0]?.id ?? null) : null,
+    archivedAt: status === 'Archived' ? acceptedAt : null,
+    deleteEligibleAt: status === 'Archived' ? deleteEligibleAt : null,
   });
 
 const expectViolation = (
@@ -217,7 +224,7 @@ describe('Group.inviteParticipant', () => {
 
     expectViolation(
       () =>
-        invite(group([left('p-owner', 'owner-subject', 1)], [], 'Archived')),
+        invite(group([active('p-owner', 'owner-subject', 1)], [], 'Archived')),
       'GROUP_NOT_ACTIVE',
     );
   });
@@ -422,11 +429,9 @@ describe('Group.acceptInvitation', () => {
       ...invited.toSnapshot(),
       status: 'Archived',
       ownerParticipantId: null,
-      participants: invited.participants.map((participant) => ({
-        ...participant,
-        status: 'Left' as const,
-        leftAt: acceptedAt,
-      })),
+      ownerAtArchiveParticipantId: ParticipantId.from('p-owner'),
+      archivedAt: acceptedAt,
+      deleteEligibleAt,
     });
     const before = archived.toSnapshot();
 
