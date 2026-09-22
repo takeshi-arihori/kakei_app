@@ -20,6 +20,7 @@
     "test:e2e": "vitest run test"
   },
   "devDependencies": {
+    "@kakei/protected-record": "workspace:*",
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
     "@types/node": "^24.0.0",

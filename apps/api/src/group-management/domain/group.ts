@@ -638,7 +638,7 @@ export class Group {
         target.id,
         this.participantStates,
         this.invitationStates,
-        this.accessPolicyVersion,
+        this.nextAccessPolicyVersion(),
         this.closingState,
         this.ownerAtArchiveParticipantId,
         this.archivedAt,
@@ -704,6 +704,7 @@ export class Group {
       group: Group.restore({
         ...this.toSnapshot(),
         participants,
+        accessPolicyVersion: this.nextAccessPolicyVersion(),
       }),
       result: 'Left',
     });
@@ -751,6 +752,7 @@ export class Group {
     const group = Group.restore({
       ...this.toSnapshot(),
       invitations: [...this.invitationStates, invitation],
+      accessPolicyVersion: this.nextAccessPolicyVersion(),
     });
 
     return Object.freeze({ group, invitation });
@@ -779,6 +781,7 @@ export class Group {
       invitations: this.invitationStates.map((current) =>
         current.id.equals(cancelled.id) ? cancelled : current,
       ),
+      accessPolicyVersion: this.nextAccessPolicyVersion(),
     });
 
     return Object.freeze({ group, invitation: cancelled });
@@ -864,6 +867,7 @@ export class Group {
       invitations: this.invitationStates.map((current) =>
         current.id.equals(consumed.id) ? consumed : current,
       ),
+      accessPolicyVersion: this.nextAccessPolicyVersion(),
     });
 
     return Object.freeze({ group, invitation: consumed, participant });

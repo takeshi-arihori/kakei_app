@@ -48,6 +48,9 @@ importers:
       '@eslint/js':
         specifier: ^9.18.0
         version: 9.39.5
+      '@kakei/protected-record':
+        specifier: workspace:*
+        version: link:../../packages/protected-record
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3

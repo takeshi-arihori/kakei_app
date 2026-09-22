@@ -161,7 +161,7 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 
 1. ADR #35／#36の条件付きAccepted記録は[PR #44](https://github.com/takeshi-arihori/kakei_app/pull/44)でRepositoryとGitHubへ統合済み。各実装Taskは一括昇格せず、Requirement・DCと実依存を個別にReady評価する。
 2. [#38](https://github.com/takeshi-arihori/kakei_app/issues/38)、[#39](https://github.com/takeshi-arihori/kakei_app/issues/39)、[#40](https://github.com/takeshi-arihori/kakei_app/issues/40)の初回Domain／Application契約は完了。本番Adapterへ接続しない。
-3. #57でInvitation／再参加の内部契約を実装し、C1はADR #55と正式Security Reviewで充足した。ADR #73のRepository同期と正式Security Reviewを完了し、#75（S0）はReady評価済み。#75完了後に#76（S3）を個別Ready評価し、その後#42を進める。本番本人性・配送、実Context fence、Production Gateは別作業とする。
+3. #57でInvitation／再参加の内部契約を実装し、C1はADR #55と正式Security Reviewで充足した。ADR #73のRepository同期と正式Security Reviewを完了し、#75（S0）はDone。#76（S3）はこのPRが`develop`へmerge後にDoneとなり、#42はS0〜S3の完了後に個別Ready評価して進める。本番本人性・配送、実Context fence、Production Gateは別作業とする。
 
 ## GitHub delivery map
 
@@ -175,10 +175,10 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 | [#40 Application・Port](https://github.com/takeshi-arihori/kakei_app/issues/40) | 2日 | PR #51 Merge済み / Done | fakeによる認可・競合・再送契約検証 |
 | [#41 招待・再参加設計](https://github.com/takeshi-arihori/kakei_app/issues/41) | 1日 | PR #53 Merge済み / Done | [比較表とADR](group-invitation-rejoin-proposal.md)。ADR #52は2026-09-13にAccepted |
 | [#57 Invitation内部契約](https://github.com/takeshi-arihori/kakei_app/issues/57) | 2日 | PR #59 Merge済み / Done | Invitation lifecycle、受諾原子性、再参加をDomain／Applicationとfakeで検証。本番Persistenceは対象外 |
-| [#75 S0: Group終了](https://github.com/takeshi-arihori/kakei_app/issues/75) | 2日 | ADR #73同期・正式Review完了 / Ready・Blocked No | Close Intent、Context fence／Receipt、Archive／取消、保持期限のDomain／Application契約 |
+| [#75 S0: Group終了](https://github.com/takeshi-arihori/kakei_app/issues/75) | 2日 | PR #82 Merge済み / Done | Close Intent、Context fence／Receipt、Archive／取消、保持期限のDomain／Application契約 |
 | [#74 S1: Schema／Migration](https://github.com/takeshi-arihori/kakei_app/issues/74) | 1日 | PR #78 Merge済み / Done | PostgreSQL Schema、Migration、runtime `pg` |
 | [#77 S2: protected record codec](https://github.com/takeshi-arihori/kakei_app/issues/77) | 1日 | PR #79 Merge済み / Done | Canonical TLV、AEAD Envelope、Key／Nonce Port |
-| [#76 S3: Access Policy](https://github.com/takeshi-arihori/kakei_app/issues/76) | 1日 | #75完了後にReady評価 | access policy／blind index／transaction contract |
-| [#42 保存Adapter](https://github.com/takeshi-arihori/kakei_app/issues/42) | 2日 | S0〜S3 / Backlog・Blocked Yes | PostgreSQL Repository Integration。Production Gate完了まで本番wiring禁止 |
+| [#76 S3: Access Policy](https://github.com/takeshi-arihori/kakei_app/issues/76) | 1日 | 本PRの`develop` merge後 Done | access policy／blind index／transaction contract |
+| [#42 保存Adapter](https://github.com/takeshi-arihori/kakei_app/issues/42) | 2日 | S0〜S3完了後に個別Ready評価 | PostgreSQL Repository Integration。Production Gate完了まで本番wiring禁止 |
 
-ADR [#35](https://github.com/takeshi-arihori/kakei_app/issues/35)と[#36](https://github.com/takeshi-arihori/kakei_app/issues/36)は2026-09-08に条件付きAcceptedされ、記録はPR #44でdevelopへ統合済み。ADR [#52](https://github.com/takeshi-arihori/kakei_app/issues/52)は2026-09-13にAcceptedされ、記録はPR #58でdevelopへ統合済み。C1は[#55](https://github.com/takeshi-arihori/kakei_app/issues/55)の正式ReviewとPR #70統合により2026-09-20に充足した。ADR [#73](https://github.com/takeshi-arihori/kakei_app/issues/73)は2026-09-21にAcceptedされ、正式Security ReviewとPR #80統合を完了した。#74／#77はDone、#75はReady、残る実装は#75／#76／#42で追跡する。
+ADR [#35](https://github.com/takeshi-arihori/kakei_app/issues/35)と[#36](https://github.com/takeshi-arihori/kakei_app/issues/36)は2026-09-08に条件付きAcceptedされ、記録はPR #44でdevelopへ統合済み。ADR [#52](https://github.com/takeshi-arihori/kakei_app/issues/52)は2026-09-13にAcceptedされ、記録はPR #58でdevelopへ統合済み。C1は[#55](https://github.com/takeshi-arihori/kakei_app/issues/55)の正式ReviewとPR #70統合により2026-09-20に充足した。ADR [#73](https://github.com/takeshi-arihori/kakei_app/issues/73)は2026-09-21にAcceptedされ、正式Security ReviewとPR #80統合を完了した。#74／#75／#77はDoneであり、#76はこのPRの`develop` merge後にDoneとなる。残る保存Adapterは#42で追跡する。
