@@ -13,6 +13,7 @@ export type GroupManagementRecordKind =
   | 'invitation'
   | 'membership-history'
   | 'invitation-history'
+  | 'group-close-history'
   | 'operation-result';
 
 export type ProtectedRecordHeader =
@@ -176,6 +177,7 @@ const validateAndCreateHeader = (raw: RawHeader): ProtectedRecordHeader => {
       'invitation',
       'membership-history',
       'invitation-history',
+      'group-close-history',
       'operation-result',
     ];
     if (!allowedKinds.includes(recordKind) || raw.revisionOrdinal !== null) {

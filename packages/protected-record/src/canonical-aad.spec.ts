@@ -84,6 +84,19 @@ describe('Canonical protected record AAD', () => {
     expect(decodeCanonicalAad(encodeCanonicalAad(snapshot))).toEqual(snapshot);
   });
 
+  it('Group close historyはGroup-scoped immutable historyとしてAADへencodeする', () => {
+    const closeHistory: ProtectedRecordHeader = {
+      ...goldenHeader,
+      recordKind: 'group-close-history',
+      logicalRecordId: '00000000-0000-4000-8000-000000000002',
+      aggregateVersion: 2n,
+    };
+
+    expect(decodeCanonicalAad(encodeCanonicalAad(closeHistory))).toEqual(
+      closeHistory,
+    );
+  });
+
   it.each([
     ['leading zero', { ...goldenHeader, aggregateVersion: '01' }],
     ['negative', { ...goldenHeader, aggregateVersion: '-1' }],
