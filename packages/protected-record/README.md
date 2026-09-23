@@ -10,6 +10,8 @@ The codec requests rotation at seal count `2^31` and rejects an allocation at or
 
 Protected-record encryption keys and blind-index digests use separate branded types and separate ports. A digest purpose is versioned and cannot be reused across membership, actor-access, operation-locator, or fingerprint namespaces.
 
+Group Management immutable history uses distinct AAD record kinds for membership, invitation, and Group-close changes. A Group-close history record remains bound to its random Group ID, logical record ID, and aggregate version; the close Intent, receipt, and actor fields remain encrypted.
+
 ## Failure and alert boundary
 
 Malformed or noncanonical AAD, metadata mismatch, unavailable keys, invalid nonce/tag lengths, and authentication failure all return the same generic `ProtectedRecordUnavailable`. The optional alert callback receives only an operation and stable code; it never receives IDs, payload, ciphertext, nonce, tag, or key material. Durable alert delivery is a later production gate.

@@ -125,6 +125,8 @@ GroupをRootとし、現在のParticipant状態・Owner参照・参加順採番�
 
 #57ではこのPortの責務を変えず、GroupStateにInvitation lifecycleを含め、`commit`の原子的な変更集合へInvitation作成・取消・消費とParticipant追加を加えた。本番Schemaは#42で完了し、read adapter #94、状態writer #95、公開commit #96、Access Policy SQL #97へ分けている。Production Security Gateまで本番へwireしない。
 
+#95の内部writerは、呼出側が渡すPostgreSQL transaction内でAggregate CAS、現在Participant／Invitation行、membership／invitation／Group closeの不変履歴、Group状態と一致するActor access indexを書き込む。現在行とindexは再構築可能な最新状態、履歴だけがappend-onlyである。indexの認可判定、固定policy versionのread lock、index miss時に復号しない振る舞いは#97の責務とし、#95では実装しない。
+
 operationIdはActor内で全Group・Command共通の一意な名前空間とし、fingerprintはCommand種別、対象Group／Participant、expectedVersion、入力を含む。サーバ生成時刻・IDは含めず最初の成功結果を再利用する。初回成功後にOwnerを失った再送では、同じActorへ最小限のCommand結果（ID・versionのみ）を返し、現在Groupの閲覧権限を付与しない。
 
 競合後に入力・期待版を変える操作は新operationIdを用いる。Conflictを無条件に自動再試行しない。Unavailableでは成功したか不明な場合があるためfindOperationで照合する。失敗結果は永続記録しない。冪等結果の暗号化・保持・削除とlocator契約はAccepted ADR #55/#85で定めた。PostgreSQL read、状態・履歴writer、atomic commit、固定版認可lockの実装証拠は#94〜#97で順に追加する。in-memory fakeの成功はPersistence適合の証拠にならない。
