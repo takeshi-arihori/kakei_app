@@ -6,7 +6,7 @@
 - Decision record: [GitHub ADR Issue #55](https://github.com/takeshi-arihori/kakei_app/issues/55)
 - Activation evidence: [Formal Security Review](https://github.com/takeshi-arihori/kakei_app/issues/55#issuecomment-5748185586)、[PR #70](https://github.com/takeshi-arihori/kakei_app/pull/70)、merge commit `d0546e46c614d4c081bb2adfd59da27cce9f70af`
 - Amends: [ADR #24](shared-expense-domain-boundaries.md#承認条件-c1-snapshot-revisionの保護と保存)
-- Amended By: [Group終了の整合性と保持期限境界](group-close-consistency-and-retention-boundary.md)、[Group operation locatorとGroup IDの保存契約](group-operation-locator-and-group-id-contract.md)
+- Amended By: [Group終了の整合性と保持期限境界](group-close-consistency-and-retention-boundary.md)、[Group operation locatorとGroup IDの保存契約](group-operation-locator-and-group-id-contract.md)、[CloseIntentIdの保持期間と一意性境界](close-intent-id-retention-boundary.md)（CloseIntent registryの削除後保持期間を1年に限定。全Context deletion receipt、鍵破棄、Checkpoint／Witness、Backup Restore Gateは維持）
 - Related input: [GitHub Task #54](https://github.com/takeshi-arihori/kakei_app/issues/54)
 - Persistence dependency: [GitHub Task #42](https://github.com/takeshi-arihori/kakei_app/issues/42)
 

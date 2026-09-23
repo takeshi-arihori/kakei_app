@@ -1,16 +1,16 @@
 # Group Managementの最初の実装境界（設計案）
 
-- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptance、2026-09-13のADR #52 Acceptance、Task #57の内部契約実装、2026-09-20のC1充足、2026-09-21のADR #73 Acceptance、2026-09-22のADR #85 Acceptanceを反映。残るOpen QuestionとBlockedを分離する。
+- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptance、2026-09-13のADR #52 Acceptance、Task #57の内部契約実装、2026-09-20のC1充足、2026-09-21のADR #73 Acceptance、2026-09-22のADR #85 Acceptance、2026-09-23のADR #102 Acceptanceを反映。残るOpen QuestionとBlockedを分離する。
 - Baseline: [実装開始時のdevelop固定Commit](https://github.com/takeshi-arihori/kakei_app/tree/68d9c469605f554306f773a929250d8b1f642d05)
 - 根拠: [現行業務モデル](../product/current-model.md)、[Accepted ADR #24](../adr/shared-expense-domain-boundaries.md)
-- Decision: [整合性境界](../adr/group-management-consistency-boundary.md)、[本人性・認可・再試行](../adr/group-management-command-authorization.md)、[招待・再参加](../adr/group-invitation-and-rejoin.md)、[Group終了](../adr/group-close-consistency-and-retention-boundary.md)、[operation locator／Group ID](../adr/group-operation-locator-and-group-id-contract.md)
+- Decision: [整合性境界](../adr/group-management-consistency-boundary.md)、[本人性・認可・再試行](../adr/group-management-command-authorization.md)、[招待・再参加](../adr/group-invitation-and-rejoin.md)、[Group終了](../adr/group-close-consistency-and-retention-boundary.md)、[CloseIntentId保持](../adr/close-intent-id-retention-boundary.md)、[operation locator／Group ID](../adr/group-operation-locator-and-group-id-contract.md)
 - 条件C1、S0〜S3、#86のActor内全Group共通locatorとcanonical Group IDのApplication／Domain契約は充足済み。#42はv2 Migration／PostgreSQL CIを実装・統合済み。#94はread adapterとしてReady評価を通過し、#95〜#97を各依存に従って個別Ready評価する。
 
 ## 1. Problem / Scope
 
 利用者が少人数の割り勘Groupを作り、参加者と管理責任を維持する。人数超過、Owner不在・複数化、古い権限による更新を防ぎ、脱退後も過去の支出・精算責務を壊さないことを観測可能な成果とする。
 
-最初の境界はCreateGroup、TransferGroupOwnership、LeaveGroup、InviteParticipant、CancelInvitation、AcceptInvitationの純粋Domainと、それらを呼ぶApplication・Repository Port契約である。Invitation lifecycleと再参加Participant寿命はADR #52で採用し、#57でDomain／Application内部契約とfake Repository検証を追加した。Group終了のClose Intent、Context fence／Receipt、Archive／取消、保持期限はADR #73で採用し、#75でDomain／Application内部契約を実装する。本番本人性・配送・公開Command接続は後続とする。
+最初の境界はCreateGroup、TransferGroupOwnership、LeaveGroup、InviteParticipant、CancelInvitation、AcceptInvitationの純粋Domainと、それらを呼ぶApplication・Repository Port契約である。Invitation lifecycleと再参加Participant寿命はADR #52で採用し、#57でDomain／Application内部契約とfake Repository検証を追加した。Group終了のClose Intent、Context fence／Receipt、Archive／取消、保持期限はADR #73で採用し、CloseIntent registryのGroup削除後1年保持と一意性境界はADR #102で限定した。#75はDomain／Application内部契約、#96はregistryの原子的登録、#103はGroup Management内の退役・期限cleanupを担当する。Group削除後の1年が経過してもcleanup commitまではID再利用を拒否し、cleanup後のDB強制一意性は終了してUUIDv4の実用上一意性に依存する。本番本人性・配送・公開Command接続は後続とする。
 
 対象外: CSV実装、Retention Batch、Invitation配送・Token実装、Expense／Settlementの実fence、DB／Migration、本番Persistence、GraphQL／UI、非同期Event／Projection。Group終了は別Contextの未精算・進行中確認を要するため、#75では公開Portとfake contractまでとし、実Context Adapterを本番へwireしない。
 
@@ -69,7 +69,7 @@ CreateGroup、TransferGroupOwnership、LeaveGroupのCommand名・入力・戻り
 | Group Owner | Groupを管理するParticipantのRole                                                                              | Active Group→Active Participantへの必須参照がちょうど1。独立Entity／Repositoryを作らない                                              | 一意性Confirmed、参照表現Accepted            |
 | Membership  | Participantの参加・脱退の時間関係を表す語                                                                     | 参加・脱退履歴を残す。Participantとは別の重複した変更入口を作らない                                                                   | 履歴必要Confirmed、モデル統合Accepted        |
 
-Group→Participantの所有方向を採用する。削除はRetention全体の設計Gateに従い、脱退でParticipantを物理削除しない。Owner Roleの独立寿命は持たせない。過去参加者を常時すべて読み込む実装は要求せず、現在状態と追加する不変履歴の整合性を同じCommitで守る。履歴の保存形式・復元方式は未決。
+Group→Participantの所有方向を採用する。削除はRetention全体の設計Gateに従い、脱退でParticipantを物理削除しない。Owner Roleの独立寿命は持たせない。Group Managementの業務Data削除後、CloseIntent registryはGroup ID等を除いたopaque UUIDと期限Metadataのみを削除後1年保持し、期限cleanupのcommitでpurgeする。これは他Contextの業務Dataやdeletion receiptの保持を代替しない。過去参加者を常時すべて読み込む実装は要求せず、現在状態と追加する不変履歴の整合性を同じCommitで守る。履歴の保存形式・復元方式は未決。
 
 ### 既存実装との対応
 
@@ -139,7 +139,7 @@ Group終了ではApplicationがExpense RecordingとSettlementのClose Fence Port
 
 ## 8. Confirmed Decisions
 
-ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query分離を維持する。GM-02〜07、人数1〜4、複数Group所属、参加・脱退履歴はcurrent-modelのConfirmed Rule。ADR #35／#36によりGroup Root、Repository Port、内部Command認可と冪等再送を条件付きAcceptedとし、ADR #52によりInvitation lifecycle、受諾原子性、新Participantによる再参加、ADR #73によりGroup終了のClose Intent、Context fence／Receipt、Closing認可、owner-at-archive、2月29日clampをAcceptedした。PR #27はADR #24のAccepted文書統合記録で、C1の証拠は後続のADR #55、正式Security Review、PR #70である。
+ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query分離を維持する。GM-02〜07、人数1〜4、複数Group所属、参加・脱退履歴はcurrent-modelのConfirmed Rule。ADR #35／#36によりGroup Root、Repository Port、内部Command認可と冪等再送を条件付きAcceptedとし、ADR #52によりInvitation lifecycle、受諾原子性、新Participantによる再参加、ADR #73によりGroup終了のClose Intent、Context fence／Receipt、Closing認可、owner-at-archive、2月29日clampをAcceptedした。ADR #102は#55／#73を一部改訂し、CloseIntent registryをGroup削除後1年保持、cleanup commit後はDB強制一意性を終了する。PR #27はADR #24のAccepted文書統合記録で、C1の証拠は後続のADR #55、正式Security Review、PR #70である。
 
 ## 9. Remaining Assumptions / External gaps
 
