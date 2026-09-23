@@ -8,6 +8,7 @@
 - Security review evidence: [Author-separated formal review pass](https://github.com/takeshi-arihori/kakei_app/issues/73#issuecomment-5755728805)（`findings=[]`、`missingEvidence=[]`）
 - Activation evidence: [PR #80](https://github.com/takeshi-arihori/kakei_app/pull/80)、merge commit `57bf974905b6de152a4bf5d566eba78f222d62ae`
 - Amends: [Group Managementの整合性境界](group-management-consistency-boundary.md)、[Snapshot Revisionの保護と保持境界](snapshot-revision-security-and-retention.md)
+- Amended By: [CloseIntentIdの保持期間と一意性境界](close-intent-id-retention-boundary.md)（DB強制一意性はGroup存続中と削除後1年のcleanup commitまで。信頼境界のCSPRNG UUIDv4生成とClose fence／Receipt契約は維持するが、cleanup後の絶対的な全履歴一意性は保証しない）
 - Related implementation: [Task #75](https://github.com/takeshi-arihori/kakei_app/issues/75)
 
 ## Context
