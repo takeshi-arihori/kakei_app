@@ -16,6 +16,8 @@ apps/
   api/       Hono＋GraphQL Yoga API
 infra/
   docker/    ローカル開発用のContainer設定
+docs/
+  api/       HTTP transport設計書とSwagger UI入力
 ```
 
 `apps/worker`と`packages/*`は現時点では存在しません。空のScaffoldは先行作成せず、対応Taskへ着手するときに責務、所有者、Runtime、最初の利用者を決めて追加します。`pnpm-workspace.yaml`のglobは将来追加を受け入れるために先行定義しています。
@@ -57,6 +59,16 @@ pnpm build
 - API: <http://localhost:3001>
 
 APIのLivenessは`GET /health`、GraphQL endpointは`POST /graphql`です。`pnpm codegen`でRepository管理のSDLからAPI Resolver型とWeb Operation型を生成します。
+
+## API設計書
+
+HTTP transport設計書は[`docs/api/openapi.yaml`](docs/api/openapi.yaml)、GraphQL業務契約の正本は[`apps/api/schema.graphql`](apps/api/schema.graphql)です。Swagger UIはローカル閲覧専用で、Request送信と外部Validator通信を無効化しています。
+
+```bash
+docker compose up -d swagger-ui
+```
+
+<http://localhost:8081>で確認できます。Portは`.env`の`SWAGGER_UI_PORT`で変更できます。停止は`docker compose stop swagger-ui`です。更新手順と契約境界は[API設計書の入口](docs/api/README.md)を参照してください。
 
 ## 開発ガイド
 
