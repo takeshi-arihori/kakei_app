@@ -289,7 +289,11 @@ export type OperationReplayLookup<T> =
   | Readonly<{ kind: 'Missing' }>
   | Readonly<{ kind: 'Found'; record: OperationReplayRecord<T> }>;
 
-/** Durable storage is #42; this port keeps locator lookup independent of its adapter. */
+/**
+ * This candidate-based port is separate from GroupRepository.findOperation.
+ * Task #94 supplies the latter's PostgreSQL read adapter; wiring this port
+ * remains a separate integration concern.
+ */
 export interface GroupOperationReplayPort<T> {
   findOperation(input: {
     locatorCandidates: readonly GroupOperationLocatorCandidate[];

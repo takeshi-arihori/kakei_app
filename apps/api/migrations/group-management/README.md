@@ -12,6 +12,12 @@ The schema stores only random record identifiers, CAS and access-policy versions
 
 The v2 locator stores one digest of canonical Actor subject plus operation ID, its key version, a command fingerprint digest, random Group ID and protected operation-result FK. It does not store the Actor or operation input. The Group close-history table uses the same protected envelope columns as other immutable histories; Task #95 supplies its append-only writer.
 
+## Read adapter and protected payload
+
+Task #94's `PostgresGroupReadRepository` implements the read-only `GroupRepository.load(groupId)` and `findOperation(actorSubject, operationId)` surface. It derives current and retired locator candidates through the Group Management locator key port, queries the v2 locator before touching a Group data key, and reads only the FK-linked protected operation result on a hit. Missing candidates or rows return `Missing` without key-read or decrypt; malformed metadata, authentication failure, key loss, invalid payload, and DB failure all become the same generic read failure. The separate candidate-based `GroupOperationReplayPort` is not implemented by this adapter.
+
+Protected Group and operation-result payloads use versioned JSON inside the AES-256-GCM envelope. The read adapter reconstructs canonical AAD from the row's record ID, random Group ID, record kind, schema/key/aggregate versions, validates the protected payload against the row, and rehydrates the Domain Group rather than exposing a PostgreSQL row as a Domain type. The codec, canonical AAD encoder and locator key port are injected; this Task does not introduce a production key provider or wire the adapter into the API. Task #95 owns state writes; Task #96 owns public atomic commit and locator/result writes.
+
 ## Rollback and forward-fix
 
 `0001_group_management_storage.down.sql` is allowed only for an empty development or test schema. It fails when a Group row exists. Once business data has been applied, do not run destructive Down or Drop operations; add a new numbered Expand migration, deploy compatible readers and writers, then use a later Contract migration or forward-fix after the old shape is no longer referenced.
