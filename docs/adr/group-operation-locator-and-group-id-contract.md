@@ -60,3 +60,7 @@ Key Provider、Key material、Audit Store、GraphQL、Production Composition Roo
 Repository ADR同期PRが未統合の間は、このDecisionを取り下げられる。統合後の変更は本ADRを直接書き換えず、新しいADRで互換性・Forward-fixを定める。
 
 Actor内operation ID namespace、locator key rotation、backup保持期間、Group IDの生成方式、operation結果の保持・削除、またはlocatorの一意性／transaction境界が変わる場合に再審査する。
+
+## 実装Task配分の更新（2026-09-23、Decision変更なし）
+
+上記の#42担当記載はAccepted時のDelivery見積りを残したもので、Decision本文の変更ではない。#86は[PR #91](https://github.com/takeshi-arihori/kakei_app/pull/91)で完了した。#42の個別Ready評価で2日・1成果を超えると判明したため、[Task #42](https://github.com/takeshi-arihori/kakei_app/issues/42)をv2 Schema／Migration／PostgreSQL CI、[#94](https://github.com/takeshi-arihori/kakei_app/issues/94)を読取・再送、[#95](https://github.com/takeshi-arihori/kakei_app/issues/95)を状態・不変履歴writer、[#96](https://github.com/takeshi-arihori/kakei_app/issues/96)をlocator/resultと公開commit、[#97](https://github.com/takeshi-arihori/kakei_app/issues/97)を固定版Access Policy SQLへ分割した。旧#42の一括Adapter担当記載はこの配分で読み替える。locatorの鍵・rotation・legacy fail-closed・Group ID契約は変更しない。

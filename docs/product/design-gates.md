@@ -7,9 +7,9 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 [ADR #24](../adr/shared-expense-domain-boundaries.md)は2026-09-06に案Aを条件付きAcceptedとした。3 Context（Group Management、Expense Recording、Settlement）、MVP Modular Monolith、State model＋必要な不変業務履歴、Command／Query責務分離を採用する。全面Event Sourcingと別Store／非同期Projectionは初期採用しない。
 
 - Group Managementの最初のData Owner、Aggregate、Repository Port、内部Command認可は後続ADR #35／#36で条件付きAcceptedとなった。Group終了のContext間Portは[ADR #73](../adr/group-close-consistency-and-retention-boundary.md)でAcceptedとなった。Category所属、他ContextのAggregate、Expense予約・競合のTransaction方式、終了以外のContext間Portは未決。
-- Invitation lifecycleと再参加Participant寿命はADR #52でAcceptedとなった。Invitation／冪等記録の保存保護、Retention、BackupのDecisionはADR #55でAccepted済みであり、S1〜S3と#42で実装・検証する。Persistence、本番本人性・認証・配送、Context間認可、Projectionの未決部分は必要な後続Decisionを経て確定する。
+- Invitation lifecycleと再参加Participant寿命はADR #52でAcceptedとなった。Invitation／冪等記録の保存保護、Retention、BackupのDecisionはADR #55でAccepted済みであり、S1〜S3と#42／#94〜#97で段階的に実装・検証する。Persistence、本番本人性・認証・配送、Context間認可、Projectionの未決部分は必要な後続Decisionを経て確定する。
 - 条件C1は2026-09-20に充足した。[保護・保持Decision](../adr/snapshot-revision-security-and-retention.md)のOwner Accepted、[正式Security Review pass](https://github.com/takeshi-arihori/kakei_app/issues/55#issuecomment-5748185586)、[PR #70](https://github.com/takeshi-arihori/kakei_app/pull/70)のdevelop統合（merge commit `d0546e46c614d4c081bb2adfd59da27cce9f70af`）を証拠とする。
-- C1充足だけではPersistence TaskをReadyにしない。S0〜S3はDoneだが、[ADR #85](../adr/group-operation-locator-and-group-id-contract.md)のRepository同期と#86のApplication／Domain契約整合が#42の追加前提である。#86完了後に#42を個別Ready評価する。実Context fence／Receipt配送、Key Provider、Audit Store、Retention／Backup Gateが揃うまで本番へwireしない。
+- C1充足だけではPersistence TaskをReadyにしない。S0〜S3、[ADR #85](../adr/group-operation-locator-and-group-id-contract.md)のRepository同期、#86のApplication／Domain契約整合はDoneである。#42は分割後のv2 Migration／PostgreSQL CIとして個別Ready評価を通過した。読取・再送 #94、状態writer #95、公開commit #96、固定版認可lock #97は各依存完了後に個別Ready評価する。最新StatusはGitHub Projectを正本とする。実Context fence／Receipt配送、Key Provider、Audit Store、Retention／Backup Gateが揃うまで本番へwireしない。
 
 [設計比較](../domain/shared-expense-design-boundaries.md)に残る候補を一括採用しない。条件に依存しない3 Contextの可視化や設計調査は、別TaskのReady評価を経て進められる。既存のHono／Next.js責務分離、JPY整数、機密平文禁止は維持する。
 
@@ -36,4 +36,4 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 
 ## Group Management初回境界
 
-[設計分析](../domain/group-management-first-boundary.md)、[整合性境界Decision](../adr/group-management-consistency-boundary.md)、[認可Decision](../adr/group-management-command-authorization.md)、[招待・再参加Decision](../adr/group-invitation-and-rejoin.md)、[Group終了Decision](../adr/group-close-consistency-and-retention-boundary.md)、[operation locator／Group ID Decision](../adr/group-operation-locator-and-group-id-contract.md)へ具体化した。S0〜S3はDoneだが、#86がActor内全Group共通operation locatorとcanonical Group IDの契約を同期するまで#42をReadyにしない。本番本人性・配送、実Context fence／Receipt配送は未決または未実装であり、Production Key Provider／Audit Store／Retention Checkpoint／Backup／Deployment Gateも未実装である。
+[設計分析](../domain/group-management-first-boundary.md)、[整合性境界Decision](../adr/group-management-consistency-boundary.md)、[認可Decision](../adr/group-management-command-authorization.md)、[招待・再参加Decision](../adr/group-invitation-and-rejoin.md)、[Group終了Decision](../adr/group-close-consistency-and-retention-boundary.md)、[operation locator／Group ID Decision](../adr/group-operation-locator-and-group-id-contract.md)へ具体化した。S0〜S3と#86はDone。#42はv2 Migration／PostgreSQL CIとしてReady評価を通過し、Adapterは#94〜#97の依存順に個別Ready評価する。本番本人性・配送、実Context fence／Receipt配送は未決または未実装であり、Production Key Provider／Audit Store／Retention Checkpoint／Backup／Deployment Gateも未実装である。

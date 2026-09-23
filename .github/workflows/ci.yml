@@ -25,6 +25,22 @@ jobs:
     name: lint・型・Test・Build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17.10-alpine3.23
+        env:
+          POSTGRES_DB: kakei_test
+          POSTGRES_USER: kakei
+          POSTGRES_PASSWORD: ci-fixture-not-a-secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kakei -d kakei_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://kakei:ci-fixture-not-a-secret@127.0.0.1:5432/kakei_test
 
     steps:
       - name: Repositoryを取得
@@ -45,5 +61,5 @@ jobs:
       - name: Repository全体を検証
         run: pnpm check
 
-      - name: WebからAPIへの疎通を検証
-        run: pnpm --filter @kakei/api exec vitest run test/api-connectivity.integration.spec.ts
+      - name: API疎通とPostgreSQL結合を検証
+        run: pnpm --filter @kakei/api test:e2e
