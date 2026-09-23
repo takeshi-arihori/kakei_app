@@ -21,5 +21,16 @@ services:
       start_period: 10s
     stop_grace_period: 30s
 
+  swagger-ui:
+    image: docker.swagger.io/swaggerapi/swagger-ui:v5.33.0
+    environment:
+      SWAGGER_JSON: /spec/openapi.yaml
+      SUPPORTED_SUBMIT_METHODS: "[]"
+      VALIDATOR_URL: none
+    ports:
+      - "${SWAGGER_UI_PORT:-8081}:8080"
+    volumes:
+      - ./docs/api/openapi.yaml:/spec/openapi.yaml:ro
+
 volumes:
   postgres_data:

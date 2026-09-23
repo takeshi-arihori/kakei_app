@@ -18,7 +18,11 @@ pnpm -C apps/api build
 - `GET /health`: Liveness
 - `POST /graphql`: GraphQL Yoga
 
-GraphQL契約の正本は[`schema.graphql`](schema.graphql)です。Repository rootで`pnpm codegen`を実行し、Resolver型とWeb Operation型を更新します。
+GraphQL契約の正本はRepositoryの[`apps/api/schema.graphql`](schema.graphql)です。Repository rootで`pnpm codegen`を実行し、Resolver型とWeb Operation型を更新します。
+
+`apps/api/src/app.ts`はGraphQL YogaのUI／transport／preflight境界として`GET`／`OPTIONS /graphql`も受理しますが、現行の公開業務API契約は`POST /graphql`だけです。ClientはGET／OPTIONSによる業務Operation実行へ依存しません。
+
+HTTP transportのOpenAPI設計書とローカルSwagger UIの利用方法は[`docs/api/README.md`](../../docs/api/README.md)を参照してください。OpenAPIはGraphQL Type／Fieldを再定義しません。
 
 ## テスト専用DB例
 

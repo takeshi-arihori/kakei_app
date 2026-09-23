@@ -1,0 +1,130 @@
+openapi: 3.1.0
+info:
+  title: Kakei App HTTP Transport API
+  version: 0.1.0
+  description: |
+    Public HTTP transport for the kakei app.
+
+    The canonical GraphQL business contract is ../../apps/api/schema.graphql.
+    This document describes only HTTP methods, content types, and transport
+    envelopes. It does not redefine GraphQL business types or fields.
+  license:
+    name: UNLICENSED
+servers:
+  - url: http://localhost:3001
+    description: Local Hono API
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check API liveness
+      responses:
+        "200":
+          description: API process is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /graphql:
+    post:
+      operationId: executeGraphQL
+      summary: Execute a GraphQL operation
+      description: |
+        Executes the operation defined by the canonical GraphQL SDL at
+        ../../apps/api/schema.graphql. GraphQL business types and fields are
+        intentionally not duplicated in this OpenAPI document.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GraphQLRequest"
+      responses:
+        "200":
+          description: GraphQL response envelope; inspect errors before data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphQLResponse"
+        "400":
+          description: Invalid GraphQL-over-HTTP request envelope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphQLResponse"
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          const: ok
+    GraphQLRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          minLength: 1
+          description: GraphQL document validated against the canonical SDL
+        operationName:
+          type:
+            - string
+            - "null"
+        variables:
+          type:
+            - object
+            - "null"
+          additionalProperties: true
+        extensions:
+          type:
+            - object
+            - "null"
+          additionalProperties: true
+    GraphQLResponse:
+      type: object
+      additionalProperties: true
+      anyOf:
+        - required:
+            - data
+        - required:
+            - errors
+      properties:
+        data:
+          type:
+            - object
+            - "null"
+          additionalProperties: true
+        errors:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/GraphQLError"
+        extensions:
+          type: object
+          additionalProperties: true
+    GraphQLError:
+      type: object
+      additionalProperties: true
+      required:
+        - message
+      properties:
+        message:
+          type: string
+        locations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        path:
+          type: array
+          items: {}
+        extensions:
+          type: object
+          additionalProperties: true
