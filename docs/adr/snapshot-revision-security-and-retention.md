@@ -297,3 +297,7 @@ Authorから分離したReviewerがPlaintext inventory、Canonical Envelope、Go
 - Backup、Checkpoint、Witness、Restore、Deletion receiptが変わる
 - PostgreSQL major version、Migration正本、Runtime dependencyが変わる
 - 本番本人性、Audit Store、Cloud／KMS、Production wiringを採用する
+
+## 実装Task配分の更新（2026-09-23、Decision変更なし）
+
+上記の#42単独担当・主証拠記載はAccepted時のDelivery計画として保持する。#42の個別Ready評価後、PostgreSQL v2 Schema／Migration／CIは[Task #42](https://github.com/takeshi-arihori/kakei_app/issues/42)、暗号化Groupとoperation結果の読取・non-member／locator miss時decrypt 0は[#94](https://github.com/takeshi-arihori/kakei_app/issues/94)、状態・履歴・索引のCAS保存は[#95](https://github.com/takeshi-arihori/kakei_app/issues/95)、operation locator／resultの原子的commit・再送・rotation lockは[#96](https://github.com/takeshi-arihori/kakei_app/issues/96)、固定policy versionとSQL row lockは[#97](https://github.com/takeshi-arihori/kakei_app/issues/97)が主証拠を出す。旧表中の#42一括証拠はこの配分で読み替える。C1とProduction Security／Retention／Deployment Gateの条件は変えない。

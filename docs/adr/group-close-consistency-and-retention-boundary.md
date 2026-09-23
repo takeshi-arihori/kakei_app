@@ -117,3 +117,7 @@ Ownerは、Context ownershipと競合安全性の代わりにClosing／Receipt�
 このDecisionを取り消す場合は新ADRでAmendまたはSupersedeし、進行中Close Intentと両Context fenceを安全に解除または移行する計画を必須とする。文書だけをrevertしてfenceを残さない。
 
 Context配置、Transaction境界、Group lifecycle、未精算／進行中の定義、fence／Receiptの配送・保護、Archive取消、保持期限、Timezone規則が変わる場合に再審査する。fence前commit、設置中競合、fence後拒否、部分失敗、timeout再送、取消、Archive／取消競合を後続contract testとIntegration Testで再確認する。
+
+## 実装Task配分の更新（2026-09-23、Decision変更なし）
+
+上記Implementationの#42一括Repository担当はAccepted時のDelivery計画として保持する。#42の個別Ready評価後、[#42](https://github.com/takeshi-arihori/kakei_app/issues/42)はGroup close不変履歴の保護Schema、[#95](https://github.com/takeshi-arihori/kakei_app/issues/95)は状態・close履歴・索引の原子的CAS writer、[#96](https://github.com/takeshi-arihori/kakei_app/issues/96)はoperation結果／locatorを含む公開commit、[#97](https://github.com/takeshi-arihori/kakei_app/issues/97)はClosing／Archivedでの固定policy版SQL lockを検証する。実Context fence／Receipt配送とProduction wiring禁止条件は変更しない。

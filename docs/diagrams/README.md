@@ -5,6 +5,7 @@
 ## 図一覧
 
 - [共有割り勘の論理Context境界](shared-expense-contexts.mermaid.md): ADR #24で採用した3 Context。条件C1は充足済み。Context間契約の未決部分は残る。
+- [Group Management locator v2の保存関係](group-management-locator-storage.mermaid.md): ADR #55／#73／#85とv2 Migrationに従うFKとkey-stateの境界。
 
 ## Template
 
