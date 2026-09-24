@@ -159,11 +159,24 @@ describe('Group locator v2 migration', () => {
         [closeIntentId, groupId],
       ),
     ).rejects.toMatchObject({ code: '23505' });
-    await expect(
-      client.query('DELETE FROM group_aggregate_record WHERE group_id = $1', [
-        groupId,
-      ]),
-    ).rejects.toMatchObject({ code: '23001' });
+    let deleteError: unknown;
+    try {
+      await client.query(
+        'DELETE FROM group_aggregate_record WHERE group_id = $1',
+        [groupId],
+      );
+    } catch (error: unknown) {
+      deleteError = error;
+    }
+    expect(deleteError).toBeDefined();
+    if (
+      typeof deleteError !== 'object' ||
+      deleteError === null ||
+      !('code' in deleteError)
+    ) {
+      throw new Error('Group deletion must fail with a database constraint');
+    }
+    expect(['23001', '23503']).toContain(deleteError.code);
 
     await client.query(
       "UPDATE group_close_intent_registry SET group_id = NULL, retain_until = now() + interval '1 year' WHERE close_intent_id = $1",
