@@ -1,4 +1,4 @@
-import { GroupInvariantViolation } from './group-invariant-violation';
+import { GroupInvariantViolation } from './group-invariant-violation.js';
 import {
   ActorSubject,
   CloseIntentId,
@@ -6,12 +6,12 @@ import {
   InvitationId,
   ParticipantId,
   UtcInstant,
-} from './group-value-objects';
+} from './group-value-objects.js';
 
 export {
   GroupInvariantViolation,
   type GroupInvariantViolationCode,
-} from './group-invariant-violation';
+} from './group-invariant-violation.js';
 export {
   ActorSubject,
   CloseIntentId,
@@ -19,7 +19,7 @@ export {
   InvitationId,
   ParticipantId,
   UtcInstant,
-} from './group-value-objects';
+} from './group-value-objects.js';
 
 export type GroupStatus = 'Active' | 'Closing' | 'Archived';
 export type ParticipantStatus = 'Active' | 'Left';
