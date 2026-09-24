@@ -1,4 +1,4 @@
-import { GroupInvariantViolation } from './group-invariant-violation';
+import { GroupInvariantViolation } from './group-invariant-violation.js';
 
 const requireNonEmpty = (value: string): string => {
   if (value.trim().length === 0) {
