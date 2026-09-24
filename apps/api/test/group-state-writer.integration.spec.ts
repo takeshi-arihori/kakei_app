@@ -414,7 +414,9 @@ describe('PostgreSQL Group state writer', () => {
     );
     await client.query('COMMIT');
 
-    const closeIntentId = CloseIntentId.from('test-close-intent-95');
+    const closeIntentId = CloseIntentId.from(
+      '00000000-0000-4000-8000-000000000095',
+    );
     const closing = group.startClosing({
       actorSubject: actor,
       closeIntentId,
@@ -578,7 +580,9 @@ describe('PostgreSQL Group state writer', () => {
       BEFORE INSERT ON group_close_history_record
       FOR EACH ROW EXECUTE FUNCTION reject_close_history();
     `);
-    const closeIntentId = CloseIntentId.from('test-close-rollback-95');
+    const closeIntentId = CloseIntentId.from(
+      '00000000-0000-4000-8000-000000000096',
+    );
     const closing = group.startClosing({
       actorSubject: actor,
       closeIntentId,

@@ -258,7 +258,9 @@ const dependencies = (): GroupCommandDependencies => ({
   ),
   nextParticipantId: vi.fn(() => ParticipantId.from('generated-participant')),
   nextInvitationId: vi.fn(() => InvitationId.from('generated-invitation')),
-  nextCloseIntentId: vi.fn(() => CloseIntentId.from('generated-close-intent')),
+  nextCloseIntentId: vi.fn(() =>
+    CloseIntentId.from('00000000-0000-4000-8000-0000000000a3'),
+  ),
   now: vi.fn(() => createdAt),
 });
 
@@ -458,7 +460,9 @@ describe('GroupCommandService.createGroup', () => {
         .mockReturnValueOnce(ParticipantId.from('participant-one'))
         .mockReturnValueOnce(ParticipantId.from('participant-two')),
       nextInvitationId: vi.fn(() => InvitationId.from('unused-invitation')),
-      nextCloseIntentId: vi.fn(() => CloseIntentId.from('unused-close-intent')),
+      nextCloseIntentId: vi.fn(() =>
+        CloseIntentId.from('00000000-0000-4000-8000-0000000000a4'),
+      ),
       now: vi.fn(() => createdAt),
     };
     const service = new GroupCommandService(repository, injected);
@@ -1274,7 +1278,7 @@ describe('GroupCommandServiceのGroup close Command', () => {
     expect(first).toEqual({
       kind: 'GroupClosingStarted',
       groupId: GroupId.from('00000000-0000-4000-8000-000000000001'),
-      closeIntentId: CloseIntentId.from('generated-close-intent'),
+      closeIntentId: CloseIntentId.from('00000000-0000-4000-8000-0000000000a3'),
       version: 2,
     });
     expect((await repository.load(first.groupId))?.group.status).toBe(

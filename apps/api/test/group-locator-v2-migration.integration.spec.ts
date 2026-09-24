@@ -21,13 +21,18 @@ const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
   'postgresql://kakei:kakei_local_password@localhost:5432/kakei_test';
 
-const loadMigration = async (version: 1 | 2): Promise<SqlMigration> => ({
+const loadMigration = async (version: 1 | 2 | 3): Promise<SqlMigration> => ({
   version,
-  name: version === 1 ? 'group-management-storage' : 'group-locator-v2',
+  name:
+    version === 1
+      ? 'group-management-storage'
+      : version === 2
+        ? 'group-locator-v2'
+        : 'close-intent-registry',
   sql: await readFile(
     resolve(
       import.meta.dirname,
-      `../migrations/group-management/000${version}_${version === 1 ? 'group_management_storage' : 'group_locator_v2'}.sql`,
+      `../migrations/group-management/000${version}_${version === 1 ? 'group_management_storage' : version === 2 ? 'group_locator_v2' : 'close_intent_registry'}.sql`,
     ),
     'utf8',
   ),
@@ -127,6 +132,85 @@ describe('Group locator v2 migration', () => {
       current_key_version: string | null;
     }>('SELECT id, current_key_version FROM group_operation_locator_key_state');
     expect(keyState.rows).toEqual([{ id: 1, current_key_version: null }]);
+  });
+
+  it('close履歴が空ならregistryを追加し、保持中の重複とGroup削除を拒否する', async () => {
+    await applySqlMigrations(client, [await loadMigration(2)]);
+    const migration = await loadMigration(3);
+    expect(await applySqlMigrations(client, [migration])).toEqual({
+      appliedVersions: [3],
+      skippedVersions: [],
+    });
+    expect(await applySqlMigrations(client, [migration])).toEqual({
+      appliedVersions: [],
+      skippedVersions: [3],
+    });
+
+    const groupId = '00000000-0000-4000-8000-000000000042';
+    const closeIntentId = '00000000-0000-4000-8000-000000000142';
+    await insertProtectedGroup(client, groupId);
+    await client.query(
+      'INSERT INTO group_close_intent_registry (close_intent_id, group_id) VALUES ($1, $2)',
+      [closeIntentId, groupId],
+    );
+    await expect(
+      client.query(
+        'INSERT INTO group_close_intent_registry (close_intent_id, group_id) VALUES ($1, $2)',
+        [closeIntentId, groupId],
+      ),
+    ).rejects.toMatchObject({ code: '23505' });
+    await expect(
+      client.query('DELETE FROM group_aggregate_record WHERE group_id = $1', [
+        groupId,
+      ]),
+    ).rejects.toMatchObject({ code: '23001' });
+
+    await client.query(
+      "UPDATE group_close_intent_registry SET group_id = NULL, retain_until = now() + interval '1 year' WHERE close_intent_id = $1",
+      [closeIntentId],
+    );
+    await client.query(
+      'DELETE FROM group_aggregate_record WHERE group_id = $1',
+      [groupId],
+    );
+    const retired = await client.query<{ group_id: string | null }>(
+      'SELECT group_id FROM group_close_intent_registry WHERE close_intent_id = $1',
+      [closeIntentId],
+    );
+    expect(retired.rows).toEqual([{ group_id: null }]);
+  });
+
+  it('protected close履歴があればregistry migrationをfail-closedでrollbackする', async () => {
+    await applySqlMigrations(client, [await loadMigration(2)]);
+    const groupId = '00000000-0000-4000-8000-000000000042';
+    await insertProtectedGroup(client, groupId);
+    await client.query(
+      `INSERT INTO group_close_history_record (
+        logical_record_id, group_id, aggregate_version, envelope_version,
+        algorithm_id, schema_version, key_version, ciphertext, nonce,
+        authentication_tag, created_at
+      ) VALUES (
+        '00000000-0000-4000-8000-000000000342', $1, 1, 1,
+        'AES-256-GCM', 1, 'test-key-v1', decode('01', 'hex'),
+        decode('000102030405060708090a0b', 'hex'),
+        decode('000102030405060708090a0b0c0d0e0f', 'hex'), now()
+      )`,
+      [groupId],
+    );
+
+    await expect(
+      applySqlMigrations(client, [await loadMigration(3)]),
+    ).rejects.toThrow(
+      'protected close history requires an approved CloseIntent registry backfill',
+    );
+    const registry = await client.query<{ name: string | null }>(
+      "SELECT to_regclass('group_close_intent_registry')::text AS name",
+    );
+    expect(registry.rows).toEqual([{ name: null }]);
+    const migration = await client.query<{ count: string }>(
+      'SELECT count(*)::text AS count FROM app_schema_migrations WHERE version = 3',
+    );
+    expect(migration.rows).toEqual([{ count: '0' }]);
   });
 
   it('legacy行があればv1行とSchemaを変更せず拒否する', async () => {

@@ -173,7 +173,9 @@ class InMemoryCloseFenceContextFake implements GroupCloseContextPort {
 }
 
 const groupId = GroupId.from('00000000-0000-4000-8000-000000000001');
-const closeIntentId = CloseIntentId.from('close-intent-a');
+const closeIntentId = CloseIntentId.from(
+  '00000000-0000-4000-8000-0000000000a1',
+);
 const cutoff = instant('2026-09-21T00:00:00.000Z');
 const now = (): UtcInstant => instant('2026-09-21T00:01:00.000Z');
 const request = { groupId, closeIntentId, cutoff };
