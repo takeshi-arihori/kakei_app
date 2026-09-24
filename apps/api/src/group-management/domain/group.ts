@@ -32,6 +32,7 @@ export type GroupInvariantViolationCode =
   | 'INVITATION_ACTION_BEFORE_CREATED'
   | 'ACCESS_POLICY_VERSION_INVALID'
   | 'CLOSE_STATE_INVALID'
+  | 'CLOSE_INTENT_ID_INVALID'
   | 'CLOSE_INTENT_MISMATCH'
   | 'CLOSE_RECEIPT_MISMATCH'
   | 'CLOSE_RECEIPT_DUPLICATED'
@@ -118,7 +119,17 @@ export class CloseIntentId {
   }
 
   static from(value: string): CloseIntentId {
-    return new CloseIntentId(requireNonEmpty(value));
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+        value,
+      )
+    ) {
+      throw new GroupInvariantViolation(
+        'CLOSE_INTENT_ID_INVALID',
+        'CloseIntentId must be a lowercase canonical UUIDv4',
+      );
+    }
+    return new CloseIntentId(value);
   }
 
   equals(other: CloseIntentId): boolean {

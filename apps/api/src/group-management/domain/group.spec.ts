@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ActorSubject,
+  CloseIntentId,
   Group,
   GroupId,
   GroupInvariantViolation,
@@ -270,6 +271,24 @@ describe('Groupの値', () => {
       '00000000-0000-0000-8000-00000000001',
     ]) {
       expectViolation(() => GroupId.from(invalid), 'GROUP_ID_INVALID');
+    }
+  });
+
+  it('CloseIntentIdはlowercase canonical UUIDv4だけを受け入れる', () => {
+    const valid = '00000000-0000-4000-8000-000000000001';
+    expect(CloseIntentId.from(valid).value).toBe(valid);
+
+    for (const invalid of [
+      '',
+      'close-intent-a',
+      '00000000-0000-0000-8000-000000000001',
+      '00000000-0000-4000-8000-00000000000A',
+      '00000000-0000-4000-c000-000000000001',
+    ]) {
+      expectViolation(
+        () => CloseIntentId.from(invalid),
+        'CLOSE_INTENT_ID_INVALID',
+      );
     }
   });
 

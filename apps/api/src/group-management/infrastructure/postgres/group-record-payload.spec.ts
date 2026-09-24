@@ -24,7 +24,9 @@ import {
 const groupId = GroupId.from('00000000-0000-4000-8000-000000000194');
 const participantId = ParticipantId.from('participant-194');
 const actor = ActorSubject.from('actor-194');
-const closeIntentId = CloseIntentId.from('close-194');
+const closeIntentId = CloseIntentId.from(
+  '00000000-0000-4000-8000-000000000194',
+);
 const at = UtcInstant.from(new Date('2026-09-23T00:00:00.000Z'));
 
 const active = (): Group =>

@@ -55,6 +55,7 @@ export type GroupCommandDependencies = Readonly<{
   nextGroupId: () => GroupId;
   nextParticipantId: () => ParticipantId;
   nextInvitationId: () => InvitationId;
+  /** Trusted composition injects CSPRNG UUIDv4 IDs; commands cannot choose an ID. */
   nextCloseIntentId: () => CloseIntentId;
   now: () => UtcInstant;
 }>;

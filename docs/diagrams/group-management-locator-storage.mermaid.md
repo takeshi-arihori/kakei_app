@@ -1,9 +1,9 @@
 # Group Management locator v2の保存関係
 
-- Status: Confirmed（ADR #55／#73／#85で採用した保存境界）
-- Source of Truth: [operation locator／Group ID Decision](../adr/group-operation-locator-and-group-id-contract.md)、[v2 Migration](../../apps/api/migrations/group-management/0002_group_locator_v2.sql)
-- Related: [Task #42](https://github.com/takeshi-arihori/kakei_app/issues/42)、[Task #94](https://github.com/takeshi-arihori/kakei_app/issues/94)、[Task #95](https://github.com/takeshi-arihori/kakei_app/issues/95)、[Task #96](https://github.com/takeshi-arihori/kakei_app/issues/96)
-- Last Confirmed: 2026-09-23
+- Status: Confirmed（ADR #55／#73／#85／#102で採用した保存境界）
+- Source of Truth: [operation locator／Group ID Decision](../adr/group-operation-locator-and-group-id-contract.md)、[CloseIntent保持Decision](../adr/close-intent-id-retention-boundary.md)、[v2 Migration](../../apps/api/migrations/group-management/0002_group_locator_v2.sql)、[v3 Migration](../../apps/api/migrations/group-management/0003_close_intent_registry.sql)
+- Related: [Task #42](https://github.com/takeshi-arihori/kakei_app/issues/42)、[Task #94](https://github.com/takeshi-arihori/kakei_app/issues/94)、[Task #95](https://github.com/takeshi-arihori/kakei_app/issues/95)、[Task #96](https://github.com/takeshi-arihori/kakei_app/issues/96)、[Task #103](https://github.com/takeshi-arihori/kakei_app/issues/103)
+- Last Confirmed: 2026-09-24
 
 ## 図の目的
 
@@ -15,6 +15,7 @@ erDiagram
     GROUP_AGGREGATE_RECORD ||--o{ GROUP_OPERATION_LOCATOR_V2 : owns
     GROUP_OPERATION_RESULT_RECORD ||--o| GROUP_OPERATION_LOCATOR_V2 : locates
     GROUP_AGGREGATE_RECORD ||--o{ GROUP_CLOSE_HISTORY_RECORD : owns
+    GROUP_AGGREGATE_RECORD ||--o{ GROUP_CLOSE_INTENT_REGISTRY : registers
 
     GROUP_AGGREGATE_RECORD {
         uuid group_id PK
@@ -38,10 +39,15 @@ erDiagram
         bigint aggregate_version
         bytea ciphertext
     }
+    GROUP_CLOSE_INTENT_REGISTRY {
+        uuid close_intent_id PK
+        uuid group_id FK "nullable after deletion retirement"
+        timestamptz retain_until "set to deletedAt plus one year"
+    }
     GROUP_OPERATION_LOCATOR_KEY_STATE {
         smallint id PK
         text current_key_version "nullable until provider initializes"
     }
 ```
 
-v1 locator表は旧digestを復元・再key化せず、0件preflight後も削除しない。v2 locatorの`locator_digest`と`digest_key_version`の組が一意であり、random `group_id`とoperation結果へのFKはGroup削除時にcascadeする。Key-state行は#96のcommandが`FOR SHARE`、rotationが`FOR UPDATE`で固定する。Group closeの内容は保護Recordのciphertext内に置き、平文列を追加しない。
+v1 locator表は旧digestを復元・再key化せず、0件preflight後も削除しない。v2 locatorの`locator_digest`と`digest_key_version`の組が一意であり、random `group_id`とoperation結果へのFKはGroup削除時にcascadeする。Key-state行は#96のcommandが`FOR SHARE`、rotationが`FOR UPDATE`で固定する。Group closeの内容は保護Recordのciphertext内に置き、平文列を追加しない。RegistryはGroup存続中はCloseIntent UUIDをGroup FKへ束縛し、削除TransactionでGroup IDを切り離した後もUUIDと`retain_until`だけを1年間保持する。expiry後もpurge commitまではunique constraintが有効。

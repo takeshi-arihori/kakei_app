@@ -18,7 +18,7 @@ const instant = (value: string): UtcInstant => UtcInstant.from(new Date(value));
 const owner = ParticipantId.from('participant-owner');
 const ownerSubject = ActorSubject.from('owner-subject');
 const groupId = GroupId.from('00000000-0000-4000-8000-000000000001');
-const intentId = CloseIntentId.from('close-intent-a');
+const intentId = CloseIntentId.from('00000000-0000-4000-8000-0000000000a1');
 const cutoff = instant('2026-09-21T00:00:00.000Z');
 
 const activeSnapshot = (): GroupSnapshot => ({
@@ -171,7 +171,9 @@ describe('Group close lifecycle', () => {
     {
       label: '別Intent',
       receipt: fenceReceipt('ExpenseRecording', {
-        closeIntentId: CloseIntentId.from('another-intent'),
+        closeIntentId: CloseIntentId.from(
+          '00000000-0000-4000-8000-0000000000a2',
+        ),
       }),
     },
     {
