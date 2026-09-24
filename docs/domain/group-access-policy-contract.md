@@ -29,7 +29,7 @@
 
 ## Boundary and traceability
 
-`GroupAccessPolicyPort` is a Group Management Application port. It publishes neither SQL nor `pg` types. #86はContext locator keyとGroup IDのApplication／Domain契約を実装し、#42がPostgreSQL `FOR SHARE` / `FOR UPDATE`、durable replay data、二接続Integrationを実装する。Security-audit `requestId`とaudit fingerprintはProduction Security Gateの対象外のままである。
+`GroupAccessPolicyPort` is a Group Management Application port. It publishes neither SQL nor `pg` types. #86はContext locator keyとGroup IDのApplication／Domain契約を実装する。#97はPostgreSQL adapterがGroup ID昇順に`FOR UPDATE`し、callbackを純粋計算として実行した後、既存state writerへ不変commit requestを同一transactionで渡す。Snapshot readはactor access index missを先に判定し、Group policy rowを`FOR SHARE`で固定してcallback結果を再認可する。Schemaは#42、暗号化済みGroup読取は#94、状態／履歴／索引writerは#95、operation result／locatorとの公開commitは#96が担う。Security-audit `requestId`とaudit fingerprintはProduction Security Gateの対象外のままである。
 
 | Scenario | Type | Contracts |
 | --- | --- | --- |
@@ -40,4 +40,4 @@
 | Version mismatch, callback exception, timeout/deadlock/connection loss | Concurrency / failure | FAIL-002 |
 | Exact and changed-payload operation replay | Retry / rejection | FAIL-003 |
 
-ADR #85のDecisionはAcceptedで、#86がApplication／Domainのlocator入力・候補PortとGroup ID形式を同期する。実際のKey Provider、retired key保持、並行transaction、永続lookupは#42とProduction Gateに従う。
+ADR #85のDecisionはAcceptedで、#86がApplication／Domainのlocator入力・候補PortとGroup ID形式を同期する。実際のKey Provider、retired key保持、locator durable lookupは#42／#96とProduction Gateに従う。Group固定policyの並行transactionとrollbackは#97のscopeであり、本番Composition RootへのwiringはProduction Gateを満たすまで行わない。

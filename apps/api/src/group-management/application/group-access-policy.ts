@@ -5,7 +5,7 @@ import type {
 } from '@kakei/protected-record';
 
 import type { ActorSubject, GroupId, ParticipantId } from '../domain/group.js';
-import type { OperationId } from './group-repository.js';
+import type { CommitGroupRequest, OperationId } from './group-repository.js';
 
 const textEncoder = new TextEncoder();
 
@@ -248,8 +248,7 @@ export type FixedSnapshotReadAccess = Readonly<{
 
 export type ExclusiveMutationResult<T> = Readonly<{
   value: T;
-  nextGroupVersion: number;
-  nextAccessPolicyVersion: number;
+  mutations: readonly CommitGroupRequest[];
 }>;
 
 export type ExpectedGroupAccessPolicyVersion = Readonly<{
@@ -261,7 +260,9 @@ export type ExpectedGroupAccessPolicyVersion = Readonly<{
 /**
  * Public Group Management boundary. Implementations keep reads within one
  * fixed policy version and serialize access-affecting mutations in ascending
- * Group ID order. SQL locking and durable storage belong to #42.
+ * Group ID order. Mutation callbacks are pure calculations over immutable
+ * policy snapshots and return readonly Group commit plans; they receive no
+ * database handle. PostgreSQL locking and persistence belong to #97.
  */
 export interface GroupAccessPolicyPort {
   withSnapshotRead<T>(input: {
