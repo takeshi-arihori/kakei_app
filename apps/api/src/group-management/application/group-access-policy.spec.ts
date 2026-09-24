@@ -2,8 +2,18 @@ import { createHmac } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
-import { ActorSubject, GroupId, ParticipantId } from '../domain/group.js';
-import { OperationId } from './group-repository.js';
+import {
+  ActorSubject,
+  Group,
+  GroupId,
+  ParticipantId,
+  UtcInstant,
+} from '../domain/group.js';
+import {
+  CommandFingerprint,
+  OperationId,
+  type CommitGroupRequest,
+} from './group-repository.js';
 import {
   actorAccessIndexDigestInput,
   canReadSnapshot,
@@ -59,6 +69,58 @@ const policy = (
     ] as FixedGroupAccessPolicy['memberships'],
     ...overrides,
   });
+
+const mutationRequest = (
+  current: FixedGroupAccessPolicy,
+): CommitGroupRequest => {
+  const createdAt = UtcInstant.from(new Date('2026-09-24T00:00:00.000Z'));
+  const participants = [
+    ...new Map(
+      current.memberships.map((membership) => [
+        membership.participantId.value,
+        membership,
+      ]),
+    ).values(),
+  ].map((membership, index) => ({
+    id: membership.participantId,
+    subject: membership.actorSubject,
+    joinedAt: createdAt,
+    joinOrder: index + 1,
+    status: membership.status,
+    leftAt: membership.status === 'Left' ? createdAt : null,
+  }));
+  const group = Group.restore({
+    id: current.groupId,
+    status: current.status,
+    ownerParticipantId: current.ownerParticipantId,
+    participants,
+    invitations: [],
+    accessPolicyVersion: current.accessPolicyVersion + 1,
+    closing: null,
+    ownerAtArchiveParticipantId: current.ownerAtArchiveParticipantId,
+    archivedAt: null,
+    deleteEligibleAt: null,
+  });
+
+  return {
+    group,
+    expectedVersion: current.groupVersion,
+    stateChanged: true,
+    membershipChanges: [],
+    invitationChanges: [],
+    groupCloseChanges: [],
+    operation: {
+      actorSubject: activeSubject,
+      operationId: OperationId.from('policy-mutation-operation'),
+      fingerprint: CommandFingerprint.from('policy-mutation-fingerprint'),
+    },
+    result: {
+      kind: 'OwnershipTransferred',
+      groupId: current.groupId,
+      ownerParticipantId: current.ownerParticipantId ?? owner,
+    },
+  };
+};
 
 const involvement = (
   overrides: Partial<SnapshotInvolvement> = {},
@@ -320,20 +382,43 @@ class FakeGroupAccessPolicyPort implements GroupAccessPolicyPort {
     }
     try {
       const result = await input.callback(fixed);
+      const mutationIds = result.mutations.map(({ group }) => group.id.value);
       if (
-        fixed.some(
-          (current) =>
-            result.nextGroupVersion <= current.groupVersion ||
-            result.nextAccessPolicyVersion <= current.accessPolicyVersion,
-        )
+        new Set(mutationIds).size !== mutationIds.length ||
+        result.mutations.some((mutation) => {
+          const expected = input.expectedPolicies.find(({ groupId: id }) =>
+            id.equals(mutation.group.id),
+          );
+          return (
+            expected === undefined ||
+            mutation.expectedVersion !== expected.groupVersion ||
+            !mutation.stateChanged ||
+            mutation.group.accessPolicyVersion <= expected.accessPolicyVersion
+          );
+        })
       ) {
         return { kind: 'Unavailable' };
       }
-      for (const current of fixed) {
+      for (const mutation of result.mutations) {
+        const current = fixed.find(({ groupId: id }) =>
+          id.equals(mutation.group.id),
+        );
+        if (current === undefined) {
+          return { kind: 'Unavailable' };
+        }
         this.policies.set(current.groupId.value, {
-          ...current,
-          groupVersion: result.nextGroupVersion,
-          accessPolicyVersion: result.nextAccessPolicyVersion,
+          groupId: mutation.group.id,
+          groupVersion: current.groupVersion + 1,
+          accessPolicyVersion: mutation.group.accessPolicyVersion,
+          status: mutation.group.status,
+          ownerParticipantId: mutation.group.ownerParticipantId,
+          ownerAtArchiveParticipantId:
+            mutation.group.ownerAtArchiveParticipantId,
+          memberships: mutation.group.participants.map((participant) => ({
+            participantId: participant.id,
+            actorSubject: participant.subject,
+            status: participant.status,
+          })),
         });
       }
       return { kind: 'Allowed', value: result.value };
@@ -672,8 +757,7 @@ describe('GroupAccessPolicyPort fake contract', () => {
         callback: () =>
           Promise.resolve({
             value: 'not used',
-            nextGroupVersion: 8,
-            nextAccessPolicyVersion: 4,
+            mutations: [],
           }),
       }),
     ).resolves.toEqual({ kind: 'Unavailable' });
@@ -686,8 +770,7 @@ describe('GroupAccessPolicyPort fake contract', () => {
         callback: ([current]) =>
           Promise.resolve({
             value: 'committed',
-            nextGroupVersion: current.groupVersion + 1,
-            nextAccessPolicyVersion: current.accessPolicyVersion + 1,
+            mutations: [mutationRequest(current)],
           }),
       }),
     ).resolves.toEqual({ kind: 'Allowed', value: 'committed' });
@@ -717,8 +800,7 @@ describe('GroupAccessPolicyPort fake contract', () => {
         await firstCanFinish;
         return {
           value: 'first',
-          nextGroupVersion: current.groupVersion + 1,
-          nextAccessPolicyVersion: current.accessPolicyVersion + 1,
+          mutations: [mutationRequest(current)],
         };
       },
     });
@@ -727,8 +809,7 @@ describe('GroupAccessPolicyPort fake contract', () => {
       callback: ([current]) =>
         Promise.resolve({
           value: 'second',
-          nextGroupVersion: current.groupVersion + 1,
-          nextAccessPolicyVersion: current.accessPolicyVersion + 1,
+          mutations: [mutationRequest(current)],
         }),
     });
 
