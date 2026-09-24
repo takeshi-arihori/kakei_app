@@ -115,8 +115,7 @@ export type SnapshotReadCallbackResult<T> =
   | Readonly<{ kind: 'Denied' }>;
 
 export type SnapshotReadResult<T> =
-  | Readonly<{ kind: 'Allowed'; value: T }>
-  | Readonly<{ kind: 'Unavailable' }>;
+  Readonly<{ kind: 'Allowed'; value: T }> | Readonly<{ kind: 'Unavailable' }>;
 
 export type FixedSnapshotReadAccess = Readonly<{
   groupVersion: number;
