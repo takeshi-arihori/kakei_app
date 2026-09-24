@@ -51,13 +51,15 @@ const request = (): CommitGroupRequest => {
 
 describe('GroupRecordPreparer', () => {
   it('protected recordとaccess indexをDB書込から独立して準備する', async () => {
-    const seal = vi.fn<ProtectedRecordCodec['seal']>(async ({ header }) => ({
-      header: { ...header, keyVersion: 'key-v1' },
-      aad: Uint8Array.from([1]),
-      nonce: Uint8Array.from([2]),
-      ciphertext: Uint8Array.from([3]),
-      authenticationTag: Uint8Array.from([4]),
-    }));
+    const seal = vi.fn<ProtectedRecordCodec['seal']>(({ header }) =>
+      Promise.resolve({
+        header: { ...header, keyVersion: 'key-v1' },
+        aad: Uint8Array.from([1]),
+        nonce: Uint8Array.from([2]),
+        ciphertext: Uint8Array.from([3]),
+        authenticationTag: Uint8Array.from([4]),
+      }),
+    );
     const digest = vi.fn().mockResolvedValue({
       digest: Uint8Array.from([9]),
       digestKeyVersion: 'digest-v1',
@@ -72,7 +74,7 @@ describe('GroupRecordPreparer', () => {
       codec: { seal },
       accessIndexDigests: { digest },
       now: () => at,
-      nextRecordId: () => ids[nextId++] ?? ids[ids.length - 1]!,
+      nextRecordId: () => ids[nextId++] ?? ids[ids.length - 1],
     });
 
     const prepared = await preparer.prepare(request(), 4);
