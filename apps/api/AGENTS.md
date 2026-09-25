@@ -4,6 +4,15 @@
 
 ## レイヤと依存方向
 
+実装パターンに応じて必要なレイヤ数を決める。
+
+- Transaction Script / Active Record: 3層を許容する。`Presentation -> Application / Business Logic -> Infrastructure / Data Access`を基本とする。
+- Domain Model / Event History Domain Model: 4層を必須とする。`Presentation -> Application -> Domain <- Infrastructure`の依存方向を守る。
+- 4層が必要なContextでも、未利用Layerの空Directoryは先行作成しない。Business APIを公開する最初のTaskでPresentation Adapterを追加するなど、利用開始時に責務を実体化する。
+- 実装パターンは既存Directory構成から逆算せず、業務Rule・Invariant・Lifecycle・履歴要件から判断する。
+
+4層を採用するContextでは次の責務を守る。
+
 - `src/<context>/domain`: Aggregate、Entity、Value Object、Domain Service、Domain Event、不変条件を持つ。
 - `src/<context>/application`: Use Caseの順序、認可、Transaction境界、Port呼出しを調整する。
 - `src/<context>/presentation`: Context固有の認証Guard、Input／Output変換、Command／Query呼出しだけを行う。

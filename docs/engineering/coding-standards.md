@@ -19,6 +19,10 @@
 
 ## 依存と境界
 
+- 実装パターンは既存Directory構成ではなく、業務Rule、Invariant、Lifecycle、履歴要件から選ぶ。
+- Transaction Script / Active Recordは3層を許容し、`Presentation -> Application / Business Logic -> Infrastructure / Data Access`を基本とする。
+- Domain Model / Event History Domain Modelは4層を必須とし、`Presentation -> Application -> Domain <- Infrastructure`を守る。
+- 4層構成でも未利用Layerの空Scaffoldは作らず、利用開始Taskで責務を実体化する。
 - APIは`src/<context>/<layer>`の順で配置し、Contextの変更範囲を同じDirectoryへ凝集させる。共通GraphQL組み立てとComposition RootはContext外に置く。
 - Context固有のLayerと将来Contextは最初の利用Taskで追加し、空Scaffoldを先行作成しない。
 - PresentationはApplicationだけを呼ぶ。
