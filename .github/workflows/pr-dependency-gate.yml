@@ -1,0 +1,73 @@
+name: PR依存関係検証
+
+on:
+  pull_request:
+    branches:
+      - develop
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-dependency-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dependency:
+    name: 依存PR確認
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Depends-OnのPRがmerge済みか確認
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          REPOSITORY: ${{ github.repository }}
+          CURRENT_PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t dependencies < <(
+            printf '%s\n' "${PR_BODY:-}" \
+              | grep -Eo 'Depends-On:[[:space:]]*#[0-9]+' \
+              | grep -Eo '[0-9]+' \
+              | sort -nu \
+              || true
+          )
+
+          if [ "${#dependencies[@]}" -eq 0 ]; then
+            echo '依存PRはありません。'
+            exit 0
+          fi
+
+          for dependency in "${dependencies[@]}"; do
+            if [ "$dependency" = "$CURRENT_PR" ]; then
+              echo "::error::PR #$CURRENT_PR は自身をDepends-Onに指定できません。"
+              exit 1
+            fi
+
+            endpoint="https://api.github.com/repos/$REPOSITORY/pulls/$dependency"
+            response="$(curl --silent --show-error --fail-with-body \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "$endpoint")" || {
+                echo "::error::Depends-On #$dependency をPull Requestとして取得できません。"
+                exit 1
+              }
+
+            merged_at="$(printf '%s' "$response" | jq -r '.merged_at // empty')"
+            if [ -z "$merged_at" ]; then
+              echo "::error::Depends-On #$dependency はまだmergeされていません。先に依存PRをmergeしてください。"
+              exit 1
+            fi
+
+            echo "Depends-On #$dependency: merged at $merged_at"
+          done
