@@ -10,7 +10,7 @@ export type RetentionKeyNamespace =
 
 /** 検証結果をRetention Intentへ結び付ける不透明な削除Token。 */
 export class RetentionDeletionToken {
-  /** 内部値の漏えいを避けるため、生成には`from`を使用する。 */
+  /** 空のTokenを拒否する生成経路を`from`に限定する。 */
   private constructor(
     /** Intentとの照合に使う削除Tokenの値。 */
     readonly value: string,
@@ -18,7 +18,12 @@ export class RetentionDeletionToken {
     Object.freeze(this);
   }
 
-  /** 削除結果を証明しない不透明なToken値を生成する。 */
+  /**
+   * 削除結果を証明しない不透明なToken値を生成する。
+   * @param value 削除Intentを識別する値。空白だけの値は受け付けない。
+   * @returns 元の値を保持する不変のToken。
+   * @throws {Error} valueが空文字または空白だけの場合。
+   */
   static from(value: string): RetentionDeletionToken {
     if (value.trim().length === 0) {
       throw new Error('Retention deletion token must not be empty');
@@ -26,7 +31,11 @@ export class RetentionDeletionToken {
     return new RetentionDeletionToken(value);
   }
 
-  /** 検証証跡として値を公開せずにTokenを比較する。 */
+  /**
+   * Tokenの値が一致するかを比較する。
+   * @param other 照合する削除Token。
+   * @returns 保持する文字列が一致する場合はtrue。
+   */
   equals(other: RetentionDeletionToken): boolean {
     return this.value === other.value;
   }
@@ -48,7 +57,12 @@ export class PreparedRetentionDeletionBinding {
     Object.freeze(this);
   }
 
-  /** 有効なBindingを生成し、不正なIntent Versionを拒否する。 */
+  /**
+   * Intentを識別する不変のBindingを生成する。
+   * @param input 削除Token、Operation ID、正の安全な整数のIntent Version。
+   * @returns 指定された削除試行とVersionを結び付けるBinding。
+   * @throws {Error} intentVersionが正の安全な整数でない場合。
+   */
   static create(input: {
     /** 検証対象の削除Intentを識別するToken。 */
     readonly deletionToken: RetentionDeletionToken;
@@ -69,7 +83,11 @@ export class PreparedRetentionDeletionBinding {
     );
   }
 
-  /** Token、Operation ID、Versionがすべて一致することを確認する。 */
+  /**
+   * Token、Operation ID、Versionがすべて一致することを確認する。
+   * @param other 照合するPrepared IntentのBinding。
+   * @returns 3つの識別情報がすべて一致する場合はtrue。
+   */
   equals(other: PreparedRetentionDeletionBinding): boolean {
     return (
       this.deletionToken.equals(other.deletionToken) &&
@@ -113,7 +131,11 @@ export interface ContextDeletionReceiptVerifierPort<
   /** このPortが証跡を所有するContext。 */
   readonly context: C;
 
-  /** 所有ContextのReceiptを指定されたPrepared Intentと照合する。 */
+  /**
+   * 所有ContextのReceiptを指定されたPrepared Intentと照合する。
+   * @param request 所有Contextの正本Receiptと照合先のBinding。
+   * @returns 正本Receiptの検証結果。成功時はContextとBinding、拒否時は理由、利用不能時はUnavailableを返す。
+   */
   verify(
     request: Readonly<{
       /** 所有Contextが発行した正本Receipt。 */
@@ -160,7 +182,11 @@ export interface ContextKeyDestructionVerifierPort {
   /** このPortが鍵の完全性を検証する所有Context。 */
   readonly context: RetentionContextName;
 
-  /** 所有Context内のGroupデータ鍵が全Versionで存在しないことを確認する。 */
+  /**
+   * 所有Context内のGroupデータ鍵が全Versionで存在しないことを確認する。
+   * @param request 全Groupデータ鍵の破棄を照合するPrepared IntentのBinding。
+   * @returns 全Versionの不在確認結果。一部でも未確認なら拒否し、検証を利用できない場合はUnavailableを返す。
+   */
   verify(
     request: Readonly<{
       /** 鍵破棄を照合するPrepared Intentの識別情報。 */
@@ -246,6 +272,9 @@ const contexts: readonly RetentionContextName[] = [
  * 1件のPrepared Intentについて、外部2 ContextのReceiptと3 Contextが所有する
  * Groupデータ鍵の破棄確認を検証する。証跡を組み立てるだけで、Context Dataの削除、
  * 削除認可、Coordinator実行は行わない。
+ * @param request 検証対象のPrepared Intentと外部2 Contextの正本Receipt。
+ * @param ports Composition Rootが配線したContext所有の信頼済み検証Port。
+ * @returns 全検証成功時は発行済み証跡、不適合時は拒否理由、Portの利用不能または呼出し失敗時はUnavailableを返す。
  */
 export async function verifyRetentionDeletionEvidence(
   request: VerifyRetentionDeletionEvidenceRequest,
@@ -343,7 +372,11 @@ export async function verifyRetentionDeletionEvidence(
   return { kind: 'Verified', evidence };
 }
 
-/** 後続Application Portが受け取る不透明値のRuntime Guard。 */
+/**
+ * 後続Application Portが受け取る不透明値のRuntime Guard。
+ * @param value このModuleが発行した証跡かを調べる値。
+ * @returns 発行済みの同一オブジェクトの場合だけtrue。形が同じ複製や呼出側の自作値はfalse。
+ */
 export function isVerifiedRetentionDeletionEvidence(
   value: unknown,
 ): value is VerifiedRetentionDeletionEvidence {
