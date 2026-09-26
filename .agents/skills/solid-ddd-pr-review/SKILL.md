@@ -5,7 +5,7 @@ description: Code Reviewの専門観点として、対象DiffのSOLID、DRY、DD
 
 # SOLID・DRY・DDD PRレビュー
 
-対象Taskの具体的な差分を、SOLID、DRY、DDD、Context境界、日本語JSDocの観点でレビューする。GitHub上の要件、Accepted ADR、Repository内のArchitecture文書を正本として扱う。本Skillは再設計やPR Delivery全体を目的とせず、[code-review](../code-review/SKILL.md)から利用できる専門Reviewである。単独利用もできる。
+対象Taskの具体的な差分を、SOLID、DRY、DDD、Context境界、日本語JSDocの観点でレビューする。GitHub上の要件、Accepted ADR、Repository内のArchitecture文書を正本として扱う。本Skillは再設計やPR Delivery全体を目的とせず、総合Code Reviewから利用できる専門Reviewである。単独利用もできる。
 
 ## 入力
 
@@ -72,7 +72,7 @@ Severityは以下を使用する。
 4. Findingがない場合は **Pass** とし、確認したReview観点を明記する。
 5. BlockerまたはMajorがある場合は修正対象として返す。MinorはTask Scope内であれば修正し、Scope外であれば簡潔な理由とFollow-upの必要性を記録する。
 6. 修正後は変更の影響を受けるVerificationを再実行し、更新後のDiffを再レビューする。
-7. `code-review`から呼ばれた場合は結果を親Reviewへ返す。独立Task Evaluator、Draft PR作成、PR Ready化、Mergeは本Skillの責務に含めない。
+7. 総合Code Reviewから呼ばれた場合は結果を親Reviewへ返す。独立Task Evaluator、Draft PR作成、PR Ready化、Mergeは本Skillの責務に含めない。
 
 ## 出力
 
