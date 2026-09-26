@@ -4,7 +4,7 @@
 - Decision record: [GitHub ADR Issue #115](https://github.com/takeshi-arihori/kakei_app/issues/115)
 - Decision Owner: Project Owner（takeshi-arihori）
 - Amends: [ADR #55: Snapshot Revisionの保護と保持境界](snapshot-revision-security-and-retention.md)、[ADR #102: CloseIntentIdの保持期間と一意性境界](close-intent-id-retention-boundary.md)
-- Related implementation: [Task #103](https://github.com/takeshi-arihori/kakei_app/issues/103)（本ADR同期とCoordinator能力TaskのReady前はBlocked）
+- Related implementation: [Task #103](https://github.com/takeshi-arihori/kakei_app/issues/103)（Accepted ADR同期PR #117統合、Receipt record Task #118、verified deletion-evidence Task #119完了までBlocked）
 
 Project Ownerは2026-09-26にこのDecisionをAcceptedとして記録した（[Issue #115](https://github.com/takeshi-arihori/kakei_app/issues/115)）。本ADRは削除Receiptの循環順序を解消するためADR #55と#102を一部改訂する。本Decisionは本番削除を認可せず、ADR #55の全Production Gateを維持する。
 
@@ -44,7 +44,7 @@ ADR #55はGroup Management（GM）、Expense Recording、Settlementの各Context
 
 Prepared commitはすべてのGroup操作経路に適用されるfenceと原子的でなければならない。既存Group read/write/command adapterの一部でもfenceを迂回できる間は実装・本番有効化しない。GM receipt recordをPrepared中に安全に再取得できるControl Ledger契約と、receipt verification key保持能力が必要になる。GM data keyを先に破棄した後でGM transactionがrollbackする場合、Groupは復号不能のままfenced状態となるため、通常利用へ戻すrollbackは行わず同じintentをfail closedで完了または運用復旧する。
 
-本ADRのAcceptedは、Retention Coordinator、Context所有deletion/verifier/key provider、Checkpoint/Witness、Backup/WAL/Restore、Alert/Runbook、production wiringの未完Production Gateを解除しない。これらすべてのADR #55 gateが満たされるまでProduction deletion trafficを無効のままにする。#103はregistry退役・purgeだけを担当する狭い範囲のままとし、CoordinatorやReceipt capabilityを暗黙に含めない。#103をReadyにする前に、このAccepted Decisionに従うCoordinator/GM receipt capabilityの独立Taskを用意しReadyにする。
+本ADRのAcceptedは、Retention Coordinator、Context所有deletion/verifier/key provider、Checkpoint/Witness、Backup/WAL/Restore、Alert/Runbook、production wiringの未完Production Gateを解除しない。これらすべてのADR #55 gateが満たされるまでProduction deletion trafficを無効のままにする。#103はGM自身のGroup row削除、CloseIntent registry退役・期限切れpurge、およびcanonical GM Receipt recordを同一削除transactionへ保存してcommit後に返す範囲を担当する。GM-owned Receipt Portとimmutable record contractはTask #118が定義し、GMが受け取るverified deletion-evidence input contract（ER／Settlementの検証済みReceipt outcomeと3 Contextのkey-destruction確認結果を同一Prepared intentへ束縛）はTask #119が定義する。#103は両境界を利用する。Coordinator実装、他Context削除、GM Receiptのcanonicalization／署名／verificationは#103に含めず、独立TaskとADR #55のProduction Gateに従う。#103はPR #117のdevelop統合および#118／#119完了までBlockedとする。
 
 ## Implementation and compatibility
 
