@@ -47,6 +47,8 @@ Do not infer an unaccepted decision from code, directory names, diagrams, or old
 
 - New or changed exported classes, functions, interfaces, types, constants, public methods/properties, and every field in an exported object type or interface must have Japanese JSDoc. Document each discriminated result field as well as the containing type.
 - JSDoc should explain purpose and meaningful constraints, failure behavior, or security/transaction semantics. Avoid repeating what a self-explanatory name or type already says.
+- Apply the tag rules in [coding standards](../../../docs/engineering/coding-standards.md): require Japanese `@param` descriptions matching every public API parameter, `@returns` for non-void results (the resolved value for asynchronous APIs), and `@throws` for documented exceptions. Omit `@param` only for parameterless signatures; omit `@returns` for constructors, `void`, `Promise<void>`, and `never` results. Describe Result-union failures in `@returns`, not as exceptions, and avoid redundant TypeScript type annotations.
+- Check tags against the actual signature and failure behavior. A Japanese summary alone is insufficient when parameter or return tags are required. Report missing tags, incorrect parameter names, and inaccurate return/exception descriptions; correct in-scope omissions before reporting the comment work complete.
 - Private implementation details and every-line narration do not need JSDoc.
 - Report missing, English-only, stale, or misleading public JSDoc as a finding.
 

@@ -66,6 +66,10 @@
 - `Manager`、`Helper`、`Data`のような責務不明な名前を避ける。
 - Commentは「何をしているか」ではなく、理由、制約、Trade-off、外部仕様を説明する。
 - Require Japanese JSDoc for every new or changed exported class, function, interface, type, constant, public method/property, and each field in an exported object type or interface, including discriminated results. Explain purpose and meaningful constraints, failure conditions, and security/transaction semantics; do not repeat details already obvious from the name or type.
+- For public functions, methods, and constructor signatures, write a Japanese `@param name` description for each parameter. Match the actual parameter names and describe their meaning and constraints; document object fields at their declarations instead of duplicating every field in nested tags.
+- Use `@returns` for non-void results, describing the outcome and failure variants. For asynchronous APIs, describe the resolved value. Omit `@param` for parameterless APIs and `@returns` for constructors, `void`, `Promise<void>`, and `never` results.
+- Add `@throws` for exceptions exposed by the API contract, including their conditions. Document expected Promise rejections explicitly when applicable. Result-union failures belong in `@returns`; do not invent exceptions or promise that an API never throws without evidence.
+- Keep descriptions in Japanese and omit redundant `{Type}` annotations when TypeScript already declares the types. A summary alone does not satisfy the required parameter and return documentation.
 - JSDoc is not required for every implementation line or private member. Write ordinary comments in Japanese and explain only reasons, constraints, and alternatives.
 - 古いCommentを残すより、Codeで意図を表し、必要な背景だけを最新に保つ。
 
