@@ -55,19 +55,31 @@ pre-investigation
                       code-review
                            │
                     findingがあれば
-                           └── implementation / testingへ戻る
+                           └── 適切な設計 / implementation / testingへ戻る
 ```
 
 設計Skill同士の順序は依存関係で決める。Domain RuleをAPIやDB都合から逆算しない。API契約とDB Schemaが両方変わる場合も、Data Owner、Domain Rule、Transaction Boundaryを先に確認する。
 
-## 既存専門Skillとの関係
+## 専門Skillとの関係
 
-- 業務概念・Rule・Invariantの発見や検証は[domain-modeling](../domain-modeling/SKILL.md)を利用する。
-- 個別Use CaseのPRE／POST／INV／FAILは[specification-contract](../specification-contract/SKILL.md)を利用する。
-- SOLID／DRY／DDDと日本語JSDocの専門Reviewは[solid-ddd-pr-review](../solid-ddd-pr-review/SKILL.md)を利用する。
-- 視覚証跡が必要な場合だけ[prepare-pr-evidence](../prepare-pr-evidence/SKILL.md)を利用する。
+統括Flowでは同じ専門Skillを重複実行しない。
 
-個別Skillからこの統括Skillを呼び戻さない。循環参照を作らず、統括Skillだけが全体順序を決める。
+- `domain-design`が、業務概念・Rule・Invariantの発見や再検証が必要な場合に[domain-modeling](../domain-modeling/SKILL.md)を利用する。
+- `domain-design`が、個別Use CaseのPRE／POST／INV／FAILを構造化する場合に[specification-contract](../specification-contract/SKILL.md)を利用する。
+- `code-review`が、JavaScript／TypeScriptの公開APIまたはSOLID／DRY／DDD／Context境界の確認が必要な場合に[solid-ddd-pr-review](../solid-ddd-pr-review/SKILL.md)を利用する。
+- 視覚結果そのものがDone Criteriaである場合など、必要な場合だけ[prepare-pr-evidence](../prepare-pr-evidence/SKILL.md)を利用する。
+
+利用者が専門Skillを単独指定した場合は、そのSkillだけを実行できる。個別Skillからこの統括Skillを呼び戻さない。循環参照を作らず、統括Skillだけが全体順序を決める。
+
+## Routing例
+
+| 依頼 | 選択例 |
+| --- | --- |
+| 調査だけ | `pre-investigation`で終了。Repository変更へ進まない |
+| Domain設計だけ | `pre-investigation → domain-design → testing（必要な仕様・構造検証）→ code-review`。Production Codeがなければ`implementation`を省略 |
+| DBだけの変更 | `pre-investigation → database-change → testing → implementation（必要な場合）→ testing → code-review` |
+| API＋DB変更 | `pre-investigation → 必要ならdomain-design → api-design / database-change → testing → implementation → testing → code-review` |
+| 文書・Skillだけ | 対象Skillの変更 → `testing`でLink／frontmatter／Routing等を検証 → `code-review`。Production Code用の`implementation`は省略可能 |
 
 ## 停止条件
 
