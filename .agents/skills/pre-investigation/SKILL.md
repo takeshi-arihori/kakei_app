@@ -7,6 +7,8 @@ description: 変更前に現行設計・実装・Domain要素・要件差分・S
 
 設計・実装を始める前に、現在の正本とCodeを確認し、何を変える必要があるかをEvidence付きで整理する。このSkill単独ではRepositoryを変更しない。
 
+既存技術・既存設計・既存Directoryを確定事項として扱わず、現在のRequirementとAccepted Decisionに照らして再評価する。既存Codeは現行動作のEvidenceであり、それだけを根拠に設計を正当化しない。
+
 ## 確認する正本
 
 1. 着手時点の最新`develop`を確認する。
