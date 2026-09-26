@@ -23,9 +23,15 @@ description: 最終DiffをRequirement・Accepted ADR・Repositoryルール・Tes
 - 正常、境界、権限、失敗、競合、再試行の必要Caseが欠けていないか
 - 未承認Decisionを実装で確定していないか
 
-### DDD・SOLID・依存方向
+### SOLID・DRY・DDD・日本語JSDoc
 
-Domain変更またはApplication／Backend境界に影響する場合は[SOLID・DRY・DDD PRレビュー](../solid-ddd-pr-review/SKILL.md)を適用する。その結果をこのReviewへ統合し、同じFindingを重複して報告しない。
+次のいずれかに該当する場合は[SOLID・DRY・DDD PRレビュー](../solid-ddd-pr-review/SKILL.md)を適用する。
+
+- JavaScript／TypeScriptのexport対象またはPublic Method／Property／Fieldを新規・変更した
+- Domain、Application、Backendの責務境界に影響する
+- SOLID、DRY、Context境界、依存方向の確認が必要な実装変更がある
+
+これによりFrontend変更でも日本語JSDoc Gateを維持する。専門Reviewの結果をこのReviewへ統合し、同じFindingを重複して報告しない。
 
 ### API
 
@@ -60,7 +66,7 @@ Secret、PII、実在金融情報、内部Security情報の混入、過剰なLog
 
 ## 修正ループ
 
-Blocker／Majorは`feature-development`側で適切な`domain-design`／`api-design`／`database-change`／`implementation`／`testing`へ戻し、修正・再検証後に再Reviewする。本Skill自身から統括Skillを呼び戻さない。
+Blocker／Majorは`feature-development`側で適切な`domain-design`／`api-design`／`database-change`／`implementation`／`testing`へ戻し、修正・再検証後に再Reviewする。本Skill自身から統括Skillを呼び戻さない。単独利用の場合は、必要な修正先Skillを出力して終了する。
 
 ## 出力
 
@@ -74,4 +80,5 @@ Blocker／Majorは`feature-development`側で適切な`domain-design`／`api-des
 
 - Blocker／Majorが残っていない。
 - Requirement、Architecture、API、DB、Test、Docsのうち変更に関係する観点を確認した。
+- JavaScript／TypeScriptの公開API変更がある場合、日本語JSDoc Gateを確認した。
 - Finding修正後の影響範囲が再検証されている。
