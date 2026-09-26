@@ -1,20 +1,20 @@
 # Retention削除とGroup Management Receiptの順序
 
-- Status: Proposed（Owner decision required; not Accepted）
-- Proposal: [GitHub ADR Issue #115](https://github.com/takeshi-arihori/kakei_app/issues/115)
+- Status: Accepted / Active（Owner Decision: 2026-09-26; see #115）
+- Decision record: [GitHub ADR Issue #115](https://github.com/takeshi-arihori/kakei_app/issues/115)
 - Decision Owner: Project Owner（takeshi-arihori）
 - Amends: [ADR #55: Snapshot Revisionの保護と保持境界](snapshot-revision-security-and-retention.md)、[ADR #102: CloseIntentIdの保持期間と一意性境界](close-intent-id-retention-boundary.md)
-- Related implementation: [Task #103](https://github.com/takeshi-arihori/kakei_app/issues/103)（本提案のOwner決定とCoordinator能力のReady前はBlocked）
+- Related implementation: [Task #103](https://github.com/takeshi-arihori/kakei_app/issues/103)（Accepted ADR同期PR #117統合、Receipt record Task #118、verified deletion-evidence Task #119完了までBlocked）
 
-この文書は削除Receiptの循環順序を解消する提案である。Ownerが明示的にAcceptedと記録するまでは、ADR #55と#102が有効な正本であり、本番削除を認可しない。
+Project Ownerは2026-09-26にこのDecisionをAcceptedとして記録した（[Issue #115](https://github.com/takeshi-arihori/kakei_app/issues/115)）。本ADRは削除Receiptの循環順序を解消するためADR #55と#102を一部改訂する。本Decisionは本番削除を認可せず、ADR #55の全Production Gateを維持する。
 
 ## Context
 
 ADR #55はGroup Management（GM）、Expense Recording、Settlementの各Contextが自分のGroup所有DataとGroup data-encryption key versionsを削除し、削除後のcanonical receiptを発行することを要求する。Receiptは`dataAbsent=true`と`allContextKeyVersionsDestroyed=true`を証明する。ADR #102は全必須ContextのReceiptとkey-destruction確認をRetention Coordinatorが検証した後にだけGM削除を実行し、GMのCloseIntent registry退役とGroup削除を同一PostgreSQL transactionで行う。
 
-このままでは、GM自身のpost-deletion receiptはGM削除後まで存在しない一方、GM削除はGM receiptを含む全Receiptの検証後まで開始できない。全Contextの削除証拠、post-deletion receiptの意味、ContextごとのData Ownershipを維持する二段階順序を提案する。
+このままでは、GM自身のpost-deletion receiptはGM削除後まで存在しない一方、GM削除はGM receiptを含む全Receiptの検証後まで開始できない。全Contextの削除証拠、post-deletion receiptの意味、ContextごとのData Ownershipを維持するため、以下の二段階順序を採用する。
 
-## Proposed decision
+## Accepted decision
 
 1. **Preparedとfenceを先行commitする。** GMは、不可逆な鍵破棄より先に、削除Token、operation ID、intent version、必要な最小状態を持つdurable Prepared intentをcommitする。同じcommitがすべてのGM Group read、write、command経路をfenceする。Prepared中の通常操作は、内部状態を漏らさないgeneric unavailableでfail closedする。fence解除はGMのComplete記録のcommit後だけ許可する。
 2. **他の二Contextを先に削除する。** Expense RecordingとSettlementは各自のContextでGroup所有business rowとそのContextのGroup data-encryption key versionsだけを削除する。各Contextは全対象rowの不在と対象key versionの不在を検証した後、ADR #55のcanonical receiptを発行する。Retention Coordinatorは各Context所有のreceipt verifierを通してReceiptを検証し、Prepared intentの削除Token、operation ID、intent versionへの一致を確認する。Contextのkeyやsecretを別Contextへ渡さない。
@@ -44,12 +44,12 @@ ADR #55はGroup Management（GM）、Expense Recording、Settlementの各Context
 
 Prepared commitはすべてのGroup操作経路に適用されるfenceと原子的でなければならない。既存Group read/write/command adapterの一部でもfenceを迂回できる間は実装・本番有効化しない。GM receipt recordをPrepared中に安全に再取得できるControl Ledger契約と、receipt verification key保持能力が必要になる。GM data keyを先に破棄した後でGM transactionがrollbackする場合、Groupは復号不能のままfenced状態となるため、通常利用へ戻すrollbackは行わず同じintentをfail closedで完了または運用復旧する。
 
-本提案をAcceptedとしても、Retention Coordinator、Context所有deletion/verifier/key provider、Checkpoint/Witness、Backup/WAL/Restore、Alert/Runbook、production wiringの未完Production Gateを解除しない。これらすべてのADR #55 gateが満たされるまでProduction deletion trafficを無効のままにする。#103はregistry退役・purgeだけを担当する狭い範囲のままとし、CoordinatorやReceipt capabilityを暗黙に含めない。#103をReadyにする前に、本提案をOwnerが決定し、その決定に従うCoordinator/GM receipt capabilityの独立Taskを用意する。
+本ADRのAcceptedは、Retention Coordinator、Context所有deletion/verifier/key provider、Checkpoint/Witness、Backup/WAL/Restore、Alert/Runbook、production wiringの未完Production Gateを解除しない。これらすべてのADR #55 gateが満たされるまでProduction deletion trafficを無効のままにする。#103はGM自身のGroup row削除、CloseIntent registry退役・期限切れpurge、およびcanonical GM Receipt recordを同一削除transactionへ保存してcommit後に返す範囲を担当する。GM-owned Receipt Portとimmutable record contractはTask #118が定義し、GMが受け取るverified deletion-evidence input contract（ER／Settlementの検証済みReceipt outcomeと3 Contextのkey-destruction確認結果を同一Prepared intentへ束縛）はTask #119が定義する。#103は両境界を利用する。Coordinator実装、他Context削除、GM Receiptのcanonicalization／署名／verificationは#103に含めず、独立TaskとADR #55のProduction Gateに従う。#103はPR #117のdevelop統合および#118／#119完了までBlockedとする。
 
 ## Implementation and compatibility
 
-この提案IssueはADR文書だけを成果とし、Accepted ADR本文、runtime、Schema、Migration、key provider、Coordinator実装、Receipt実装、Runbook、本番wiringを変更しない。提案がAcceptedされた後は#55/#102と実装Issueを別PRで同期し、schema/protocolが必要なら互換性、failure recovery、rollbackまたはforward-fix計画を含むTaskを準備する。現時点では新しいReceipt fieldやContextを提案しない。
+このADRはADR文書だけを変更対象とし、ADR #55／#102のAccepted本文、runtime、Schema、Migration、key provider、Coordinator実装、Receipt実装、Runbook、本番wiringを変更しない。実装Issueを本Decisionへ同期する。schema/protocolが必要なら互換性、failure recovery、rollbackまたはforward-fix計画を含むTaskを準備する。本ADRは新しいReceipt fieldやContextを追加しない。
 
 ## Review trigger
 
-GM read/write/commandのfence完全性、Prepared retry semantics、receiptのpost-deletion意味、対象key namespace、35日Backup window、CloseIntent保持規則、Context間Data Ownershipのどれかが変わる場合は再審査する。Owner decision dateとAccepted状態はOwnerがGitHub Issueと本Repository記録に明示した後にだけ追加する。
+GM read/write/commandのfence完全性、Prepared retry semantics、receiptのpost-deletion意味、対象key namespace、35日Backup window、CloseIntent保持規則、Context間Data Ownershipのどれかが変わる場合は再審査する。Owner Decisionは2026-09-26にAcceptedとしてIssue #115と本Repository記録へ反映した。理由は、全Contextのpost-deletion証拠を維持してGM Receiptの循環を解消するためである。ADR #55のProduction Gateは継続する。

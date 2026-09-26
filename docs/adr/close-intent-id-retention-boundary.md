@@ -26,7 +26,7 @@ ADR #73はCloseIntentIdの全Group一意性を定め、ADR #55はGroup削除時�
 ## Implementation ownership
 
 - #96はDomain UUIDv4検証、registryの原子的登録、Group状態更新前の重複拒否を担当する。Retention接続前に物理Group削除でregistryが消えないようGroup FKは`ON DELETE RESTRICT`とする。
-- #103はGroup Management内のregistry退役と期限切れcleanupを担当する。退役・cleanupの操作はGroup削除を認可せず、#55のCoordinatorが検証した証拠の後にのみ呼び出す。他Context削除、receipt発行、Coordinator、Checkpoint／Witness、Backup／Restore、Runbook、本番wiringは対象外。
+- #103はGroup Management内のGroup root／所有domain data削除、registry退役・期限切れcleanup、およびGM canonical post-deletion Receipt recordの同一削除transactionへの保存を担当する。これはOwner Accepted ADR #115が本ADRのreceipt orderをAmendしたことによる実装scope同期である。Task #118はGM Receipt Port／immutable record contractを、#119はER／Settlementのverified Receipt outcomeとGMを含む3 Contextのkey-destruction confirmation outcomeを同一Prepared intentへ束縛するtyped evidence input contractを定義する。#103は当該検証済み境界の後にのみ呼び出し可能であり、他Context削除、Receipt verification・signing／canonicalization、Retention Coordinator実装、Checkpoint／Witness、Backup／Restore、Runbook、本番wiringは対象外。
 - v3 Migrationはprotected close-historyに既存行がある場合、Backfillなしに適用せずfail-closedにrollbackする。Production適用は対象Historyが空というpreflight、または別途レビュー済みの復号／backfillと重複検査が揃うまでBlockedとする。
 - #96は本ADRと関連文書のRepository同期が完了し、個別Ready Gateを満たすまでBlockedとする。
 
