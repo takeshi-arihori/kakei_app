@@ -27,9 +27,17 @@ description: 家計アプリの業務要求からドメインモデルを整理�
 | 業務知識の不足を質問で解消 | [Interview Guide](references/interview-guide.md) |
 | Concept・Rule・Invariant・境界の検証 | [Domain Model Rules](references/domain-model-rules.md) |
 | 個別Use Case／CommandをPRE・POST・INV・FAILとTestへ構造化 | [Specification Contract](../specification-contract/SKILL.md) |
+| 確認済みRuleからEntity／VO／Aggregate等の設計へ進む | [Domain Design](../domain-design/SKILL.md) |
 | 正式Mermaid図の作成・更新、明示されたdraw.io入力の参照 | 作業前に[Diagram Governance](references/diagram-governance.md) |
 
 局所レビューは対象の結論、根拠、具体例、未決事項に絞る。全体モデルの11項目を毎回再作成しない。
+
+## 責務境界
+
+- `domain-modeling`は業務Concept、Rule、Invariant、境界を発見・検証する。
+- `domain-design`は確認済みRuleをEntity、Value Object、Aggregate、Domain Service、Domain Event、Port等の設計へ落とす。
+- `specification-contract`は個別Use Case／CommandをTest可能な契約へ構造化する。
+- このSkill単独でProduction Code、API Schema、DB Schemaを変更しない。
 
 ## 判断待ちと完了
 
