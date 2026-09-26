@@ -1,37 +1,60 @@
 ---
 name: implement-github-task
-description: 家計アプリのReady済みGitHub Taskを実装し、検証・独立評価を経てDraft PRまで届ける。
+description: Ready済みGitHub Taskの開始・Branch・公開Gate・Draft PRまでのDelivery Lifecycleを管理し、実作業をfeature-developmentへ委譲する。
 ---
 
-# GitHub Taskの実装
+# GitHub Taskの実装Lifecycle
 
-Ready済みTaskを、GitHubとRepositoryの正本に従って実装する。Notionは読み書きしない。
+Ready済みTaskを、GitHubとRepositoryの正本に従ってDraft PRまで届ける。Notionは読み書きしない。本SkillはGitHub上のLifecycleを担当し、設計・実装・Test・Reviewの詳細は[feature-development](../feature-development/SKILL.md)へ委譲する。
 
 ## Taskと作業環境を固定する
 
-1. [delivery-workflow](../../../docs/engineering/delivery-workflow.md)のReady・Branch・文書影響を確認する。GitHub取得先と固定Commitは[正本入口](../../../docs/governance/README.md)で確認し、技術文書は変更に関係する箇所だけ読む。
+1. [delivery-workflow](../../../docs/engineering/delivery-workflow.md)のReady・Branch・文書影響を確認する。GitHub取得先と固定Commitは[正本入口](../../../docs/governance/README.md)で確認する。
 2. Task Issue、Project Field、Epic、Dependencies、Accepted ADR、固定Commitの仕様を取得する。
 3. Status、Requirement、Done Criteria、Estimate、Decision Check、Related ADRがReady条件を満たすことを確認する。
-4. `gh auth status`、同TaskのOpen PR、現在Branch、`origin/develop`、作業ツリーを確認する。
+4. 同TaskのOpen PR、現在Branch、`origin/develop`、作業ツリーを確認する。
 5. 無関係または所有者不明の変更を移動、破棄、Stage、Commitしない。必要なら`origin/develop`から隔離worktreeと`codex/` Branchを作る。
 
 GitHubへの最初の書き込み前に[保存と公開Gate](../../../docs/engineering/delivery-workflow.md#githubでの保存と公開gate)を確認する。開始記録を含む公開本文・添付ごとに機械検査と手動Reviewを行い、非公開情報は公開しない。
 
 StatusをIn Progressにし、Issueへ開始記録を残す。`develop`へ直接CommitまたはPushしない。
 
-## 変更範囲とDecisionを確認する
+## 実作業を委譲する
 
-TaskをBounded Context、Data Owner、Aggregate、Application Use Case、GraphQL、画面、永続化、Event、Security、Audit、Runbookへ対応付ける。変更予定文書ごとに方針変更の有無を判断する。新しいDecisionが必要ならADRを提案し、OwnerのAcceptedまでその判断に依存する実装を止める。依存しない調査・文書整理は続け、既に承認された範囲で確認を繰り返さない。
+[feature-development](../feature-development/SKILL.md)へ、Task、Requirement、Done Criteria、Accepted ADR、固定Commit、既知の制約を渡す。
 
-本番依存関係の追加、破壊的Migration、破壊的Schema変更は利用者の確認を得る。
+`feature-development`が変更内容を判定し、必要な以下のSkillだけを組み合わせる。
 
-## TDDと文書更新
+- `pre-investigation`
+- `domain-design`
+- `api-design`
+- `database-change`
+- `implementation`
+- `testing`
+- `code-review`
 
-Red → Green → Refactorを繰り返す。Bugは失敗する再現Testを先に作る。機械的な文書・設定変更で先行Testに価値がない場合は理由を記録し、構造検査、リンク検査、再取得など決定的な代替検証を行う。
+既存の`domain-modeling`、`specification-contract`、`solid-ddd-pr-review`、`prepare-pr-evidence`は、それぞれの専門Skillから必要時に利用する。
 
-実装と同じ差分でRepositoryの仕様、ADR、図、Schema、Migration Note、Runbook、開発ガイドを更新する。Secret、PII、実在金融情報、内部Security情報を公開Repository、Issue、PRへ書かない。
-公開JavaScript／TypeScript APIとFieldの日本語JSDocは[コーディング規約](../../../docs/engineering/coding-standards.md)に従う。
+本番依存関係の追加、破壊的Migration、破壊的Schema変更、ADR必須Decisionは、Repository Ruleに従って承認・Decisionを得るまで依存作業を止める。
 
-## 完了まで進める
+## Deliveryを完了する
 
-実装・関連文書・検証が揃ったら、[SOLID／DRY／DDDレビューSkill](../solid-ddd-pr-review/SKILL.md)を使ってPR前レビューを行う。その後、[独立評価とDraft PR](references/delivery.md)を読み、評価、修正、Commit、Push、Draft PR、Issue／Project更新まで進める。初回実装だけで完了にしない。PR Ready化・Mergeは明示依頼がある場合だけ行う。
+`feature-development`から次を受け取る。
+
+- 実装・文書差分
+- Test／検証結果
+- `code-review`結果
+- 未実施検証と残Risk
+- 未決事項
+
+Blocker／Majorが残っている場合はDraft PR作成へ進まない。解消後、[独立評価とDraft PR](references/delivery.md)に従い、評価、Commit、Push、Draft PR、Issue／Project更新まで進める。
+
+PR Ready化・Mergeは利用者の明示依頼がある場合だけ行う。
+
+## 完了条件
+
+- GitHub Taskと最終DiffがTraceできる。
+- 必要なSkill選択と省略理由が記録されている。
+- Test／検証と`code-review`が完了している。
+- 公開Gateを満たしたDraft PRがTaskへLinkされている。
+- 未実施検証、未決事項、残Riskが明示されている。
