@@ -13,7 +13,7 @@ description: 機能追加・変更・リファクタリングを対象に、影�
 - 関連するRequirement、Done Criteria、Accepted ADR、Repository文書
 - 既存Code・Test・Schema・Migration・運用手順
 
-Ready済みGitHub TaskをBranch作成からDraft PRまで届ける場合は、外側のLifecycleを[implement-github-task](../implement-github-task/SKILL.md)に任せる。このSkillはGitHub StatusやPR作成そのものを責務にしない。
+Ready済みGitHub TaskをBranch作成からDraft PRまで届ける場合、本SkillはGitHub Delivery Lifecycleの内側で利用される。GitHub Status、Branch、Commit、Push、PR作成そのものは本Skillの責務に含めない。
 
 ## 最初に行うこと
 
