@@ -1,11 +1,11 @@
 ---
 name: solid-ddd-pr-review
-description: Draft PR作成前にGitHub Taskの実装をレビューし、SOLID、DRY、DDD、Context境界、日本語JSDocに関する実質的な問題を確認する。実装と検証の完了後、独立Task Evaluatorの実行およびPR公開前に使用する。
+description: Code Reviewの専門観点として、対象DiffのSOLID、DRY、DDD、Context境界、日本語JSDocに関する実質的な問題を確認する。
 ---
 
 # SOLID・DRY・DDD PRレビュー
 
-Draft PRを作成する前に、対象Taskの具体的な差分をレビューする。GitHub上の要件、Accepted ADR、Repository内のArchitecture文書を正本として扱う。本Skillは再設計を目的とするものではなく、対象変更に対する限定的な品質Gateである。
+対象Taskの具体的な差分を、SOLID、DRY、DDD、Context境界、日本語JSDocの観点でレビューする。GitHub上の要件、Accepted ADR、Repository内のArchitecture文書を正本として扱う。本Skillは再設計やPR Delivery全体を目的とせず、総合Code Reviewから利用できる専門Reviewである。単独利用もできる。
 
 ## 入力
 
@@ -47,7 +47,7 @@ Code、Directory名、Diagram、過去Issueだけを根拠に、未承認の意�
 
 - 新規または変更されたexport対象のClass、Function、Interface、Type、Constant、Public Method／Property、およびexportされたObject Type／Interface内のすべてのFieldには日本語JSDocを必須とする。Discriminated Resultの各Fieldも、その親TypeとあわせてDocumentする。
 - JSDocでは、目的と、意味のあるConstraint、Failure Behavior、Security／Transaction上のSemanticsを説明する。自明なNameやTypeの言い換えは避ける。
-- [coding standards](../../../docs/engineering/coding-standards.md) のTag Ruleを適用する。すべてのPublic API Parameterに一致する日本語の`@param`説明、非void戻り値に`@returns`、Document対象のExceptionに`@throws`を必須とする。引数なしSignatureでは`@param`を省略し、Constructor、`void`、`Promise<void>`、`never`では`@returns`を省略する。非同期APIではResolve後の値を`@returns`に記載する。Result UnionのFailureはExceptionとしてではなく`@returns`内で説明し、TypeScriptの型注釈と重複する記述を避ける。
+- [coding standards](../../../docs/engineering/coding-standards.md)のTag Ruleを適用する。すべてのPublic API Parameterに一致する日本語の`@param`説明、非void戻り値に`@returns`、Document対象のExceptionに`@throws`を必須とする。引数なしSignatureでは`@param`を省略し、Constructor、`void`、`Promise<void>`、`never`では`@returns`を省略する。非同期APIではResolve後の値を`@returns`に記載する。Result UnionのFailureはExceptionとしてではなく`@returns`内で説明し、TypeScriptの型注釈と重複する記述を避ける。
 - Tagが実際のSignatureとFailure Behaviorに一致していることを確認する。ParameterやReturn Tagが必要な場合、日本語の要約文だけでは対応済みとしない。Tag不足、誤ったParameter名、不正確なReturn／Exception説明を報告し、対象Scope内の不足はComment対応完了とする前に修正する。
 - Privateな実装詳細や、すべての行を逐一説明するJSDocは不要とする。
 - Public JSDocの不足、英語のみ、古い記述、誤解を招く記述はFindingとして報告する。
@@ -70,9 +70,9 @@ Severityは以下を使用する。
 2. Full Diffを確認し、重要なDependencyについて必要に応じて周辺Codeまで追跡する。
 3. 上記のReview観点で評価し、SeverityとFile／Line Evidenceを伴う具体的なFindingを記録する。
 4. Findingがない場合は **Pass** とし、確認したReview観点を明記する。
-5. BlockerまたはMajorがある場合は、独立評価の前に修正する。MinorはTask Scope内であれば修正し、Scope外であれば簡潔な理由とFollow-upの必要性を記録する。
-6. 修正後、変更の影響を受けるVerificationを再実行し、更新後のDiffを再レビューする。
-7. 最終差分を独立Task Evaluatorへ渡す。本Skillは独立Task Evaluatorを置き換えるものではなく、PR Ready化やMergeを許可するものでもない。
+5. BlockerまたはMajorがある場合は修正対象として返す。MinorはTask Scope内であれば修正し、Scope外であれば簡潔な理由とFollow-upの必要性を記録する。
+6. 修正後は変更の影響を受けるVerificationを再実行し、更新後のDiffを再レビューする。
+7. 総合Code Reviewから呼ばれた場合は結果を親Reviewへ返す。独立Task Evaluator、Draft PR作成、PR Ready化、Mergeは本Skillの責務に含めない。
 
 ## 出力
 

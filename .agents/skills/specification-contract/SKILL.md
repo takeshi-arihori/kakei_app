@@ -24,13 +24,17 @@ description: 個別Use Case・Command・操作仕様をPrecondition、Postcondit
 | 条件の定義、分類、責務境界、拒否・失敗時の保証 | [Contract Rules](references/contract-rules.md) |
 | 契約ID、出力Template、Traceability、Test Scenario | [Output Contract](references/output-contract.md) |
 | 業務Concept、Rule、Invariant、Bounded Context自体の発見・検証 | [Domain Modeling](../domain-modeling/SKILL.md) |
+| 確認済みRuleからEntity／VO／Aggregate等を設計 | [Domain Design](../domain-design/SKILL.md) |
+| 契約から具体的なTestを作成・実行 | [Testing](../testing/SKILL.md) |
 
 必要なReferenceだけを読む。入口へ詳細Ruleを複製しない。
 
 ## 責務境界
 
 - `domain-modeling`は業務Concept、Rule、Invariant、Aggregate候補、Bounded Context候補を発見・検証する。
+- `domain-design`は確認済みRuleをDomain要素と責務境界へ落とす。
 - このSkillは確認済みまたは状態を明示したRuleを、個別操作のTest可能な契約へ構造化する。
+- `testing`は契約IDとDone Criteriaから実際のTest Caseを設計・実行する。
 - DB、Prisma、GraphQL、UI、Framework、既存Codeは業務契約の根拠そのものにしない。現行動作や技術制約の証拠として分けて扱う。
 - GitHub IssueをRequirement／Done Criteria、Repositoryを仕様／設計／ADRの正本とする。Notionは読み書き・同期しない。
 

@@ -16,7 +16,8 @@
 - `apps/worker`（未作成）: Projection・Outbox・保守JobのTaskへ着手するときに追加する
 - `packages`（未作成）: 生成GraphQL契約またはBackend非依存基盤の最初の利用Taskへ着手するときに追加する
 - `infra`: ローカル・クラウド環境
-- `docs/engineering`: 実装時に使うルールとチェックリスト
+- `docs`: 「何が正しいか」を管理する静的な仕様・設計・規約
+- `.agents/skills`: 「どう作業するか」を管理する再利用可能な手順
 - Package Managerはpnpmを使用し、TypeScript strict modeを維持する。
 
 ## アーキテクチャ不変条件
@@ -39,14 +40,34 @@
 - 3 Context（Group Management、Expense Recording、Settlement）、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離を採用する。境界やPersistenceを扱う前に[設計Gate](docs/product/design-gates.md)と、そこから辿れる対象ADRを確認する。条件付き採用や未決事項を採用済みと解釈しない。C1は2026-09-20に充足したが、Persistence実装はS0〜S3と対象Task固有のReady条件が揃うまで進めない。
 - 未確定の設計判断に依存するTaskをReadyまたは実装へ進めない。
 
-## 作業の入口と完了範囲
+## 作業の入口
 
-- GitHub Epic／Taskの起票・改善は`prepare-github-work`、Ready済みTaskの実装は`implement-github-task`を使う。旧Notion名は互換入口であり、Notionへ接続しない。
-- Domain Modelingは`domain-modeling`、PRの視覚証跡は`prepare-pr-evidence`を使う。通常のCode Reviewや文書編集にこれらを一律適用しない。
-- 利用者が対象を指定した文書・Skillの整理は、その範囲で進める。新しい機能Taskを選ぶ作業と混同しない。機能の着手条件、GitHub起票・変更のDecision Check、ADR承認は[delivery-workflow](docs/engineering/delivery-workflow.md)に従う。
-- 変更の影響範囲に応じて必要な文書だけを読み、関連文書を同じ差分で整合させる。既に得た利用者の承認を繰り返し求めない。
-- 依頼された成果の作成、検証、変更起因の修正、再検証まで進める。未決Decisionがあれば依存する確定・実装を止め、影響と必要な判断を報告し、依存しない作業を続ける。
-- 検証は[testing.md](docs/engineering/testing.md)に従う。新しい振る舞いとBug FixはTDD、文書・Skillのみの変更は構造・リンク・指示の整合性を確認する。
+GitHub Epic／Taskの起票・改善は`prepare-github-work`、Ready済みTaskをDraft PRまで届ける場合は`implement-github-task`を使う。`implement-github-task`はGitHub Lifecycleを担当し、実作業を`feature-development`へ委譲する。
+
+機能変更の統括は`feature-development`を入口とし、変更内容に応じて必要なSkillだけを組み合わせる。
+
+| 作業 | Skill |
+| --- | --- |
+| 現状・影響範囲・不足・SOLID／依存方向の事前調査 | `pre-investigation` |
+| Domain Rule、Entity、Value Object、Aggregate、Domain Service、Domain Event | `domain-design` |
+| GraphQL／HTTP契約、Input／Output、Error、認証認可境界、互換性 | `api-design` |
+| Table、Migration、Index、Constraint、Data移行 | `database-change` |
+| Production Code | `implementation` |
+| TDD、Test設計、検証、回帰 | `testing` |
+| 最終Diffの要件・設計・品質Review | `code-review` |
+
+専門Skillは単独でも利用できる。
+
+- `domain-modeling`: 業務概念・Rule・Invariant・境界の発見／検証
+- `specification-contract`: 個別Use CaseのPRE／POST／INV／FAILとTest Trace
+- `solid-ddd-pr-review`: SOLID／DRY／DDD／日本語JSDocの専門Review
+- `prepare-pr-evidence`: 必要時だけPRの視覚証跡を準備
+
+旧Notion名のSkillは互換入口であり、Notionへ接続しない。個別Skillから`feature-development`を呼び戻さず、統括Skillだけが組合せと順序を決める。
+
+利用者が対象を指定した文書・Skillの整理は、その範囲で進める。新しい機能Taskを選ぶ作業と混同しない。機能の着手条件、GitHub起票・変更のDecision Check、ADR承認は[delivery-workflow](docs/engineering/delivery-workflow.md)に従う。
+
+変更の影響範囲に応じて必要な文書だけを読み、関連文書を同じ差分で整合させる。既に得た利用者の承認を繰り返し求めない。依頼された成果の作成、検証、変更起因の修正、再検証まで進める。未決Decisionがあれば依存する確定・実装を止め、影響と必要な判断を報告し、依存しない作業を続ける。
 
 ## 変更ルール
 
@@ -73,9 +94,11 @@
 
 ## 完了条件
 
-- 変更に関係する正常、境界、権限、失敗、競合、再試行を検証する。
+- 使用したSkillと省略したSkill、その理由が説明できる。
+- 変更に関係する正常、境界、権限、失敗、競合、再試行を必要範囲で検証する。
 - 新しいDomain RuleにはDomain Unit Testがある。
 - テスト失敗や未確認事項を無視して完了扱いにしない。
+- `code-review`でBlocker／Majorが残っていない。
 - 関連するIssue、Repository文書、Schema、ADR、Runbookの更新要否が説明できる。
 - 実行しなかった検証がある場合は、理由と残リスクを明示する。
 
