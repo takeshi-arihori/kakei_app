@@ -9,6 +9,15 @@ description: 家計アプリのGitHub Epic・Taskを作成・分割・レビュ�
 
 レビューのみなら、以下の起票・Property設定・Status変更は提案として扱い、GitHubへ書き込まない。作成・更新を依頼された場合だけ保存手順へ進む。
 
+## Issueの記述言語
+
+Issueのタイトル、本文、見出し、チェックリスト、Notesなど、人が読む自然言語は原則として日本語で記述する。
+
+- Conventional Commit風のprefix（`feat(group):`、`docs(api):`など）、コード識別子、型名、API名、Package名、Branch名、SHA、URL、GitHub Projectの定義済みField値やStatus値は、正本の表記を維持する。
+- 英語のログ、Error message、外部仕様からの引用は原文を保持してよいが、必要に応じて日本語の説明を添える。
+- Issueを保存する前に、タイトルと本文に不要な英文の説明文・見出しが残っていないか確認し、日本語へ直す。
+- 既存Issueを更新する場合も、新たに追加・修正する自然言語は同じ方針に従う。
+
 ## 正本と参照元を確認する
 
 1. [delivery-workflow](../../../docs/engineering/delivery-workflow.md)の起票・Ready・ADR条件を確認する。GitHub取得先と固定Commitは[正本入口](../../../docs/governance/README.md)で確認し、仕様・設計は今回の成果に関係する箇所だけ読む。
