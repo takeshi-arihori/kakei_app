@@ -30,7 +30,8 @@ TaskをBounded Context、Data Owner、Aggregate、Application Use Case、GraphQL
 Red → Green → Refactorを繰り返す。Bugは失敗する再現Testを先に作る。機械的な文書・設定変更で先行Testに価値がない場合は理由を記録し、構造検査、リンク検査、再取得など決定的な代替検証を行う。
 
 実装と同じ差分でRepositoryの仕様、ADR、図、Schema、Migration Note、Runbook、開発ガイドを更新する。Secret、PII、実在金融情報、内部Security情報を公開Repository、Issue、PRへ書かない。
+公開JavaScript／TypeScript APIとFieldの日本語JSDocは[コーディング規約](../../../docs/engineering/coding-standards.md)に従う。
 
 ## 完了まで進める
 
-実装・関連文書・検証が揃ったら、[独立評価とDraft PR](references/delivery.md)を読み、評価、修正、Commit、Push、Draft PR、Issue／Project更新まで進める。初回実装だけで完了にしない。PR Ready化・Mergeは明示依頼がある場合だけ行う。
+実装・関連文書・検証が揃ったら、[SOLID／DRY／DDDレビューSkill](../solid-ddd-pr-review/SKILL.md)を使ってPR前レビューを行う。その後、[独立評価とDraft PR](references/delivery.md)を読み、評価、修正、Commit、Push、Draft PR、Issue／Project更新まで進める。初回実装だけで完了にしない。PR Ready化・Mergeは明示依頼がある場合だけ行う。

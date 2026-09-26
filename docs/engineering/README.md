@@ -17,8 +17,10 @@
 
 ## ガイド一覧
 
+- [backend.md](backend.md): BackendのLayer、依存方向、Directory配置、GraphQL Presentation境界
 - [domain-design.md](domain-design.md): DDD、Value Object、Entity、Aggregate、Domain Event、CQRS／Event Sourcing
 - [coding-standards.md](coding-standards.md): TypeScript、単一責任、依存、Error、Security
+- [solid-ddd-pr-review/SKILL.md](../../.agents/skills/solid-ddd-pr-review/SKILL.md): PR前にSOLID、DRY、DDD、日本語JSDocを確認するレビューSkill
 - [frontend.md](frontend.md): Frontendの責務、構成、状態、Accessibility
 - [testing.md](testing.md): TDD、Test Level、Done Criteria
 - [delivery-workflow.md](delivery-workflow.md): Epic／Task、Git、PR、文書更新
@@ -29,12 +31,12 @@
 
 | 変更 | 必ず読む | 追加確認 |
 | --- | --- | --- |
-| Domain Rule／Aggregate／Event | domain-design、testing | DDD・UML、ADR、Event Schema |
+| Domain Rule／Aggregate／Event | backend、domain-design、testing | DDD・UML、ADR、Event Schema |
 | Mermaid図／draw.io入力 | diagram-governance、delivery-workflow | 関連Issue、ADR、Owner承認 |
-| GraphQL／Application Use Case | domain-design、coding-standards、testing | 要件定義、Architecture、Schema |
+| GraphQL／Application Use Case | backend、domain-design、coding-standards、testing | 要件定義、Architecture、Schema |
 | Frontend／画面 | frontend、testing | 画面遷移、UX/UI、GraphQL Operation |
-| Prisma／Migration／Read Model | domain-design、coding-standards、testing | ER図、Migration、Rebuild計画 |
-| 認証／認可／削除 | coding-standards、testing | Security、ADR、Runbook |
+| Prisma／Migration／Read Model | backend、domain-design、coding-standards、testing | ER図、Migration、Rebuild計画 |
+| 認証／認可／削除 | backend、coding-standards、testing | Security、ADR、Runbook |
 | 文書・Skillのみ | testingの検証Command、変更対象の参照元 | 起票・PR作成時はdelivery-workflow、方針変更があればADR |
 | CI／Cloud／運用 | delivery-workflow、testing | Architecture、Security、Runbook、ADR |
 
