@@ -18,8 +18,13 @@
 - `src/<context>/presentation`: Context固有の認証Guard、Input／Output変換、Command／Query呼出しだけを行う。
 - `src/<context>/infrastructure`: Prisma、PostgreSQL、Firestore、KMS、Email、OAuthなどのAdapterを実装する。
 - `src/shared/domain`: 複数Contextで意味と変更理由が一致するDomain型だけを置く。
-- `src/presentation/graphql`: GraphQL Schema、生成型、Context Presentationの共通組み立てを置く。
+- `src/presentation/graphql`: Keep only shared GraphQL schema loading, generated types, and composition of Context resolvers here. Put Context-specific resolvers, input/output mapping, and GraphQL authentication/authorization adapters under each Context's `src/<context>/presentation/graphql`.
+- An Aggregate Root is an Entity that serves as the external entry point to its Aggregate and enforces its invariants. The Repository persists and restores the Aggregate through this root. Keep the root as one module at `src/<context>/domain/<aggregate-root>.ts`; do not duplicate it under `entities/`.
+- For newly introduced or separately refactored child Entities with independent identity and lifecycle, use `src/<context>/domain/entities/`. For newly introduced or separately refactored immutable Value Objects, compared by value and validated at creation, use `src/<context>/domain/value-objects/`; keep cohesive concepts together and unrelated concepts in separate modules. Existing files move only in a dedicated, scoped refactor.
+- Place Domain Services, Domain Events, and invariant-specific types according to their cohesion, directly under `domain/` or in a focused subdirectory. Do not create empty classification directories in advance.
+- Use Cases belong to the Application layer. Put new or separately refactored business-operation entry points under `src/<context>/application/use-cases/`; keep existing grouped Application services in place until a dedicated refactor. Keep Ports, Policies, and Coordinators recognizable by their names and responsibilities; split them into focused modules when they have independent change reasons or consumers.
 - Context固有のPresentation／Infrastructureは最初の利用Taskで追加し、空Directoryを先行作成しない。
+- Keep Group Management-specific Presentation out of shared `src/presentation/graphql`. Limit the shared GraphQL layer to transport-wide mechanics and composition.
 - Expense Recording／Settlementも、Accepted済みの実装対象へ着手するときにContext Directoryを追加する。
 - DomainからHono、GraphQL、Prisma、Cloud SDKをImportしない。
 - ApplicationはPortへ依存し、Infrastructureが内向きにPortを実装する。

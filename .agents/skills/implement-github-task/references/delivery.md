@@ -6,6 +6,8 @@
 
 今回のTask所有FileだけをStageし、Base SHAを固定する。`git diff --cached --binary --full-index <base-sha>`のSHA-256とFile一覧を記録する。新しい`task_evaluator` SubagentへTask URL、Requirement、Done Criteria、Project Field、設計範囲、Decision、Base SHA、Stage済み差分、checksum、File一覧、検証結果、文書、Security、Rollback、既知Riskを渡す。
 
+Stage・checksum取得の前に、[`solid-ddd-pr-review`](../../solid-ddd-pr-review/SKILL.md)を適用し、Task・Accepted ADR・変更差分に対するSOLID／DRY／DDDと日本語JSDocをレビューする。BlockerまたはMajorがあれば修正し、影響する検証を再実行してから独立Evaluatorへ渡す。Minorは範囲内で修正するか、具体的な理由とともに記録する。独立Evaluatorはこのレビューの代替にならない。
+
 同じEvaluatorを再利用しない。`findings`と`missingEvidence`が空のpassだけを合格とする。failは親Agentが修正・再検証し、新しいEvaluatorへ再依頼する。blockedは証拠と影響を利用者へ報告する。
 
 ## Commit、Draft PR、追跡更新

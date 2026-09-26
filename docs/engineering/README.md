@@ -19,6 +19,7 @@
 
 - [domain-design.md](domain-design.md): DDD、Value Object、Entity、Aggregate、Domain Event、CQRS／Event Sourcing
 - [coding-standards.md](coding-standards.md): TypeScript、単一責任、依存、Error、Security
+- [solid-ddd-pr-review/SKILL.md](../../.agents/skills/solid-ddd-pr-review/SKILL.md): PR preflight review for SOLID, DRY, DDD, and Japanese JSDoc
 - [frontend.md](frontend.md): Frontendの責務、構成、状態、Accessibility
 - [testing.md](testing.md): TDD、Test Level、Done Criteria
 - [delivery-workflow.md](delivery-workflow.md): Epic／Task、Git、PR、文書更新

@@ -65,6 +65,8 @@
 - Eventは過去形、Commandは命令、Queryは取得意図が分かる名前にする。
 - `Manager`、`Helper`、`Data`のような責務不明な名前を避ける。
 - Commentは「何をしているか」ではなく、理由、制約、Trade-off、外部仕様を説明する。
+- Require Japanese JSDoc for every new or changed exported class, function, interface, type, constant, public method/property, and each field in an exported object type or interface, including discriminated results. Explain purpose and meaningful constraints, failure conditions, and security/transaction semantics; do not repeat details already obvious from the name or type.
+- JSDoc is not required for every implementation line or private member. Write ordinary comments in Japanese and explain only reasons, constraints, and alternatives.
 - 古いCommentを残すより、Codeで意図を表し、必要な背景だけを最新に保つ。
 
 ## 依存Package
