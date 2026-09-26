@@ -65,12 +65,12 @@
 - Eventは過去形、Commandは命令、Queryは取得意図が分かる名前にする。
 - `Manager`、`Helper`、`Data`のような責務不明な名前を避ける。
 - Commentは「何をしているか」ではなく、理由、制約、Trade-off、外部仕様を説明する。
-- Require Japanese JSDoc for every new or changed exported class, function, interface, type, constant, public method/property, and each field in an exported object type or interface, including discriminated results. Explain purpose and meaningful constraints, failure conditions, and security/transaction semantics; do not repeat details already obvious from the name or type.
-- For public functions, methods, and constructor signatures, write a Japanese `@param name` description for each parameter. Match the actual parameter names and describe their meaning and constraints; document object fields at their declarations instead of duplicating every field in nested tags.
-- Use `@returns` for non-void results, describing the outcome and failure variants. For asynchronous APIs, describe the resolved value. Omit `@param` for parameterless APIs and `@returns` for constructors, `void`, `Promise<void>`, and `never` results.
-- Add `@throws` for exceptions exposed by the API contract, including their conditions. Document expected Promise rejections explicitly when applicable. Result-union failures belong in `@returns`; do not invent exceptions or promise that an API never throws without evidence.
-- Keep descriptions in Japanese and omit redundant `{Type}` annotations when TypeScript already declares the types. A summary alone does not satisfy the required parameter and return documentation.
-- JSDoc is not required for every implementation line or private member. Write ordinary comments in Japanese and explain only reasons, constraints, and alternatives.
+- 新規または変更されたexport対象のClass、Function、Interface、Type、Constant、Public Method／Property、およびexportされたObject Type／Interface内の各Fieldには日本語JSDocを必須とする。Discriminated Resultの各Fieldも対象とし、目的、意味のある制約、失敗条件、Security／Transaction上の意味を説明する。名前や型から自明な内容の言い換えは避ける。
+- Public Function、Method、Constructorでは、各Parameterに実際の名前と一致する日本語の`@param name`説明を記載する。Parameterの意味と制約を説明し、Object Fieldは宣言箇所でDocumentしてNested Tagへ重複記載しない。
+- 非voidの戻り値には`@returns`を使い、結果と失敗Variantを説明する。非同期APIではResolve後の値を記載する。引数なしAPIでは`@param`を省略し、Constructor、`void`、`Promise<void>`、`never`では`@returns`を省略する。
+- API契約として外部へ露出するExceptionには、発生条件を含む`@throws`を記載する。PromiseのRejectが契約上想定される場合も明示する。Result UnionのFailureは`@returns`で説明し、根拠なくExceptionを作ったり「絶対にthrowしない」と断定したりしない。
+- 説明文は日本語で記載し、TypeScriptですでに型が宣言されている場合は冗長な`{Type}`表記を省略する。要約文だけでは、必要なParameter／ReturnのDocumentを満たしたことにしない。
+- すべての実装行やprivate memberへJSDocを書く必要はない。通常Commentも日本語とし、理由、制約、代替案が必要な箇所だけ説明する。
 - 古いCommentを残すより、Codeで意図を表し、必要な背景だけを最新に保つ。
 
 ## 依存Package
