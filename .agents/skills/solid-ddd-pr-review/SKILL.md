@@ -1,85 +1,85 @@
 ---
 name: solid-ddd-pr-review
-description: Review a GitHub Task implementation before Draft PR creation for meaningful SOLID, DRY, DDD, context-boundary, and Japanese JSDoc issues. Use after implementation and verification, before independent task evaluation and publishing a PR.
+description: Draft PR作成前にGitHub Taskの実装をレビューし、SOLID、DRY、DDD、Context境界、日本語JSDocに関する実質的な問題を確認する。実装と検証の完了後、独立Task Evaluatorの実行およびPR公開前に使用する。
 ---
 
-# SOLID, DRY, and DDD PR Review
+# SOLID・DRY・DDD PRレビュー
 
-Review the concrete Task diff before a Draft PR is created. Treat GitHub requirements, accepted ADRs, and repository architecture documents as authoritative. This is a focused quality gate, not a redesign exercise.
+Draft PRを作成する前に、対象Taskの具体的な差分をレビューする。GitHub上の要件、Accepted ADR、Repository内のArchitecture文書を正本として扱う。本Skillは再設計を目的とするものではなく、対象変更に対する限定的な品質Gateである。
 
-## Inputs
+## 入力
 
-Read only what is needed to understand the change:
+変更内容を理解するために必要な範囲のみを読む。
 
-- The GitHub Task, Done Criteria, dependency state, and linked Epic.
-- Accepted ADRs and relevant repository rules.
-- The complete changed-file diff, including tests and documentation.
-- Existing neighboring code when needed to establish a real pattern or duplication.
+- GitHub Task、Done Criteria、依存Taskの状態、関連Epic。
+- Accepted ADRおよび関連するRepositoryルール。
+- Test・Documentationを含む、変更対象Fileの完全なDiff。
+- 実在するPatternまたは重複を確認するために必要な既存の周辺Code。
 
-Do not infer an unaccepted decision from code, directory names, diagrams, or old issues. When an unresolved decision affects the change, report it as a blocker and identify the dependent scope.
+Code、Directory名、Diagram、過去Issueだけを根拠に、未承認の意思決定を推測しない。未解決の意思決定が変更内容へ影響する場合はBlockerとして報告し、依存する範囲を明示する。
 
-## Review dimensions
+## レビュー観点
 
-### DDD and boundaries
+### DDD・境界
 
-- Check that each behavior belongs to its owning Bounded Context and layer.
-- Check that Domain rules and invariants are enforced by the appropriate Aggregate, Entity, or Value Object, rather than GraphQL, persistence, or orchestration code.
-- Treat an Aggregate Root as an Entity with the additional role of guarding an Aggregate boundary. Do not recommend a duplicate Entity wrapper or duplicate type placement.
-- Distinguish child Entities by stable identity and lifecycle; do not classify snapshots or data shapes as Entities from their names alone.
-- Check Application Use Cases for orchestration, authorization, transaction boundaries, and Port calls. Keep transport and persistence details at their adapters.
-- Check that Contexts communicate through accepted IDs, Ports, or explicit public contracts, not direct access to another Context's model or storage.
-- Do not recommend microservices or new workspace packages merely because a Context or layer exists. Evaluate the accepted Modular Monolith and actual reuse/ownership needs.
+- 各振る舞いが、その責務を持つBounded ContextおよびLayerに属していることを確認する。
+- Domain RuleとInvariantが、GraphQL、Persistence、Orchestration Codeではなく、適切なAggregate、Entity、Value Objectによって保証されていることを確認する。
+- Aggregate Rootは、Aggregate境界を保護する追加責務を持つEntityとして扱う。重複するEntity Wrapperや同一Typeの二重配置を推奨しない。
+- Child Entityは安定したIdentityとLifecycleによって識別する。SnapshotやData Shapeを名前だけでEntityと分類しない。
+- Application Use CaseがOrchestration、Authorization、Transaction Boundary、Port呼び出しを担っていることを確認する。TransportとPersistenceの詳細はAdapter側に置く。
+- Context間の連携が、別ContextのModelやStorageへの直接Accessではなく、合意済みのID、Port、または明示的なPublic Contractを通じて行われていることを確認する。
+- ContextやLayerが存在するという理由だけで、Microservice化や新規Workspace Packageの追加を推奨しない。Accepted Modular Monolithと、実際の再利用・Ownership要件に基づいて評価する。
 
-### SOLID and cohesion
+### SOLID・凝集度
 
-- Identify concrete reasons a module has multiple change drivers or a use case owns unrelated behavior.
-- Check abstractions against real variation, ownership, and dependency direction; avoid interface-per-class or speculative extensibility recommendations.
-- Check substitutability and interface segregation where implementations or consumers demonstrate a real mismatch.
-- Check dependency inversion across layer boundaries and whether dependencies are injected at a suitable composition boundary.
+- Moduleに複数の変更理由が存在する、またはUse Caseが無関係な振る舞いを抱えている場合、その具体的な理由を特定する。
+- 抽象化を、実際のVariation、Ownership、Dependency Directionに照らして確認する。ClassごとのInterface作成や、将来を推測した過剰な拡張性提案を避ける。
+- 実装側または利用側に実際の不整合がある場合、Liskov Substitution PrincipleとInterface Segregation Principleの観点を確認する。
+- Layer境界を跨ぐDependency Inversionと、適切なComposition BoundaryでDependencyがInjectされているかを確認する。
 
 ### DRY
 
-- Report duplication only when the repeated logic has the same meaning, change reason, and ownership.
-- Keep coincidentally similar rules separate when they belong to different Contexts or evolve independently.
-- Prefer a small local implementation over premature shared utilities or a new package.
+- 重複Logicが同じ意味、同じ変更理由、同じOwnershipを持つ場合のみ、重複として指摘する。
+- 別Contextに属する、または独立して変更される可能性がある、見た目だけ類似したRuleは分離したままにする。
+- 早すぎる共通Utility化や新規Package作成より、小さなLocal実装を優先する。
 
-### Japanese JSDoc
+### 日本語JSDoc
 
-- New or changed exported classes, functions, interfaces, types, constants, public methods/properties, and every field in an exported object type or interface must have Japanese JSDoc. Document each discriminated result field as well as the containing type.
-- JSDoc should explain purpose and meaningful constraints, failure behavior, or security/transaction semantics. Avoid repeating what a self-explanatory name or type already says.
-- Apply the tag rules in [coding standards](../../../docs/engineering/coding-standards.md): require Japanese `@param` descriptions matching every public API parameter, `@returns` for non-void results (the resolved value for asynchronous APIs), and `@throws` for documented exceptions. Omit `@param` only for parameterless signatures; omit `@returns` for constructors, `void`, `Promise<void>`, and `never` results. Describe Result-union failures in `@returns`, not as exceptions, and avoid redundant TypeScript type annotations.
-- Check tags against the actual signature and failure behavior. A Japanese summary alone is insufficient when parameter or return tags are required. Report missing tags, incorrect parameter names, and inaccurate return/exception descriptions; correct in-scope omissions before reporting the comment work complete.
-- Private implementation details and every-line narration do not need JSDoc.
-- Report missing, English-only, stale, or misleading public JSDoc as a finding.
+- 新規または変更されたexport対象のClass、Function、Interface、Type、Constant、Public Method／Property、およびexportされたObject Type／Interface内のすべてのFieldには日本語JSDocを必須とする。Discriminated Resultの各Fieldも、その親TypeとあわせてDocumentする。
+- JSDocでは、目的と、意味のあるConstraint、Failure Behavior、Security／Transaction上のSemanticsを説明する。自明なNameやTypeの言い換えは避ける。
+- [coding standards](../../../docs/engineering/coding-standards.md) のTag Ruleを適用する。すべてのPublic API Parameterに一致する日本語の`@param`説明、非void戻り値に`@returns`、Document対象のExceptionに`@throws`を必須とする。引数なしSignatureでは`@param`を省略し、Constructor、`void`、`Promise<void>`、`never`では`@returns`を省略する。非同期APIではResolve後の値を`@returns`に記載する。Result UnionのFailureはExceptionとしてではなく`@returns`内で説明し、TypeScriptの型注釈と重複する記述を避ける。
+- Tagが実際のSignatureとFailure Behaviorに一致していることを確認する。ParameterやReturn Tagが必要な場合、日本語の要約文だけでは対応済みとしない。Tag不足、誤ったParameter名、不正確なReturn／Exception説明を報告し、対象Scope内の不足はComment対応完了とする前に修正する。
+- Privateな実装詳細や、すべての行を逐一説明するJSDocは不要とする。
+- Public JSDocの不足、英語のみ、古い記述、誤解を招く記述はFindingとして報告する。
 
-## Finding threshold
+## Findingの閾値
 
-Report only evidence-backed issues that materially affect correctness, changeability, security, or the accepted architecture. Do not block for personal naming preference, theoretical purity, speculative future reuse, or unrelated pre-existing debt.
+Correctness、Changeability、Security、またはAccepted Architectureに実質的な影響を与える、Evidenceに基づく問題のみを報告する。個人的なNaming Preference、理論上の純粋性、将来の再利用を想定した推測、今回の変更と無関係な既存Debtを理由にBlockしない。
 
-Use these severities:
+Severityは以下を使用する。
 
-- **Blocker**: violates a confirmed requirement/accepted decision, breaks a critical invariant or security boundary, or depends on a decision that is not accepted.
-- **Major**: likely causes a correctness defect, significant coupling, a broken layer/context boundary, or makes a core behavior hard to change safely.
-- **Minor**: a localized clarity, cohesion, duplication, or JSDoc issue that does not prevent safe review.
+- **Blocker**: 確定済み要件／Accepted Decisionへの違反、重大なInvariantやSecurity Boundaryの破壊、または未承認の意思決定への依存がある。
+- **Major**: Correctness Defectを引き起こす可能性が高い、重大なCoupling、Layer／Context Boundaryの破壊、またはCore Behaviorを安全に変更することを困難にする。
+- **Minor**: 安全なReviewを妨げない、局所的なClarity、Cohesion、Duplication、JSDoc上の問題。
 
-Every finding must include the changed file and line, observed behavior, why it matters under a project rule or Task requirement, and the smallest useful correction. Do not create findings against unchanged code unless the diff introduces or relies on the defect.
+各Findingには、変更FileとLine、観測したBehavior、Project RuleまたはTask要件に照らして問題となる理由、最小限かつ有効な修正方法を含める。Diffによって新たに問題が発生した、または既存問題へ依存する場合を除き、未変更CodeをFinding対象にしない。
 
 ## Workflow
 
-1. Read the Task and relevant accepted design sources.
-2. Inspect the full diff and trace important dependencies into neighboring code.
-3. Evaluate the dimensions above and record concrete findings with severity and file/line evidence.
-4. If no findings exist, report **Pass** and state the reviewed dimensions.
-5. If Blocker or Major findings exist, fix them before independent evaluation. Fix Minor findings when within Task scope; otherwise record a concise reason and follow-up need.
-6. After fixes, rerun the verification affected by the changes and review the updated diff.
-7. Pass the final change to the independent Task evaluator. This Skill does not replace that evaluator or authorize PR Ready/merge.
+1. Taskと関連するAccepted Design Sourceを読む。
+2. Full Diffを確認し、重要なDependencyについて必要に応じて周辺Codeまで追跡する。
+3. 上記のReview観点で評価し、SeverityとFile／Line Evidenceを伴う具体的なFindingを記録する。
+4. Findingがない場合は **Pass** とし、確認したReview観点を明記する。
+5. BlockerまたはMajorがある場合は、独立評価の前に修正する。MinorはTask Scope内であれば修正し、Scope外であれば簡潔な理由とFollow-upの必要性を記録する。
+6. 修正後、変更の影響を受けるVerificationを再実行し、更新後のDiffを再レビューする。
+7. 最終差分を独立Task Evaluatorへ渡す。本Skillは独立Task Evaluatorを置き換えるものではなく、PR Ready化やMergeを許可するものでもない。
 
-## Output
+## 出力
 
-Return:
+以下を返す。
 
-- **Result**: Pass or Needs changes.
-- **Findings**: severity, file/line, issue, project-grounded reason, and correction; or `None`.
-- **Reviewed scope**: Task/ADR and changed areas considered.
-- **Verification**: checks rerun after any review-driven correction.
-- **Residual Minor items**: reason and follow-up, or `None`.
+- **Result**: `Pass` または `Needs changes`。
+- **Findings**: Severity、File／Line、Issue、Projectに基づく理由、修正内容。問題がなければ`None`。
+- **Reviewed scope**: 確認したTask／ADRおよび変更範囲。
+- **Verification**: Review起因の修正後に再実行した確認内容。
+- **Residual Minor items**: 理由とFollow-up。なければ`None`。
