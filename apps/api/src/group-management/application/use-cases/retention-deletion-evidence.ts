@@ -236,20 +236,276 @@ export type VerifyRetentionDeletionEvidencePorts = Readonly<{
   keyDestructionVerifiers: readonly ContextKeyDestructionVerifierPort[];
 }>;
 
-/** Retention削除境界が受け取る不透明な証跡を検証する未実装のUse Case。 */
+const contexts: readonly RetentionContextName[] = [
+  'GroupManagement',
+  'ExpenseRecording',
+  'Settlement',
+];
+
+/**
+ * 1件のPrepared Intentについて、外部2 ContextのReceiptと3 Contextが所有する
+ * Groupデータ鍵の破棄確認を検証する。証跡を組み立てるだけで、Context Dataの削除、
+ * 削除認可、Coordinator実行は行わない。
+ */
 export async function verifyRetentionDeletionEvidence(
   request: VerifyRetentionDeletionEvidenceRequest,
   ports: VerifyRetentionDeletionEvidencePorts,
 ): Promise<RetentionDeletionEvidenceVerificationResult> {
-  void request;
-  void ports;
-  return { kind: 'Unavailable' };
+  if (!isPreparedBinding(request.binding)) {
+    return { kind: 'Rejected', reason: 'BindingMismatch' };
+  }
+
+  const receiptPortResult = validateReceiptPorts(ports);
+  if (receiptPortResult !== undefined) {
+    return { kind: 'Rejected', reason: receiptPortResult };
+  }
+
+  const keyPortResult = validateKeyPorts(ports.keyDestructionVerifiers);
+  if (keyPortResult !== undefined) {
+    return { kind: 'Rejected', reason: keyPortResult };
+  }
+
+  let receiptResults: readonly [
+    ContextReceiptVerificationResult<'ExpenseRecording'>,
+    ContextReceiptVerificationResult<'Settlement'>,
+  ];
+  try {
+    receiptResults = await Promise.all([
+      ports.expenseReceiptVerifier.verify({
+        canonicalReceipt: request.expenseRecordingReceipt,
+        binding: request.binding,
+      }),
+      ports.settlementReceiptVerifier.verify({
+        canonicalReceipt: request.settlementReceipt,
+        binding: request.binding,
+      }),
+    ]);
+  } catch {
+    return { kind: 'Unavailable' };
+  }
+
+  for (const result of receiptResults) {
+    if (!isReceiptVerificationResult(result)) {
+      return { kind: 'Rejected', reason: 'InvalidEvidence' };
+    }
+    if (result.kind === 'Unavailable') return { kind: 'Unavailable' };
+    if (result.kind === 'Rejected') {
+      return { kind: 'Rejected', reason: mapReceiptRejection(result.reason) };
+    }
+    if (!result.binding.equals(request.binding)) {
+      return { kind: 'Rejected', reason: 'BindingMismatch' };
+    }
+  }
+  if (
+    receiptResults[0].kind === 'Verified' &&
+    receiptResults[0].context !== 'ExpenseRecording'
+  ) {
+    return { kind: 'Rejected', reason: 'UnexpectedContext' };
+  }
+  if (
+    receiptResults[1].kind === 'Verified' &&
+    receiptResults[1].context !== 'Settlement'
+  ) {
+    return { kind: 'Rejected', reason: 'UnexpectedContext' };
+  }
+
+  let keyResults: readonly ContextKeyDestructionVerificationResult[];
+  try {
+    keyResults = await Promise.all(
+      ports.keyDestructionVerifiers.map((verifier) =>
+        verifier.verify({ binding: request.binding }),
+      ),
+    );
+  } catch {
+    return { kind: 'Unavailable' };
+  }
+
+  for (const [index, result] of keyResults.entries()) {
+    if (!isKeyDestructionVerificationResult(result)) {
+      return { kind: 'Rejected', reason: 'IncompleteEvidence' };
+    }
+    if (result.kind === 'Unavailable') return { kind: 'Unavailable' };
+    if (result.kind === 'Rejected') {
+      return { kind: 'Rejected', reason: mapKeyRejection(result.reason) };
+    }
+    if (result.keyNamespace !== 'GroupData') {
+      return { kind: 'Rejected', reason: 'KeyNamespaceMismatch' };
+    }
+    if (result.context !== ports.keyDestructionVerifiers[index]?.context) {
+      return { kind: 'Rejected', reason: 'UnexpectedContext' };
+    }
+    if (!result.binding.equals(request.binding)) {
+      return { kind: 'Rejected', reason: 'BindingMismatch' };
+    }
+  }
+
+  const evidence = issueVerifiedEvidence(request.binding);
+  return { kind: 'Verified', evidence };
 }
 
-/** 発行済みRetention削除証跡かを確認する未実装のRuntime Guard。 */
+/** 後続Application Portが受け取る不透明値のRuntime Guard。 */
 export function isVerifiedRetentionDeletionEvidence(
   value: unknown,
 ): value is VerifiedRetentionDeletionEvidence {
-  void value;
-  return false;
+  return (
+    typeof value === 'object' && value !== null && issuedEvidence.has(value)
+  );
+}
+
+function issueVerifiedEvidence(
+  binding: PreparedRetentionDeletionBinding,
+): VerifiedRetentionDeletionEvidence {
+  const value = Object.freeze({
+    [evidenceBrand]: true as const,
+    binding,
+  });
+  issuedEvidence.add(value);
+  return value;
+}
+
+function validateReceiptPorts(
+  ports: VerifyRetentionDeletionEvidencePorts,
+): RetentionDeletionEvidenceRejectionReason | undefined {
+  const receiptContexts = [
+    ports.expenseReceiptVerifier.context,
+    ports.settlementReceiptVerifier.context,
+  ];
+  if (new Set(receiptContexts).size !== receiptContexts.length) {
+    return 'DuplicateContext';
+  }
+  if (
+    ports.expenseReceiptVerifier.context !== 'ExpenseRecording' ||
+    ports.settlementReceiptVerifier.context !== 'Settlement'
+  ) {
+    return 'MissingContext';
+  }
+}
+
+function validateKeyPorts(
+  ports: readonly ContextKeyDestructionVerifierPort[],
+): RetentionDeletionEvidenceRejectionReason | undefined {
+  const supplied = ports.map(({ context }) => context);
+  if (new Set(supplied).size !== supplied.length) return 'DuplicateContext';
+  if (supplied.some((context) => !contexts.includes(context))) {
+    return 'UnexpectedContext';
+  }
+  if (contexts.some((context) => !supplied.includes(context))) {
+    return 'MissingContext';
+  }
+}
+
+function mapReceiptRejection(
+  reason: 'BindingMismatch' | 'StaleEvidence' | 'InvalidReceipt',
+): RetentionDeletionEvidenceRejectionReason {
+  switch (reason) {
+    case 'BindingMismatch':
+      return 'BindingMismatch';
+    case 'StaleEvidence':
+      return 'StaleEvidence';
+    case 'InvalidReceipt':
+      return 'InvalidEvidence';
+  }
+}
+
+function mapKeyRejection(
+  reason:
+    | 'BindingMismatch'
+    | 'StaleEvidence'
+    | 'MissingEvidence'
+    | 'IncompleteEvidence',
+): RetentionDeletionEvidenceRejectionReason {
+  switch (reason) {
+    case 'BindingMismatch':
+      return 'BindingMismatch';
+    case 'StaleEvidence':
+      return 'StaleEvidence';
+    case 'MissingEvidence':
+      return 'MissingContext';
+    case 'IncompleteEvidence':
+      return 'IncompleteEvidence';
+  }
+}
+
+function isPreparedBinding(
+  value: unknown,
+): value is PreparedRetentionDeletionBinding {
+  return (
+    value instanceof PreparedRetentionDeletionBinding &&
+    Object.isFrozen(value) &&
+    value.intentVersion > 0 &&
+    Number.isSafeInteger(value.intentVersion) &&
+    value.deletionToken instanceof RetentionDeletionToken &&
+    Object.isFrozen(value.deletionToken) &&
+    typeof value.deletionToken.value === 'string' &&
+    value.deletionToken.value.trim().length > 0 &&
+    value.operationId instanceof OperationId &&
+    Object.isFrozen(value.operationId) &&
+    typeof value.operationId.value === 'string' &&
+    value.operationId.value.trim().length > 0
+  );
+}
+
+function isReceiptVerificationResult(
+  value: unknown,
+): value is ContextReceiptVerificationResult<
+  'ExpenseRecording' | 'Settlement'
+> {
+  if (!isRecord(value)) return false;
+  if (value.kind === 'Unavailable') return true;
+  if (value.kind === 'Rejected') {
+    return (
+      value.reason === 'BindingMismatch' ||
+      value.reason === 'StaleEvidence' ||
+      value.reason === 'InvalidReceipt'
+    );
+  }
+  return (
+    value.kind === 'Verified' &&
+    (value.context === 'ExpenseRecording' || value.context === 'Settlement') &&
+    isPreparedBinding(value.binding)
+  );
+}
+
+function isKeyDestructionVerificationResult(
+  value: unknown,
+): value is ContextKeyDestructionVerificationResult {
+  if (!isRecord(value)) return false;
+  if (value.kind === 'Unavailable') return true;
+  if (value.kind === 'Rejected') {
+    return (
+      value.reason === 'BindingMismatch' ||
+      value.reason === 'StaleEvidence' ||
+      value.reason === 'MissingEvidence' ||
+      value.reason === 'IncompleteEvidence'
+    );
+  }
+  return (
+    value.kind === 'Verified' &&
+    isRetentionContextName(value.context) &&
+    isRetentionKeyNamespace(value.keyNamespace) &&
+    isPreparedBinding(value.binding)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isRetentionContextName(value: unknown): value is RetentionContextName {
+  return (
+    value === 'GroupManagement' ||
+    value === 'ExpenseRecording' ||
+    value === 'Settlement'
+  );
+}
+
+function isRetentionKeyNamespace(
+  value: unknown,
+): value is RetentionKeyNamespace {
+  return (
+    value === 'GroupData' ||
+    value === 'ReceiptVerification' ||
+    value === 'Audit' ||
+    value === 'DeletedGroupToken'
+  );
 }
