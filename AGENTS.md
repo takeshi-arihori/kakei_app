@@ -81,6 +81,7 @@
 
 ## 詳細ルール
 
+- Backend責務・Layer・Directory配置: [backend.md](docs/engineering/backend.md)
 - DDD・値オブジェクト・Entity・Event Sourcing: [domain-design.md](docs/engineering/domain-design.md)
 - Coding・単一責任: [coding-standards.md](docs/engineering/coding-standards.md)
 - Frontend責務: [frontend.md](docs/engineering/frontend.md)
