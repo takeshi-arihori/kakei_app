@@ -47,6 +47,7 @@ Directoryの責務と採用技術はRepository docsを正本とする。Rootで�
 - `packages`: 複数Applicationで共有する必要性がAcceptedされた場合だけ追加する
 - `infra`: Local／Cloud環境
 - `docs`: 静的な仕様・設計・Rule
+- `.worktree`: Project rootに置く、Git管理外の追加Worktree
 - `.agents/skills`: 再利用可能な作業Workflow
 - `.codex`: Project-local Codex Harness／custom agent設定
 
@@ -105,6 +106,13 @@ Project-local custom agentは`.codex/config.toml`で宣言する。
 ## Git・Pull Request
 
 Branch、Commit、PR、Squash merge、公開前確認、PR Template、文書同期の具体Ruleは[Delivery Workflow](docs/engineering/delivery-workflow.md)を正本とする。
+
+追加Worktreeの保存先と作成方法は[Worktree運用](docs/engineering/worktree-management.md)に従う。
+
+- 追加WorktreeはProject rootの`.worktree/<用途>/`へ置き、Worktree内に入れ子で作らない。
+- 作成前にProjectのprimary checkoutを特定し、既存Worktree／Branch、dirty state、base Commitを確認する。
+- Project rootの`.gitignore`に`/.worktree/`を設定し、作成予定Pathが`git check-ignore`で除外されることを確認するまで作成しない。
+- Codex managed worktreeで保存先を指定できない場合は、runbookに従って保存先を明示した`git worktree add`を使う。後片付けもrunbookに従う。
 
 Root Gateとして次だけを守る。
 

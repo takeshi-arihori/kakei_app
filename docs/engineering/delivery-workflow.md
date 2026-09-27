@@ -105,6 +105,8 @@ Rule:
 - Secret、個人情報、公開不可情報、大容量生成物をCommitしない。
 - `develop`向けPRはSquash mergeを使用し、統合後は1 PRを1 Commitとして扱う。作業Branch内のCommitを事前に1つへ潰す必要はない。
 
+追加Worktreeを使う場合の保存先、Ignore、Codexのmanaged worktree toolとの使い分けは[Worktree運用](worktree-management.md)に従う。
+
 ## PR前の文書同期
 
 文書はPR後の後片付けではなく実装の一部とする。
