@@ -1,60 +1,83 @@
 ---
 name: implement-github-task
-description: Ready済みGitHub Taskの開始・Branch・公開Gate・Draft PRまでのDelivery Lifecycleを管理し、実作業をfeature-developmentへ委譲する。
+description: Ready済みGitHub TaskのDelivery Lifecycleを管理し、実作業をfeature-developmentへ委譲した後、独立Evaluatorを経てDraft PRまで届ける。
 ---
 
-# GitHub Taskの実装Lifecycle
+# GitHub Task Delivery
 
-Ready済みTaskを、GitHubとRepositoryの正本に従ってDraft PRまで届ける。Notionは読み書きしない。本SkillはGitHub上のLifecycleを担当し、設計・実装・Test・Reviewの詳細は[feature-development](../feature-development/SKILL.md)へ委譲する。
+Ready済みTaskを、[Engineering Loop](../../../docs/engineering/engineering-loop.md)の実装フェーズに従ってDraft PRまで届ける。Notionは読み書きしない。
 
-## Taskと作業環境を固定する
+本SkillはGitHub Lifecycle、独立Evaluator、Draft PRを担当し、設計・TDD・Production変更・Self Reviewは`feature-development`へ委譲する。
 
-1. [delivery-workflow](../../../docs/engineering/delivery-workflow.md)のReady・Branch・文書影響を確認する。GitHub取得先と固定Commitは[正本入口](../../../docs/governance/README.md)で確認する。
-2. Task Issue、Project Field、Epic、Dependencies、Accepted ADR、固定Commitの仕様を取得する。
-3. Status、Requirement、Done Criteria、Estimate、Decision Check、Related ADRがReady条件を満たすことを確認する。
-4. 同TaskのOpen PR、現在Branch、`origin/develop`、作業ツリーを確認する。
-5. 無関係または所有者不明の変更を移動、破棄、Stage、Commitしない。必要なら`origin/develop`から隔離worktreeと`codex/` Branchを作る。
+## 最初に読む
 
-GitHubへの最初の書き込み前に[保存と公開Gate](../../../docs/engineering/delivery-workflow.md#githubでの保存と公開gate)を確認する。開始記録を含む公開本文・添付ごとに機械検査と手動Reviewを行い、非公開情報は公開しない。
+- [Engineering Loop](../../../docs/engineering/engineering-loop.md)
+- [Skillガバナンス](../../../docs/engineering/skill-governance.md)
+- [Delivery Workflow](../../../docs/engineering/delivery-workflow.md)
+- [PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)
+- [正本入口](../../../docs/governance/README.md)
+- 対象Task、Epic、Dependencies、Accepted ADR、関連docs
 
-StatusをIn Progressにし、Issueへ開始記録を残す。`develop`へ直接CommitまたはPushしない。
+具体的なBranch、Commit、PR、公開Gate、Test Command等のRuleはRepository docsを正本とする。特定の言語、DB、Framework、API方式を仮定しない。
+
+## I0. Taskと作業環境を固定する
+
+1. TaskがRepositoryのReady条件を満たすか確認する。
+2. Task、Requirement、Done Criteria、Dependencies、Decision、関連docsを取得する。
+3. 現在Branch、作業Tree、Remote、最新`develop`、同TaskのOpen PRを確認する。
+4. Dependencyがある場合、[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)に従って通常BranchかStacked Branchかを決める。
+5. 無関係または所有者不明の変更を移動、破棄、Stage、Commitしない。
+6. GitHubへの書き込み前にRepositoryの公開Gateを確認する。
+
+ReadyでないTask、未承認Decisionに依存するTask、前提Dependencyを満たさないTaskは実装へ進めない。
 
 ## 実作業を委譲する
 
-[feature-development](../feature-development/SKILL.md)へ、Task、Requirement、Done Criteria、Accepted ADR、固定Commit、既知の制約を渡す。
+`feature-development`へ次を渡す。
 
-`feature-development`が変更内容を判定し、必要な以下のSkillだけを組み合わせる。
+- Task／Requirement／Done Criteria
+- Accepted ADR／関連docs
+- 基準Commit
+- Dependency／Stack情報
+- 既知制約とOpen Question
 
-- `pre-investigation`
-- `domain-design`
-- `api-design`
-- `database-change`
-- `implementation`
-- `testing`
-- `code-review`
+`feature-development`が必要な調査・設計・TDD・実装・検証・Self Reviewを組み合わせる。
 
-既存の`domain-modeling`、`specification-contract`、`solid-ddd-pr-review`、`prepare-pr-evidence`は、それぞれの専門Skillから必要時に利用する。
+## I5. 独立Evaluator Loop
 
-本番依存関係の追加、破壊的Migration、破壊的Schema変更、ADR必須Decisionは、Repository Ruleに従って承認・Decisionを得るまで依存作業を止める。
+実作業がSelf Reviewまで完了したら、[検証・独立評価・Draft PR](references/delivery.md)に従って評価対象を固定し、新しい`task_evaluator`へEvidenceを渡す。
 
-## Deliveryを完了する
+- `fail`: 親Agentが原因に対応するSkillへ戻して修正・再検証・Self Reviewし、**新しいEvaluator**へ渡す。
+- `blocked`: Owner Decision、権限、正本Conflict、Evidence不足等を解消するまで依存Deliveryを止める。
+- `pass`: Findingと不足Evidenceが空であることを確認してDraft PRへ進む。
 
-`feature-development`から次を受け取る。
+Evaluatorはread-onlyで、Code／文書／GitHub状態を変更させない。
 
-- 実装・文書差分
-- Test／検証結果
-- `code-review`結果
-- 未実施検証と残Risk
-- 未決事項
+## I6. Draft PR
 
-Blocker／Majorが残っている場合はDraft PR作成へ進まない。解消後、[独立評価とDraft PR](references/delivery.md)に従い、評価、Commit、Push、Draft PR、Issue／Project更新まで進める。
+Evaluator pass後だけ、RepositoryのDelivery Ruleに従ってCommit、Push、Draft PR、Issue追跡を完了する。
+
+Stacked PRの場合は[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)のBaseと`Depends-On`を維持する。
 
 PR Ready化・Mergeは利用者の明示依頼がある場合だけ行う。
 
+## 出力
+
+- Task／Requirement／Done Criteria
+- 使用／省略Skill
+- 実装・文書差分
+- TDD／Verification結果
+- Self Review結果
+- Independent Evaluator結果
+- Dependency／Stack状態
+- Branch／Commit／Draft PR
+- 未実施検証、Open Question、残Risk
+
 ## 完了条件
 
-- GitHub Taskと最終DiffがTraceできる。
-- 必要なSkill選択と省略理由が記録されている。
-- Test／検証と`code-review`が完了している。
+- Taskと最終DiffをTraceできる。
+- 必要なSelf ReviewとVerificationが完了している。
+- 最新評価対象に対して`task_evaluator`がpassしている。
 - 公開Gateを満たしたDraft PRがTaskへLinkされている。
+- Dependencies／Stack状態がPRと一致している。
 - 未実施検証、未決事項、残Riskが明示されている。

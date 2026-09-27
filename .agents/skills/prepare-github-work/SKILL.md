@@ -1,67 +1,91 @@
 ---
 name: prepare-github-work
-description: 家計アプリのGitHub Epic・Taskを作成・分割・レビューし、要件、依存関係、ADR、Ready判定を整える。
+description: 検証済み要求と設計成果を、RepositoryのDelivery Ruleに従ってGitHub Epic／Task／Dependencies／Ready状態へ変換する。
 ---
 
 # GitHub作業項目の準備
 
 要求を、別の開発者やAIが推測せず実装できるGitHub作業項目へ変換する。Notionは読み書きしない。
 
-レビューのみなら、以下の起票・Property設定・Status変更は提案として扱い、GitHubへ書き込まない。作成・更新を依頼された場合だけ保存手順へ進む。
+レビューのみの依頼では提案と評価までに留め、GitHubへの書き込みは依頼された場合だけ行う。
 
-## Issueの記述言語
+## 最初に読む
 
-Issueのタイトル、本文、見出し、チェックリスト、Notesなど、人が読む自然言語は原則として日本語で記述する。
+- [Engineering Loop](../../../docs/engineering/engineering-loop.md)の設計フェーズ
+- [Skillガバナンス](../../../docs/engineering/skill-governance.md)
+- [Delivery Workflow](../../../docs/engineering/delivery-workflow.md)
+- [PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)
+- [正本入口](../../../docs/governance/README.md)
+- 要求の変更範囲に対応するProduct／Domain／Architecture等のdocsとAccepted ADR
 
-- Conventional Commit風のprefix（`feat(group):`、`docs(api):`など）、コード識別子、型名、API名、Package名、Branch名、SHA、URL、GitHub Projectの定義済みField値やStatus値は、正本の表記を維持する。
-- 英語のログ、Error message、外部仕様からの引用は原文を保持してよいが、必要に応じて日本語の説明を添える。
-- Issueを保存する前に、タイトルと本文に不要な英文の説明文・見出しが残っていないか確認し、日本語へ直す。
-- 既存Issueを更新する場合も、新たに追加・修正する自然言語は同じ方針に従う。
+Epic／Task粒度、Ready、ADR、Project Field、公開Gate、Branch／PR等の具体RuleはRepository docsを正本とし、このSkillへ複製しない。特定の言語、DB、Framework、API方式を前提にTaskを作らない。
 
-## 正本と参照元を確認する
+## Inputを検証する
 
-1. [delivery-workflow](../../../docs/engineering/delivery-workflow.md)の起票・Ready・ADR条件を確認する。GitHub取得先と固定Commitは[正本入口](../../../docs/governance/README.md)で確認し、仕様・設計は今回の成果に関係する箇所だけ読む。
-2. 対象のGitHub Project、Epic Issue、Task Issue、関連Issue、Repositoryの仕様・設計・Accepted ADRを取得する。
-3. `develop`に未反映の正本は、ガバナンス文書が示す固定Commit URLから読む。
-4. Project内とRepository Issuesを業務語彙、期待成果、Bounded Contextで検索し、重複と包含関係を比較する。
-5. 製品、Security、Data、Architectureの判断を暗黙に補わない。不足はClarification、調査Task、ADR Proposalへ分離する。
+1. [Engineering Loop](../../../docs/engineering/engineering-loop.md)のD0〜D2が成立しているか確認する。
+2. Problem、Goal、Requirement、Done Criteria、Scope、設計結果、Open Questionを取得する。
+3. 現状Evidence、既存Epic／Task、Accepted ADRを検索し、重複・包含関係を比較する。
+4. 未決DecisionはClarification、調査Task、ADR Proposal等へ分離し、依存TaskをReadyにしない。
 
-旧Notion URLやSource Notion IDは出典識別子としてのみ保持し、アクセス、同期、更新には使わない。
+D0〜D2のEvidenceが不足する場合、作業項目を推測で完成させず、不足する前段へ戻す。
 
-## 公開前Security Gate
+## Work Breakdown
 
-Public RepositoryのIssue、PR、添付へ書き込む前に、対象情報を`公開可／要編集／非公開／除外`へ分類し、未分類を残さない。Secret、PII、実在金融情報、内部Security情報を機械検査と手動Reviewの両方で確認する。要編集、非公開、未分類の本文を公開せず、公開可と確認できた情報だけを最小限に記載する。
+[Delivery Workflow](../../../docs/engineering/delivery-workflow.md)の粒度Ruleに従って、必要な場合だけEpicを作り、独立して検証可能なTaskへ分解する。
 
-非公開のまま必要な現行情報を発見した場合は作成・更新を停止し、OwnerがPrivate Repository等の保管先を決めるまで進めない。Private Projectへ追加してもPublic Issueは非公開にならないことを前提にする。
+各Taskへ少なくとも次をTraceする。
 
-## EpicとTaskを設計する
+- Problem／Requirement／Done Criteria
+- Scope／Out of scope
+- 対象Context／Use Case／Ownership等、設計で確定した境界
+- Dependencies
+- Decision Check／Related ADR
+- Test／Verification方針
+- 更新対象docs
 
-複数の独立成果にまたがる場合だけEpicを作る。単一の1〜2日、1 DeliverableはTaskにする。3日以上または複数Deliverableは分割し、密接した2時間未満の作業は隣接Taskへまとめる。
+## Dependency／PR Planning
 
-Issue本文にProblem、成果、制約、対象外、Requirement、観測可能なDone Criteria、Bounded Context、Data Owner、AggregateまたはUse Case、Layer、影響範囲、Dependencies、Related ADR、Decision Checkの根拠、PR URL、Notesを記録する。
+[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)に従い、Task Graphを作る。
 
-ProjectにはWork Type、Phase、Area、Priority、Estimate、Decision Check、Blocked、Status、Sprintを設定する。MilestoneはRepositoryのnative Milestoneを使う。Issue本文とProject Fieldを再取得し、一致を確認する。
+- 並行可能Task
+- 先行必須Task
+- Code差分上の依存有無
+- Stacked PRの要否
+- Stackの場合の直接Base
+- Merge順序
+- 前提Merge後に必要な再検証
 
-## Decision CheckとADR
+をPlanning段階で決める。
 
-起票またはRequirement変更ごとに`方針変更なし`か`方針変更あり`を判断し、根拠をIssueへ記録する。判定不能は`方針変更あり`として扱う。
+## 独立Planning Evaluator
 
-Accepted ADR、新しいBounded Context、DB、Cloud Service、Runtime、Event Sourcing、認証・認可、Security・Privacy、API Protocol、Schema正本、Context間連携、不可逆または高コストな運用判断の変更はADRを必須とする。未決ならADR IssueとRepository ADR Proposalを作り、OwnerがAcceptedを明示するまで依存TaskをReadyにしない。RejectedならRequirementとDone Criteriaを現行Decisionへ戻す。
+保存前に[独立Planning評価と保存確認](references/delivery.md)に従い、新しい`work_planning_evaluator`へproposalを渡す。
 
-## Ready判定
+- `pass`: GitHub更新を依頼されている場合だけ保存へ進む。
+- `fail`: 親AgentがPlanningを修正し、新しいEvaluatorで再評価する。
+- `blocked`: Owner Decision、権限、正本Conflict等を報告して依存作業を止める。
 
-次が揃う場合だけStatusをReadyへ移す。
+Evaluatorはread-onlyで、GitHub更新は親Agentだけが行う。
 
-- RequirementとDone Criteriaが具体的で矛盾しない。
-- Epic、Work Type、Priority、Area、Milestone、Estimateが揃う。
-- Dependenciesが完了済みか、着手を妨げない。
-- Bounded Context、Data Owner、AggregateまたはUse Case、認可、Test方針が分かる。
-- 未決事項が解消済みか別作業に分離されている。
-- Decision Checkが確定し、必要なRelated ADRがすべてAcceptedである。
-- 1〜2日、1 Deliverableである。
+## 保存後
 
-状態はBacklog → Ready → In Progress → Review → Doneとする。飛ばす場合はIssueへ理由を記録する。個人開発のIn Progressは原則1件に制限する。
+GitHubへ書き込んだ場合はIssue／Projectの実体を再取得し、proposalどおり永続化されたかを**別の新しいEvaluator**で確認する。
 
-## 完了まで進める
+## 出力
 
-レビューのみの依頼では提案とReady判定を報告する。GitHubの作成・更新を依頼された場合は、書き込み前に[独立Planning評価と保存確認](references/delivery.md)を読み、proposal評価、保存、persisted評価まで完了する。親Agentだけが書き込み、初稿の提示だけで作業を終えない。
+- 使用／既存Epicと理由
+- 作成／更新するTask
+- Requirement／Done Criteria
+- Dependency GraphとPR順序
+- Ready判定
+- Decision／ADR状態
+- 未解決事項
+- GitHub更新を行った場合のURLとpersisted評価
+
+## 完了条件
+
+- 要求からEpic／TaskまでTraceできる。
+- 各TaskがRepositoryのReady Ruleで評価されている。
+- DependenciesとDelivery順序が明示されている。
+- 必要な場合のStacked PR計画がある。
+- Planning Evaluatorで重大Findingと不足Evidenceが残っていない。

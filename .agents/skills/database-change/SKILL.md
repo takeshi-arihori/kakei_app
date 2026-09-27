@@ -1,65 +1,57 @@
 ---
 name: database-change
-description: Data OwnerとDomain/Application契約を前提に、Table・Migration・Index・Constraint・Data移行・Rollbackを安全に設計する。
+description: 確認済みDomain／Application契約を、RepositoryのData／Persistence docsに従って安全なPersistence変更・移行・復旧へ写像する。
 ---
 
 # Database Change
 
-Persistence変更を業務Ruleの正本にせず、確認済みのData Owner、Domain設計、Application契約をDBへ写像する。
+Persistence変更を業務Ruleの正本にせず、確認済みのData Ownership、Domain設計、Application契約を永続化へ写像する。Skill自身は特定のDB、Data Store、ORM、Migration Toolを固定しない。
 
-## 入力
+## 最初に読む
 
 - GitHub TaskのRequirement／Done Criteria
-- `pre-investigation`、必要なら`domain-design`の成果
-- [設計Gate](../../../docs/product/design-gates.md)
-- [Backend開発ルール](../../../docs/engineering/backend.md)
-- [ドメイン設計ルール](../../../docs/engineering/domain-design.md)
-- [テスト方針](../../../docs/engineering/testing.md)
+- `pre-investigation`、必要な設計Skillの成果
+- [Engineering Loop](../../../docs/engineering/engineering-loop.md)
+- [Skillガバナンス](../../../docs/engineering/skill-governance.md)
+- [開発ガイド](../../../docs/engineering/README.md)
+- Data／Backend／Domain／Testing／Operations等、変更範囲に必要なdocs
 - 関連Accepted ADR
-- 既存Migration、Schema、Repository Adapter、Integration Test
+- 既存Persistence定義、Migration、Adapter、Integration Test
 
-DB、Persistence方式、Data Ownerが未確定なら、既存DirectoryやMigrationの存在だけを根拠に採用済みとみなさない。
+採用中のData Store、Schema方式、Migration Tool、命名、Constraint、Index、Transactionの具体RuleはdocsとAccepted Decisionから取得する。
 
-## 設計観点
+## 実施
 
-- Table／Column／Key／ConstraintがどのConceptとRuleを永続化するか
-- Aggregate／Transaction Boundaryと書込単位
-- Unique、Foreign Key、Check Constraintの責務
-- IndexのQuery Pattern、選択性、Write Cost
-- Version／Optimistic Lock、競合、Idempotency
-- Nullability、Default、既存Dataとの互換性
-- Expand／Migrate／Contract、Backfill、Dual Read／Writeの要否
-- Online Migration、Lock、長時間Transaction、Batchサイズ
-- RollbackまたはForward-fix
-- Backup、Restore、Retention、削除、再構築可能性
+1. Data Owner、永続化対象、書込単位をRequirement／Domain設計へTraceする。
+2. Persistence構造と制約の変更理由をConcept／Ruleへ対応付ける。
+3. Query Pattern、整合性、Concurrency、Idempotency、性能Riskに応じて必要な設計を行う。
+4. Nullability／Default／既存Data等、現行DataとのCompatibilityを確認する。
+5. Data移行が必要なら段階、Backfill、切替、停止条件を整理する。
+6. 破壊的変更または長時間／高Risk変更では関連docsが要求するRollback／Forward-fix、運用、Backup／Restore等を整理する。
+7. Integration／Migration／Concurrency等、必要なTestを`testing`へ渡す。
+8. Schema／Data／Runbook／図等の更新対象を整理する。
 
-DB Constraintだけを根拠にDomain Invariantを新規確定しない。
-
-## Migration Rule
-
-- 破壊的Migrationは利用者の明示確認なしに実行しない。
-- 既存Dataを壊す可能性がある変更はMigration手順と復旧方針を先に示す。
-- Schema変更と対応するApplication／Repository／Test／文書を同じ変更で整合させる。
-- 未採用のDBやORMを前提にScaffoldを追加しない。
+Persistence上の制約だけを根拠に、新しいDomain Invariantを確定しない。
 
 ## 出力
 
 - Data OwnerとPersistence対象
-- Schema差分と各変更の根拠
-- Index／Constraint／Transaction／Concurrency方針
-- Migration／Backfill手順
+- Persistence差分と根拠
+- Constraint／Index／Transaction／Concurrency等、適用した設計結果
+- Data移行／Backfill／切替手順
 - RollbackまたはForward-fix
-- Integration Test、競合、再試行、Migration Test
-- Data保持・削除・Securityへの影響
-- 更新する文書／図／Runbook
+- Test／検証項目
+- Data保持・削除・Security／Operationsへの影響
+- 更新対象docs／図／Runbook
 - Open Question／Conflict／ADR要否
 
 ## 停止条件
 
-新しいDB、Persistence方式、Data Owner、Context間Storage共有、不可逆なData移行などADR必須のDecisionが未承認なら、そのDecisionに依存するSchema／Migrationを確定・実行しない。
+新しいData Store、Persistence方式、Data Ownership、Context間Storage共有、不可逆なData移行等についてRepositoryのDecision Gateに該当する未承認Decisionがある場合、そのDecisionに依存する変更を確定・実行しない。
 
 ## 完了条件
 
-- Schema変更がDomain／Application上の必要性へTraceできる。
-- 互換性、移行、競合、復旧、検証方法が説明できる。
-- DB都合をDomain Ruleとして誤確定していない。
+- Persistence変更がRequirementとDomain／Application上の必要性へTraceできる。
+- 具体方式がRepository docsの現行Decisionと一致する。
+- Compatibility、移行、競合、復旧、検証方法を説明できる。
+- Skill本文の技術仮定ではなくdocsを根拠に設計している。

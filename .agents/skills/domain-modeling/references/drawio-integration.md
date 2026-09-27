@@ -1,5 +1,5 @@
-# draw.io Integration（廃止済み）
+# 移行済み
 
-旧draw.io生成・更新契約は廃止した。現在の図管理は[Diagram Governance Contract](diagram-governance.md)を使用する。
+検討用Diagram InputとRepository正本図の扱いは[`docs/engineering/diagram-governance.md`](../../../../docs/engineering/diagram-governance.md)を正本とする。
 
-draw.ioはProject Ownerの検討用入力である。AIはファイルを変更せず、Ownerが対象を明示した場合だけ読み取り専用で参照する。正式な図はRepositoryの`docs/diagrams/*.mermaid.md`へ記録する。
+このReferenceへProject固有のDiagram Ruleを追加しない。

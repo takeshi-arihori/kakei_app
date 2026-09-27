@@ -1,3 +1,5 @@
-# 現行モデルの入口
+# 移行済み
 
-正本は[現行Product Scope・業務モデル](../../../../docs/product/current-model.md)。[未確定・未移行Gate](../../../../docs/product/design-gates.md)と[正本入口](../../../../docs/governance/README.md)も確認する。実装を根拠に未確定Decisionを補完しない。
+現行Product／Domain Modelの正本は[`docs/product/current-model.md`](../../../../docs/product/current-model.md)と、そこから辿れるAccepted ADR／Domain docsで管理する。
+
+Skill配下へProject固有Modelのコピーを置かない。

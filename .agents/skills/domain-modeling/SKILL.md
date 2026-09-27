@@ -1,48 +1,70 @@
 ---
 name: domain-modeling
-description: 家計アプリの業務要求からドメインモデルを整理・レビューする。DBやUIからの型設計には使わない。
+description: 業務要求からConcept、Rule、Invariant、境界を発見・検証し、RepositoryのDomain docsへTraceできるモデルを整理する。
 ---
 
 # Domain Modeling
 
-対象Problem、Actor、Use Caseを起点に、具体例とモデルを往復して業務理解を検証する。依頼された範囲のモデル、根拠、未決事項、次に必要な判断までを成果とする。
+対象Problem、Actor、Use Caseを起点に、具体例とモデルを往復して業務理解を検証する。このSkillは業務理解のWorkflowを担当し、Project固有のDomain Ruleや技術Ruleを正本として保持しない。
 
-## 根拠と境界
+## 最初に読む
 
-- 家計アプリのモデルを扱うときは[現行モデル](../../../docs/product/current-model.md)と[設計Gate](../../../docs/product/design-gates.md)の対象箇所を確認する。GitHubの取得先や固定Commitは[正本入口](../../../docs/governance/README.md)で確認する。Notionは読み書きしない。
-- Rule、Term、Boundaryに根拠とKnowledge State（`Confirmed`、`Proposed`、`Assumption`、`Open Question`、`Conflict`）を付ける。提案や仮定を暗黙にConfirmedへ昇格させない。
-- DB、Prisma、GraphQL、UI、Frameworkは業務Ruleの根拠にしない。既存実装は現行動作の証拠としてモデルとの対応・乖離を記録する。このSkillからCode変更へ自動進行しない。
-- AggregateはInvariant、変更単位、同時更新、Lifecycle、整合性要求を確認してから候補を検討する。技術都合や親子関係だけで確定しない。
-- 正常例に加え、対象Ruleを反証できる境界・失敗・競合等の具体例を使う。同じ語がContextで異なる意味を持つ場合は分ける。
+- 利用者の要求とGitHub上の関連Requirement
+- [Engineering Loop](../../../docs/engineering/engineering-loop.md)
+- [Skillガバナンス](../../../docs/engineering/skill-governance.md)
+- [開発ガイド](../../../docs/engineering/README.md)
+- [Domain Modeling Rule](../../../docs/engineering/domain-modeling.md)
+- [Domain Design Rule](../../../docs/engineering/domain-design.md)
+- 対象Product／Domain docs、Design Gate、Accepted ADR
 
-## 作業に応じて読む
+現行業務モデル、Knowledge State、Diagram Rule等のProject固有ルールはdocsを正本とする。
 
-全資料の事前読込は不要。今回の判断に必要な資料だけを読む。
+## 進め方
 
-| 作業 | 参照 |
-| --- | --- |
-| 新しいモデル全体の整理 | [進め方と成果の観点](references/modeling-workflow.md)、[出力形式](references/output-contract.md) |
-| 抽象化・モデルの妥当性・実装との乖離のレビュー | [モデリング原則](references/modeling-principles.md) |
-| System Context／Use Case／Object／Domainの各視点を整理 | [SUDOの観点](references/sudo-modeling.md) |
-| 業務知識の不足を質問で解消 | [Interview Guide](references/interview-guide.md) |
-| Concept・Rule・Invariant・境界の検証 | [Domain Model Rules](references/domain-model-rules.md) |
-| 個別Use Case／CommandをPRE・POST・INV・FAILとTestへ構造化 | [Specification Contract](../specification-contract/SKILL.md) |
-| 確認済みRuleからEntity／VO／Aggregate等の設計へ進む | [Domain Design](../domain-design/SKILL.md) |
-| 正式Mermaid図の作成・更新、明示されたdraw.io入力の参照 | 作業前に[Diagram Governance](references/diagram-governance.md) |
+1. Problem、Actor、Goal、Trigger、期待結果を確認する。
+2. 用語、Concept、Rule、Invariant候補を具体例から抽出する。
+3. 正常例だけでなく、境界・拒否・競合等の反例でRuleを検証する。
+4. 同じ用語がContextごとに異なる意味を持つ場合は分ける。
+5. Context、Ownership、Lifecycle、整合性要求をEvidence付きで整理する。
+6. 各結論へRepository docsが定めるKnowledge Stateを付ける。
+7. 確認済みRuleを`domain-design`へ、個別操作の契約化を`specification-contract`へ引き継ぐ。
 
-局所レビューは対象の結論、根拠、具体例、未決事項に絞る。全体モデルの11項目を毎回再作成しない。
+外部技術や既存Data Shapeは現行動作のEvidenceとして参照できるが、それ自体を業務Ruleの根拠にしない。
+
+## 補助Reference
+
+`references/`は質問例、出力Template、モデリング手順等の補助として利用できる。ただし規範的なProject Ruleは`docs/`が正本であり、Referenceとdocsが矛盾する場合はdocsを優先する。
+
+必要なReferenceだけを読む。入口へRule本文を複製しない。
 
 ## 責務境界
 
-- `domain-modeling`は業務Concept、Rule、Invariant、境界を発見・検証する。
-- `domain-design`は確認済みRuleをEntity、Value Object、Aggregate、Domain Service、Domain Event、Port等の設計へ落とす。
-- `specification-contract`は個別Use Case／CommandをTest可能な契約へ構造化する。
-- このSkill単独でProduction Code、API Schema、DB Schemaを変更しない。
+- `domain-modeling`: 業務Concept、Rule、Invariant、Boundaryの発見・検証
+- `domain-design`: 確認済みRuleをDomain要素・責務境界へ変換
+- `specification-contract`: 個別操作をTest可能な契約へ構造化
+- `testing`: 契約とDone Criteriaを実際のTest／Verificationへ変換
 
-## 判断待ちと完了
+このSkill単独でProduction Code、公開契約、Persistence構造を変更しない。
 
-根拠不足、正本間Conflict、重要語の意味不明、Invariant未確定、ScopeまたはAccepted ADRの変更がある場合は、その判断の確定と依存する実装・正本反映を止める。影響と必要な判断を示し、依存しない整理・反例の検討・提案は続ける。
+## 出力
 
-図の意味を左右するConflict／Open Questionや未承認Proposedは正式Mermaidへ反映しない。図は文章のAccepted Decisionを根拠とし、既に承認された内容を再承認待ちにしない。draw.ioはOwnerが対象を明示した場合だけ読み取り専用とし、作成・変更・削除・整形・自動同期を行わない。
+- Problem／Actor／Use Case
+- Ubiquitous Language候補と意味
+- Rule／Invariant／BoundaryとEvidence
+- Knowledge State
+- 具体例／反例
+- Context／Ownership候補
+- Conflict／Open Question
+- 次の`domain-design`／`specification-contract`への入力
+- 更新対象のProduct／Domain docs
 
-成果には確認できた事項と提案・未決事項を区別し、根拠と次の判断を添える。設計を確定できない部分があっても、完了した分析を報告する。
+## 停止条件
+
+重要Ruleの根拠不足、正本Conflict、未承認Decisionが結果を左右する場合は、該当部分をConfirmedへ昇格させない。依存しないモデリングと反例検討は継続する。
+
+## 完了条件
+
+- 確定事項と提案・未決事項を区別している。
+- 各RuleをRequirement、具体例、Repository docsへTraceできる。
+- 技術都合を業務Ruleとして確定していない。
+- 後続設計へ渡す入力が明確である。
