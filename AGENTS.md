@@ -1,114 +1,136 @@
 # 家計アプリ 開発ルール
 
-## 正本と読み方
+## 正本と入口
 
 - 利用者の最新の明示指示を最優先する。
-- Notionは読み書きしない。GitHub Issueを要件・完了条件、Private Projectを進捗・Sprint、Repositoryを仕様・設計・ADRの正本とする。
-- GitHubの取得先や固定Commitを確認するときは[正本入口](docs/governance/README.md)を使う。
-- 機能Taskの実装前に対象Task、関連仕様、GitHubのAccepted ADR、既存コードを確認する。
-- 詳細ルールの入口は[docs/engineering/README.md](docs/engineering/README.md)とする。必要な文書だけを読む。
-- GitHubとコードが矛盾する場合は実装で吸収せず、矛盾と影響を報告して解消する。
+- Notionは読み書きしない。GitHub IssueをRequirement／Done Criteria、Private Projectを進捗、Repositoryを仕様・設計・ADRの正本とする。
+- GitHubの取得先や固定Commitは[正本入口](docs/governance/README.md)で確認する。
+- 設計・実装を始める前に最新`develop`を確認する。
+- 設計からDraft PRまでの標準状態遷移は[Engineering Loop](docs/engineering/engineering-loop.md)を正本とする。
+- 詳細Ruleの入口は[開発ガイド](docs/engineering/README.md)とする。必要な文書だけを読む。
+- GitHub正本とCodeが矛盾する場合は実装で吸収せず、Conflictとして扱う。
 
-## プロジェクト構成
+## docsとSkillの責務
 
-- `apps/web`: Next.jsフロントエンド
-- `apps/api`: Hono＋GraphQL Yoga API
-- `apps/worker`（未作成）: Projection・Outbox・保守JobのTaskへ着手するときに追加する
-- `packages`（未作成）: 生成GraphQL契約またはBackend非依存基盤の最初の利用Taskへ着手するときに追加する
-- `infra`: ローカル・クラウド環境
-- `docs`: 「何が正しいか」を管理する静的な仕様・設計・規約
-- `.agents/skills`: 「どう作業するか」を管理する再利用可能な手順
-- Package Managerはpnpmを使用し、TypeScript strict modeを維持する。
+[Skillガバナンス](docs/engineering/skill-governance.md)を守る。
 
-## アーキテクチャ不変条件
+```text
+AGENTS.md     : 入口・Gate・Routing
+Engineering Loop: 状態遷移
+.agents/skills: 作業Workflow
+Repository docs: Project固有・技術固有Rule
+```
 
-- Next.jsにDomain LogicやDB Accessを実装しない。業務API、認証、認可の正本はHono APIのApplication／Domainとする。
-- Honoは薄いPresentation Adapterとし、Presentation → Application → Domainの依存方向を守る。
-- InfrastructureはDomainまたはApplicationが定義したPortを実装する。
-- Prisma Model、DTO、GraphQL Type、Domain Modelを同一型として共有しない。
-- Contextを跨ぐ直接参照を避け、IDまたは明示的なPort・公開契約を使用する。
-- Domain Event、Integration Event、Stored Event、Audit Log、Outbox Messageを区別する。
-- Event、Snapshot、Logへ機密平文を保存しない。
-- 正式な設計図は`docs/diagrams/*.mermaid.md`で管理し、文章のAccepted Decisionを優先する。詳細は[図の管理ルール](docs/engineering/diagram-governance.md)に従う。
-- draw.ioはProject Ownerの検討用入力とする。AIはdraw.ioファイルを作成、更新、削除、整形せず、変更を行うToolも使用しない。Ownerが明示した場合だけ読み取り専用で参照する。
+Skillは特定のProgramming Language、DB、Framework、ORM、API Protocol、Runtime、Cloud製品を固定ルールとして持たない。変更時点のRepository docsから採用技術と具体Ruleを取得する。採用技術が変わってもWorkflowが同じならSkillは変更しない。
 
-現行Product Scopeと設計Gate:
+## 再設計時の原則
 
-- 業務Domainは1〜4人のGroupで行う共有割り勘に限定し、個人収支を扱わない。
-- 現行の主要語はGroup、Participant、Group Expense、Split Allocation、Settlement Case、Snapshot Revision、Payment Instruction、Payment Attempt、Settlement Archiveとする。
-- 個人用Household、Account、収入Transaction、日付境界Archive、単一Payer／Payeeを現行仕様として実装しない。
-- 3 Context（Group Management、Expense Recording、Settlement）、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離を採用する。境界やPersistenceを扱う前に[設計Gate](docs/product/design-gates.md)と、そこから辿れる対象ADRを確認する。条件付き採用や未決事項を採用済みと解釈しない。C1は2026-09-20に充足したが、Persistence実装はS0〜S3と対象Task固有のReady条件が揃うまで進めない。
-- 未確定の設計判断に依存するTaskをReadyまたは実装へ進めない。
+既存技術、既存設計、既存Directory、既存Codeを確定事項として扱わず、現在のRequirementとAccepted Decisionに基づいて再評価する。
+
+初回調査では変更せず、`pre-investigation`で最低限次を整理する。
+
+1. 現在の設計・実装・Test
+2. 変更に関係するEntity／Value Object／Aggregate／Domain Service／Domain Event等
+3. Requirementとの不足・矛盾
+4. SOLID／DRY／依存方向／責務分離
+5. 影響範囲と再設計が必要な箇所
+
+調査結果から変更が必要と判断した後、Engineering Loopに従って設計・実装へ進む。
+
+## Project構成
+
+Directoryの責務と採用技術はRepository docsを正本とする。Rootでは入口だけを示す。
+
+- `apps/web`: Web Application
+- `apps/api`: Backend API
+- `apps/worker`: Background／Async処理用。作成条件はAccepted Designに従う
+- `packages`: 複数Applicationで共有する必要性がAcceptedされた場合だけ追加する
+- `infra`: Local／Cloud環境
+- `docs`: 静的な仕様・設計・Rule
+- `.agents/skills`: 再利用可能な作業Workflow
+- `.codex`: Project-local Codex Harness／custom agent設定
+
+具体的なArchitecture、Layer、Directory配置、Protocol、Data Store、Coding Ruleは[開発ガイド](docs/engineering/README.md)から対象文書を読む。
 
 ## 作業の入口
 
-GitHub Epic／Taskの起票・改善は`prepare-github-work`、Ready済みTaskをDraft PRまで届ける場合は`implement-github-task`を使う。`implement-github-task`はGitHub Lifecycleを担当し、実作業を`feature-development`へ委譲する。
+```text
+要求・設計・作業分解
+    └─ prepare-github-work
 
-機能変更の統括は`feature-development`を入口とし、変更内容に応じて必要なSkillだけを組み合わせる。
+Ready TaskのDelivery
+    └─ implement-github-task
+          └─ feature-development
+```
+
+`feature-development`は変更内容から必要なSkillだけを選ぶ。
 
 | 作業 | Skill |
 | --- | --- |
-| 現状・影響範囲・不足・SOLID／依存方向の事前調査 | `pre-investigation` |
-| Domain Rule、Entity、Value Object、Aggregate、Domain Service、Domain Event | `domain-design` |
-| GraphQL／HTTP契約、Input／Output、Error、認証認可境界、互換性 | `api-design` |
-| Table、Migration、Index、Constraint、Data移行 | `database-change` |
-| Production Code | `implementation` |
-| TDD、Test設計、検証、回帰 | `testing` |
-| 最終Diffの要件・設計・品質Review | `code-review` |
+| 現状・Gap・影響範囲の事前調査 | `pre-investigation` |
+| Domain設計 | `domain-design` |
+| 公開API契約設計 | `api-design` |
+| Persistence変更設計 | `database-change` |
+| Production変更 | `implementation` |
+| TDD／検証／回帰 | `testing` |
+| 最終Diffのセルフレビュー | `code-review` |
 
-専門Skillは単独でも利用できる。
+専門Skillは必要時だけ利用する。
 
-- `domain-modeling`: 業務概念・Rule・Invariant・境界の発見／検証
-- `specification-contract`: 個別Use CaseのPRE／POST／INV／FAILとTest Trace
-- `solid-ddd-pr-review`: SOLID／DRY／DDD／日本語JSDocの専門Review
-- `prepare-pr-evidence`: 必要時だけPRの視覚証跡を準備
+- `domain-modeling`: 業務Concept／Rule／Invariant／境界の発見・検証
+- `specification-contract`: PRE／POST／INV／FAILとTest Trace
+- `solid-ddd-pr-review`: Repository docsが定めるDDD／SOLID／DRY等の専門Review
+- `prepare-pr-evidence`: 必要なPR Evidence
 
-旧Notion名のSkillは互換入口であり、Notionへ接続しない。個別Skillから`feature-development`を呼び戻さず、統括Skillだけが組合せと順序を決める。
+個別Skillから`feature-development`を呼び戻さず、統括Skillだけが全体順序を決める。
 
-利用者が対象を指定した文書・Skillの整理は、その範囲で進める。新しい機能Taskを選ぶ作業と混同しない。機能の着手条件、GitHub起票・変更のDecision Check、ADR承認は[delivery-workflow](docs/engineering/delivery-workflow.md)に従う。
+## Design Gate
 
-変更の影響範囲に応じて必要な文書だけを読み、関連文書を同じ差分で整合させる。既に得た利用者の承認を繰り返し求めない。依頼された成果の作成、検証、変更起因の修正、再検証まで進める。未決Decisionがあれば依存する確定・実装を止め、影響と必要な判断を報告し、依存しない作業を続ける。
+- 未確定のProduct／Architecture Decisionに依存するTaskをReadyまたは実装へ進めない。
+- ADR必須条件、Ready条件、文書影響、公開Gateは[Delivery Workflow](docs/engineering/delivery-workflow.md)と[正本入口](docs/governance/README.md)に従う。
+- 依存Task／PRとStacked PRは[PR依存関係Gate](docs/engineering/pr-dependency-gate.md)に従う。
+- 採用済みDecisionを変更する場合、AIが暗黙にAccepted扱いしない。
 
-## 変更ルール
+## 独立Evaluator Harness
 
-- 新しい本番依存関係を追加する前に確認を取る。
-- MigrationやSchemaの破壊的変更を無断で行わない。
-- Accepted ADR、新しいBounded Context、DB、Cloud Service、Runtime／配置構成、Event Sourcing対象、認証・認可・Security／Privacy方式、API Protocol／Schema正本、Context間連携、不可逆または高コストな運用判断を変える場合はGitHub ADRを必須とする。
-- 現行Decision内の局所実装や、容易に戻せる低影響の変更にはADRを作成しない。
-- GraphQL、Event Schema、Migrationの変更には互換性・移行・RollbackまたはForward-fix計画を持たせる。
-- 金額にfloating pointを使わない。MVPではJPYの1円単位整数として扱う。
-- 内部TimestampはUTC、業務上の月次判定はAsia/Tokyoで行う。
-- Secret、個人情報、実在する金融情報をコード、Fixture、Log、Commitへ含めない。
-- コメントは処理の逐語説明ではなく、理由、制約、代替案を記す。
-- draw.ioとMermaidを自動同期しない。検討用入力は`Confirmed`、`Proposed`、`Open Question`へ分け、Ownerが採用を承認した後だけMermaid正本へ反映する。
+Project-local custom agentは`.codex/config.toml`で宣言する。
 
-## Git・プルリクエスト
+- `work_planning_evaluator`: 要求・設計・Epic／Task／Dependencies／Ready判定をread-onlyで独立評価
+- `task_evaluator`: 実装後の最新Diff、Test、docs、Requirement整合をread-onlyで独立評価
 
-- Epic、Task、ADRの起票・状態管理はGitHubだけで行う。
-- `develop`を統合Branchとし、`develop`への直接Pushと`main` Branchの作成・Pushを禁止する。
+親AgentだけがCode、文書、GitHub状態を変更する。Evaluatorの`fail`は親Agentが修正・再検証し、**新しいEvaluator**で再評価する。`blocked`は阻害要因を解消するまで依存作業を止める。`pass`かつFinding／不足Evidenceなしの場合だけ次のDelivery段階へ進む。
+
+## Git・Pull Request
+
+Branch、Commit、PR、Squash merge、公開前確認、PR Template、文書同期の具体Ruleは[Delivery Workflow](docs/engineering/delivery-workflow.md)を正本とする。
+
+Root Gateとして次だけを守る。
+
+- `develop`を統合Branchとし、直接Pushしない。
 - 1 Task／1 Branch／1 PRを基本とする。
-- `develop`向けPRはSquash mergeで統合する。1 PRを1 Commitとし、最終CommitメッセージはConventional Commitsに従う。
-- Conventional Commitsを使用し、Commitをレビュー可能な論理単位にする。
-- PR本文へGitHub Task URLを記載する。
-- PR作成前に[delivery-workflow.md](docs/engineering/delivery-workflow.md)の文書影響確認を完了する。
+- Commitはレビュー可能な論理単位にする。
+- PR作成前にSelf Reviewと独立`task_evaluator`を完了する。
+- PR Ready化・Mergeは利用者の明示依頼がある場合だけ行う。
 
 ## 完了条件
 
-- 使用したSkillと省略したSkill、その理由が説明できる。
-- 変更に関係する正常、境界、権限、失敗、競合、再試行を必要範囲で検証する。
-- 新しいDomain RuleにはDomain Unit Testがある。
-- テスト失敗や未確認事項を無視して完了扱いにしない。
-- `code-review`でBlocker／Majorが残っていない。
-- 関連するIssue、Repository文書、Schema、ADR、Runbookの更新要否が説明できる。
-- 実行しなかった検証がある場合は、理由と残リスクを明示する。
+- Requirement／Done Criteria → Design → Test／Verification → Diff → ReviewをTraceできる。
+- 使用したSkillと省略したSkill、その理由を説明できる。
+- 関連docs、Issue、Schema、ADR、Runbook等の更新要否を説明できる。
+- 実行しなかった検証と残Riskを明示する。
+- Self Reviewで重大Findingが残っていない。
+- 最新評価対象に対して独立`task_evaluator`が`pass`している。
 
 ## 詳細ルール
 
-- Backend責務・Layer・Directory配置: [backend.md](docs/engineering/backend.md)
-- DDD・値オブジェクト・Entity・Event Sourcing: [domain-design.md](docs/engineering/domain-design.md)
-- Coding・単一責任: [coding-standards.md](docs/engineering/coding-standards.md)
-- Frontend責務: [frontend.md](docs/engineering/frontend.md)
-- TDD・品質保証: [testing.md](docs/engineering/testing.md)
-- Epic／Task／Git／PR前文書更新: [delivery-workflow.md](docs/engineering/delivery-workflow.md)
-- 図の正本・draw.io検討用入力: [diagram-governance.md](docs/engineering/diagram-governance.md)
-- ADR・未確定事項: [08. 設計変更・意思決定](docs/governance/README.md)
+- Engineering Loop: [engineering-loop.md](docs/engineering/engineering-loop.md)
+- Skill責務: [skill-governance.md](docs/engineering/skill-governance.md)
+- Backend: [backend.md](docs/engineering/backend.md)
+- Domain Design: [domain-design.md](docs/engineering/domain-design.md)
+- Coding: [coding-standards.md](docs/engineering/coding-standards.md)
+- Frontend: [frontend.md](docs/engineering/frontend.md)
+- Testing: [testing.md](docs/engineering/testing.md)
+- Delivery: [delivery-workflow.md](docs/engineering/delivery-workflow.md)
+- PR Dependencies: [pr-dependency-gate.md](docs/engineering/pr-dependency-gate.md)
+- Diagram: [diagram-governance.md](docs/engineering/diagram-governance.md)
+- Governance／ADR: [docs/governance/README.md](docs/governance/README.md)

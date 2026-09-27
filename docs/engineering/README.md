@@ -1,69 +1,80 @@
 # 開発ガイド
 
-このディレクトリは、GitHubの承認済み仕様を実装へ落とすための静的なルールを管理する。Project、Epic、Task、仕様、設計、ADRの正本はGitHubとする。作業手順は`.agents/skills/`に分離し、同じルール本文をSkillへ複製しない。
+このディレクトリは、GitHubの承認済みRequirement／Decisionを実装へ落とすための静的ルールを管理する。作業手順は`.agents/skills/`、設計からDeliveryまでの状態遷移は[Engineering Loop](engineering-loop.md)で管理し、同じRule本文をSkillへ複製しない。
 
-## 機能Taskで確認する順序
+## まず読むもの
 
-1. 利用者が指定したGitHub Taskを取得する。
-2. TaskのStatusがReadyで、Requirement、Done Criteria、Dependencies、Estimate、Epic、Project、Decision Check、必要なRelated ADRが揃うことを確認する。
-3. TaskからEpic、要求・要件、[08. 設計変更・意思決定](../governance/README.md)のAccepted ADR、対象設計文書を辿る。
-4. `pre-investigation`で現状、Domain要素、要件との差分、SOLID・依存方向、影響範囲を確認する。
-5. 変更種別に応じて必要な設計Skillを使い、未承認Decisionがあれば依存作業を止める。
-6. TDDの最初の失敗Test、実装、回帰検証、最終Reviewの順に進める。
+1. [Engineering Loop](engineering-loop.md): 要求検証 → 要件化 → 設計 → Epic／Task → TDD → Self Review → 独立Evaluator → Draft PR
+2. [Skillガバナンス](skill-governance.md): `docs`とSkillの責務分離
+3. [Delivery Workflow](delivery-workflow.md): Epic／Task、Ready、Branch、Commit、PR、文書更新
+4. [PR依存関係Gate](pr-dependency-gate.md): Task／PR依存、Stacked PR、Merge順序
+5. 変更範囲に対応する静的ルールだけを追加で読む
 
-利用者が対象を指定した文書・Skill整理は、その範囲で実施する。機能Taskを選ぶ場合にTaskが指定されていなければ、AIはコードの見た目だけから次の機能を選ばない。GitHubのReady Taskを確認し、複数候補がある場合は利用者へ選択を求める。
+## 正本の原則
 
-現行モデルのConfirmed Ruleと未確定Gateを区別する。個人用家計、2人限定、日付境界、単一Payer／Payeeを前提とする旧節を現行仕様として実装しない。
+- Requirement／Done Criteria: GitHub Issue
+- 重要Decision: Accepted ADR
+- Project固有・技術固有Rule: `docs/`
+- Workflow: `.agents/skills/`
+- Engineering Loop: `docs/engineering/engineering-loop.md`
+
+Skillは特定の言語、DB、Framework、ORM、API Protocol、Runtimeを固定しない。採用技術と具体Ruleはこのディレクトリおよび関連`docs/`から取得する。詳細は[Skillガバナンス](skill-governance.md)を参照する。
 
 ## 静的ルール
 
-- [backend.md](backend.md): BackendのLayer、依存方向、Directory配置、GraphQL Presentation境界
-- [domain-design.md](domain-design.md): DDD、Value Object、Entity、Aggregate、Domain Event、CQRS／Event Sourcing
-- [coding-standards.md](coding-standards.md): TypeScript、単一責任、依存、Error、Security、日本語JSDoc
+- [backend.md](backend.md): Backendの責務、Layer、依存方向、Repository固有構成
+- [domain-modeling.md](domain-modeling.md): Domain Modeling、Evidence、Knowledge State、Concept／Boundary候補の判断Rule
+- [domain-design.md](domain-design.md): DDD、Domain要素、Transaction／Event等の設計Rule
+- [specification-contract.md](specification-contract.md): PRE／POST／INV／FAIL、責務分類、Test Trace
+- [coding-standards.md](coding-standards.md): 採用言語のCoding、単一責任、Error、Security、Documentation Rule
 - [frontend.md](frontend.md): Frontendの責務、構成、状態、Accessibility
-- [testing.md](testing.md): TDD、Test Level、Done Criteria
-- [delivery-workflow.md](delivery-workflow.md): Epic／Task、Git、PR、文書更新
-- [diagram-governance.md](diagram-governance.md): Mermaid図の正本、Knowledge State、draw.io検討用入力との境界
-- [08. 設計変更・意思決定](../governance/README.md): ADR、未確定事項、文書間Conflict、廃止履歴
+- [testing.md](testing.md): TDD、Test Level、検証Command、Done Criteria
+- [delivery-workflow.md](delivery-workflow.md): Epic／Task、Ready、Git、PR、文書更新
+- [pr-dependency-gate.md](pr-dependency-gate.md): Task／PR依存とStacked PR
+- [diagram-governance.md](diagram-governance.md): 正式図、Knowledge State、検討用入力との境界
+- [08. 設計変更・意思決定](../governance/README.md): ADR、未確定事項、文書Conflict
+- [API設計書](../api/README.md): 現行の公開契約方式とその正本
 
 ## Skill構成
 
-`feature-development`が変更内容を判定して必要な個別Skillだけを組み合わせる。各個別Skillは単独利用も可能とし、個別Skillから`feature-development`へ戻る循環参照は作らない。
+`feature-development`はReadyな変更の実作業を統括し、必要なSkillだけを選択する。`implement-github-task`はGitHub Lifecycleと独立Evaluator、Draft PRまでを担当する。設計前のEpic／Task作成は`prepare-github-work`を入口にする。
 
-| Skill | 責務 |
+| Skill | Workflow上の責務 |
 | --- | --- |
-| [feature-development](../../.agents/skills/feature-development/SKILL.md) | 機能変更全体のRouting、順序、成果物の引継ぎ |
-| [pre-investigation](../../.agents/skills/pre-investigation/SKILL.md) | 現状、Domain要素、要件差分、SOLID・依存方向、影響範囲の調査 |
-| [domain-design](../../.agents/skills/domain-design/SKILL.md) | Entity／VO／Aggregate／Domain Service／Domain Event／Portの設計 |
-| [api-design](../../.agents/skills/api-design/SKILL.md) | GraphQL／HTTP公開契約、Error、認証認可境界、互換性 |
-| [database-change](../../.agents/skills/database-change/SKILL.md) | Schema、Migration、Index、Constraint、Data移行、復旧 |
-| [implementation](../../.agents/skills/implementation/SKILL.md) | 確定設計とRed Testに基づくProduction Code実装 |
-| [testing](../../.agents/skills/testing/SKILL.md) | TDD、Test Level選択、検証、回帰 |
-| [code-review](../../.agents/skills/code-review/SKILL.md) | 最終Diffの要件・設計・品質Review |
+| `prepare-github-work` | 要求・設計成果をEpic／Task／Dependencies／Ready状態へ変換 |
+| `implement-github-task` | Ready TaskのBranch開始、実作業委譲、独立評価、Draft PR |
+| `feature-development` | 変更種別のRouting、TDD、実装、Self Reviewの修正Loop |
+| `pre-investigation` | 現状、Gap、Domain要素、設計品質、影響範囲の調査 |
+| `domain-design` | 確認済み業務RuleをDomain設計へ変換 |
+| `api-design` | 確認済みUse Caseを公開契約へ変換 |
+| `database-change` | 確認済みDomain／Application契約をPersistence変更へ変換 |
+| `testing` | Requirement／契約からTest／検証を設計・実行 |
+| `implementation` | 確定設計とRed Testから最小差分を実装 |
+| `code-review` | 最終DiffをRequirement、Design、docs、Testへ照合 |
 
-既存の専門Skillは上記を補助する。
+専門Skill:
 
-- [domain-modeling](../../.agents/skills/domain-modeling/SKILL.md): 業務概念・Rule・Invariant・境界の発見／検証
-- [specification-contract](../../.agents/skills/specification-contract/SKILL.md): PRE／POST／INV／FAILとTest Trace
-- [solid-ddd-pr-review](../../.agents/skills/solid-ddd-pr-review/SKILL.md): SOLID／DRY／DDD／日本語JSDocの専門Review
-- [prepare-pr-evidence](../../.agents/skills/prepare-pr-evidence/SKILL.md): 必要時のPR視覚証跡
-- [prepare-github-work](../../.agents/skills/prepare-github-work/SKILL.md): Epic／Taskの作成・改善・Ready判定
-- [implement-github-task](../../.agents/skills/implement-github-task/SKILL.md): Ready TaskのGitHub LifecycleとDraft PR delivery
+- `domain-modeling`: 業務Concept、Rule、Invariant、境界の発見／検証
+- `specification-contract`: 個別操作をPRE／POST／INV／FAILとTestへTrace
+- `solid-ddd-pr-review`: DDD／SOLID／DRY等、Repository docsが定める設計品質の専門Review
+- `prepare-pr-evidence`: 必要な視覚証跡等の準備
 
-旧Notion名のSkillは互換入口であり、Notionへ接続しない。
+具体技術名は上表のSkill責務ではなく、変更時点の`docs/`から解決する。
 
-## 変更種別から読む文書とSkill
+## 変更種別から読むRule
 
-| 変更 | 静的ルール | 主なSkill |
-| --- | --- | --- |
-| Domain Rule／Aggregate／Event | backend、domain-design、testing | pre-investigation、domain-design、testing、code-review |
-| GraphQL／HTTP API | backend、coding-standards、testing、API設計書 | pre-investigation、api-design、testing、code-review |
-| DB／Migration／Read Model | backend、domain-design、coding-standards、testing | pre-investigation、database-change、testing、code-review |
-| Application／Production Code | backend／frontend、coding-standards、testing | implementation、testing、code-review |
-| Mermaid図／draw.io入力 | diagram-governance、delivery-workflow | 変更理由に対応する設計Skill、必要ならprepare-pr-evidence |
-| 認証／認可／削除 | backend、coding-standards、testing | pre-investigation、api-design、必要ならdomain-design／database-change |
-| 文書・Skillのみ | testingの検証Command、変更対象の参照元 | 対象Skill、testing、code-review |
-| CI／Cloud／運用 | delivery-workflow、testing | pre-investigation、implementation、testing、code-review |
+| 変更の概念 | 先に確認する正本 |
+| --- | --- |
+| Domain理解／Modeling | `domain-modeling.md`、関連Product／Domain docs、Accepted ADR |
+| Domain Rule／Aggregate／Event | `domain-design.md`、関連Product／Domain docs、Accepted ADR |
+| Use Case契約 | `specification-contract.md`、`domain-design.md`、`testing.md` |
+| 公開API契約 | `docs/api/`、`backend.md`、Security／Testing関連docs |
+| Persistence／Migration | `backend.md`、`domain-design.md`、Data／Testing関連docs |
+| Production Code | 対象Layerのdocs、`coding-standards.md`、`testing.md` |
+| Frontend | `frontend.md`、`coding-standards.md`、`testing.md` |
+| Security／Privacy | 対象Security／Architecture docs、Accepted ADR |
+| CI／Cloud／Operations | 対応するArchitecture／Operations docs、`delivery-workflow.md`、`testing.md` |
+| 文書・Skillのみ | 対象正本、`skill-governance.md`、`testing.md` |
 
 ## 正本の入口
 
@@ -72,4 +83,4 @@
 - [未確定・未移行Gate](../product/design-gates.md)
 - [API設計書](../api/README.md)
 
-Notionは読み書きしない。旧ページや削除済みDatabaseを作業条件にしない。管理先の切替によって業務上の未確定事項が解消したとみなさない。
+Notionは読み書きしない。旧URL等は出典識別子としてのみ扱い、現行判断の正本にしない。

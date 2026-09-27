@@ -1,30 +1,78 @@
 # 検証・独立評価・Draft PR
 
-## 検証と独立Evaluator
+このReferenceは`implement-github-task`の操作手順を補助する。Project Ruleの正本は`docs/`であり、具体的な言語、Tool、Test Command、DB、Framework、API方式はここへ固定しない。
 
-[testing.md](../../../../docs/engineering/testing.md)の検証Commandに従い、実行Code等に影響する場合はpackage.jsonに存在するlint、typecheck、test、buildを実行する。文書・Skillだけなら同書の代替検証を使う。変更に必要なSchema・Migration・生成コード検査を追加する。失敗を無視せず、変更起因、既存、環境を区別する。
+## 最終検証とSelf Review
 
-今回のTask所有FileだけをStageし、Base SHAを固定する。`git diff --cached --binary --full-index <base-sha>`のSHA-256とFile一覧を記録する。新しい`task_evaluator` SubagentへTask URL、Requirement、Done Criteria、Project Field、設計範囲、Decision、Base SHA、Stage済み差分、checksum、File一覧、検証結果、文書、Security、Rollback、既知Riskを渡す。
+1. [Testing Rule](../../../../docs/engineering/testing.md)と変更範囲の関連docsから、今回実行すべき検証Commandを取得する。
+2. 変更範囲に必要なTest、静的Check、Schema／Migration／生成物／Operations等の検証を実行する。
+3. 失敗を無視せず、変更起因、既存、環境を区別する。
+4. [`code-review`](../../code-review/SKILL.md)で最終DiffをSelf Reviewする。
+5. 必要な専門Reviewがある場合だけ対応Skillを利用する。
+6. Blocker／Major相当のFindingを修正し、影響する検証を再実行する。
 
-Stage・checksum取得の前に、[`solid-ddd-pr-review`](../../solid-ddd-pr-review/SKILL.md)を適用し、Task・Accepted ADR・変更差分に対するSOLID／DRY／DDDと日本語JSDocをレビューする。BlockerまたはMajorがあれば修正し、影響する検証を再実行してから独立Evaluatorへ渡す。Minorは範囲内で修正するか、具体的な理由とともに記録する。独立Evaluatorはこのレビューの代替にならない。
+## 評価対象を固定する
 
-同じEvaluatorを再利用しない。`findings`と`missingEvidence`が空のpassだけを合格とする。failは親Agentが修正・再検証し、新しいEvaluatorへ再依頼する。blockedは証拠と影響を利用者へ報告する。
+Independent Evaluatorへ渡す直前に、Task所有の変更だけを評価対象として固定する。
 
-## Commit、Draft PR、追跡更新
+最低限記録する。
 
-Evaluator pass後に限り、次を行う。[保存と公開Gate](../../../../docs/engineering/delivery-workflow.md#githubでの保存と公開gate)に従い、公開する本文・添付ごとに機械検査と手動Reviewを完了する。必要な現行非公開情報はOwnerのPrivate保管先決定まで公開しない。
+- Base Commit／Branch
+- 評価対象Diffを一意に識別できるChecksumまたはCommit／Index情報
+- 変更File一覧
+- 作業Treeの状態
+- Requirement／Done Criteria
+- Accepted Decisionと適用したdocs
+- 実行した検証と結果
+- 未実施検証と理由
+- Self Review結果
+- 文書／Security／Operations／Rollback等の影響
+- 既知Riskと承認済み例外
 
-1. Stage済み差分へ無関係な変更や機密情報がないことを再確認する。
-2. Conventional CommitsでCommitする。
-3. BaseからCommitまでのpatch checksumとFile一覧がEvaluator承認時と一致することを確認する。
-4. Task BranchをoriginへPushする。
-5. 同TaskのOpen PRがなければ`develop`向けDraft PRを作る。既存PRがあれば更新する。
-6. PRにTask URL、Requirement、Done Criteria、変更、検証、文書・Schema・Migration・Security・運用・Rollback、未実施事項、残Riskを記録する。
-7. PRのURL、Head SHA、Base、Draft、Files、本文を再取得する。
-8. IssueへPR URLと検証結果を記録し、Project StatusをReviewへ移して再取得する。
+無関係な変更を評価対象へ混ぜない。
 
-この実装依頼の完了点はDraft PRとReview状態である。PR Ready化・Mergeは別途明示依頼がある場合だけ行う。旧Notion URLやSource Notion IDは既存データの識別子としてのみ保持し、アクセス、更新、同期に使わない。
+## Independent Evaluator Loop
+
+各Cycleで**新しい`task_evaluator`**を1つ起動する。同じEvaluator Threadを修正後の再評価に使用しない。
+
+```text
+task_evaluator
+   │
+   ├─ pass ─────▶ Draft PR工程
+   │
+   ├─ fail ─────▶ 親Agentが修正
+   │                 │
+   │                 ├─ 再検証
+   │                 ├─ Self Review
+   │                 └─ 新しいtask_evaluator
+   │
+   └─ blocked ──▶ 阻害要因を解消するまで停止
+```
+
+Evaluatorはread-onlyとし、親AgentだけがCode、文書、Stage状態、GitHubを変更する。
+
+`pass`でも`findings`または`missingEvidence`が残る場合は合格扱いにしない。
+
+## Evaluator pass後の整合確認
+
+Evaluatorが承認したDiffと、実際にCommit／PushするDiffが同一であることを確認する。Hook、生成処理、Stage漏れ、追加修正等で差分が変わった場合は、その変更に必要な検証・Self Review・新しいEvaluator Cycleへ戻る。
+
+## Commit／Push／Draft PR
+
+[Delivery Workflow](../../../../docs/engineering/delivery-workflow.md)と[PR依存関係Gate](../../../../docs/engineering/pr-dependency-gate.md)に従う。
+
+1. 公開対象へ無関係な変更や公開不可情報がないことを確認する。
+2. レビュー可能な論理単位でCommitする。
+3. Evaluator承認Diffとの一致を再確認する。
+4. Task BranchをRemoteへPushする。
+5. 同TaskのOpen PRがなければDraft PRを作成し、既存Open PRがあれば更新する。
+6. Dependencyがある場合は正しいBaseと`Depends-On`を設定する。
+7. PR本文へTask、Requirement／Done Criteria、変更、検証、文書／Security／Operations／Rollback、未実施事項、残Riskを記録する。
+8. PRのURL、Head、Base、Draft状態、Files、本文を再取得して永続化を確認する。
+9. RepositoryのIssue／Project追跡Ruleに従ってPR URLと状態を同期する。
+
+PR Ready化・Mergeは別途明示依頼がある場合だけ行う。
 
 ## 完了報告
 
-Task・Epic・仕様・ADR、満たしたDone Criteria、主要File、TDDまたは代替検証、全検証結果、Security、残Risk、Branch、Commit、Draft PR、IssueとProject Statusを報告する。
+Task、満たしたDone Criteria、主要差分、TDD／Verification、Self Review、Independent Evaluator、Dependency／Stack、Branch／Commit／Draft PR、未実施検証、残Riskを報告する。

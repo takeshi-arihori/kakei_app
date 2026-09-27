@@ -1,64 +1,58 @@
 ---
 name: domain-design
-description: 確認済み要求と業務RuleからEntity・Value Object・Aggregate・Domain Service・Domain Event・Portを設計し、DDD境界と依存方向を整理する。
+description: 確認済みRequirementと業務Ruleを、RepositoryのDomain Design docsに従ってDomain要素・責務境界・Invariant・Portへ落とす。
 ---
 
 # Domain Design
 
-業務Requirementと確認済みDomain Ruleを、実装可能なDomain設計へ落とす。DB、GraphQL、UI、Frameworkの都合からDomain Modelを逆算しない。
+確認済みの業務Ruleを実装可能なDomain設計へ変換する。外部技術や既存Data Shapeを業務Ruleの根拠にしない。
 
-## 入力
+## 最初に読む
 
-- GitHub TaskのRequirement／Done Criteria
-- [現行Product Scope・業務モデル](../../../docs/product/current-model.md)
-- [設計Gate](../../../docs/product/design-gates.md)
-- [ドメイン設計ルール](../../../docs/engineering/domain-design.md)
-- 関連Accepted ADR
 - `pre-investigation`の調査結果
+- GitHub TaskのRequirement／Done Criteria
+- [Engineering Loop](../../../docs/engineering/engineering-loop.md)
+- [Skillガバナンス](../../../docs/engineering/skill-governance.md)
+- [開発ガイド](../../../docs/engineering/README.md)
+- [Domain Design Rule](../../../docs/engineering/domain-design.md)
+- 対象Product／Domain docsとAccepted ADR
 
-業務概念・Rule・Invariant自体の発見や再検証が必要なら、先に[domain-modeling](../domain-modeling/SKILL.md)を使う。個別Use Caseの契約をPRE／POST／INV／FAILへ構造化する場合は[specification-contract](../specification-contract/SKILL.md)を使う。
+Domain要素の分類Rule、Layer、依存方向、Transaction／Event等の具体Ruleは上記docsを正本とする。このSkillへ複製しない。
 
-## 設計観点
+## Routing
 
-- Entity: IdentityとLifecycleを持つか
-- Value Object: 値で比較し、生成時に妥当性を保証できるか
-- Aggregate: 同一Transactionで守るInvariantの最小境界か
-- Aggregate Root: Aggregate外部からの変更入口とInvariant保護を担うか
-- Domain Service／Policy: 単一Entity／VOへ自然に属さないStatelessなDomain Ruleか
-- Domain Event: 既に起きた業務上の事実か
-- Application Use Case: Orchestration、認可、Transaction Boundary、Port呼出しか
-- Port: Domain／Applicationが必要とする外部能力を内側から定義しているか
+- 業務Concept、Rule、Invariant、境界自体の発見・再検証が必要: `domain-modeling`
+- 個別操作のPRE／POST／INV／FAILをTest可能にする: `specification-contract`
+- 確認済みRuleを設計要素へ落とせる: このSkillを続行
 
-AggregateやContextを、画面、Mutation、Table、既存Directoryを根拠に決めない。
+## 実施
 
-## SOLID・依存方向
-
-[Backend開発ルール](../../../docs/engineering/backend.md)と[コーディング規約](../../../docs/engineering/coding-standards.md)を参照し、DomainがFrameworkやInfrastructureへ依存しないこと、ApplicationがPortへ依存すること、責務ごとの変更理由が分離されていることを確認する。
+1. 対象Use Caseと業務RuleをRequirementへTraceする。
+2. Repository docsの分類Ruleに従って、Entity、Value Object、Aggregate、Domain Service／Policy、Domain Event等の採否を判断する。
+3. Invariant、Lifecycle、変更単位、Transaction Boundaryを整理する。
+4. Application Use Case／Portとの責務境界を整理する。
+5. Context間参照とData OwnershipをAccepted Decisionへ照合する。
+6. 正常・境界・拒否・競合・再試行のうちDomain Testが必要なCaseを`testing`へ渡す。
+7. 変更するdocs／図／ADRの要否を整理する。
 
 ## 出力
 
 - 対象Use Case／業務Rule
-- Entity／Value Object／Aggregate／Domain Service／Domain Eventの採否と根拠
-- Application Use Case／Portとの責務境界
+- Domain要素の採否とRequirement／docs上の根拠
 - InvariantとTransaction Boundary
-- Context間参照方式とData Ownership
-- 正常・境界・拒否・競合・再試行で必要なDomain Test
-- 更新が必要なRepository文書／図／ADR
+- Application／Portとの責務境界
+- Context間参照とData Ownership
+- Testへ渡すContract／Case
+- 更新対象docs／図／ADR
 - Confirmed／Proposed／Open Question／Conflict
-
-## 対象外
-
-- API Schemaの具体設計は`api-design`へ委ねる。
-- Table、Migration、Indexの具体設計は`database-change`へ委ねる。
-- Production Code変更は`implementation`へ委ねる。
 
 ## 停止条件
 
-新しいBounded Context、未承認のAggregate／Data Owner変更、Accepted ADRの変更、Context間連携方式など、Owner DecisionまたはADRが必要な場合はConfirmedとして確定せず、その判断に依存する実装を止める。
+RepositoryのADR条件またはOwner Decision条件に該当する未承認Decisionが必要なら、該当部分をConfirmedとして確定しない。依存しない分析は継続する。
 
 ## 完了条件
 
-- 各Domain要素の分類にRequirement／Rule／Invariantの根拠がある。
-- API／DB都合を業務Ruleとして採用していない。
-- 依存方向と責務境界が説明できる。
-- Testと文書更新へTraceできる。
+- 各設計判断がRequirement、Domain Rule、Accepted Decision、Repository docsへTraceできる。
+- 外部技術都合を新しい業務Ruleとして確定していない。
+- 依存方向と責務境界を説明できる。
+- Testと文書更新へ引き継げる。

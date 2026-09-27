@@ -1,68 +1,62 @@
 ---
 name: testing
-description: Requirement・契約・変更差分から必要なTest LevelとCaseを選び、TDDのRed作成からGreen・回帰・構造検証まで実施する。
+description: Requirement・Contract・変更Riskから必要なTest／検証を選び、TDDのRedからGreen・回帰までをRepository docsに従って実施する。
 ---
 
 # Testing
 
-Testを実装詳細の確認ではなく、Requirement、Domain Rule、公開契約、障害境界を検証する証拠として設計・実行する。
+Testを実装詳細の確認ではなく、Requirement、業務Rule、公開契約、障害境界を検証するEvidenceとして設計・実行する。Skill自身は特定のProgramming Language、Test Framework、Runner、Commandを固定しない。
 
-## 入力
+## 最初に読む
 
 - GitHub TaskのRequirement／Done Criteria
-- `pre-investigation`の現状・影響範囲
-- 必要な`domain-design`／`api-design`／`database-change`の成果
-- [テストとTDD](../../../docs/engineering/testing.md)
-- 変更対象Code、既存Test、Schema、Migration
+- `pre-investigation`と必要な設計Skillの成果
+- [Engineering Loop](../../../docs/engineering/engineering-loop.md)
+- [Skillガバナンス](../../../docs/engineering/skill-governance.md)
+- [Testing Rule](../../../docs/engineering/testing.md)
+- 対象変更に関係するArchitecture／Domain／API／Data／Frontend／Operations等のdocs
 
-## TDD
+具体的なTest Level、Tool、Command、Coverage、Fixture、E2E等のProject Ruleはdocsを正本とする。
 
-新しい振る舞いとBug Fixは原則として次の順で進める。
+## TDD Loop
 
-1. Requirement／契約から次の最小Caseを選ぶ。
-2. 意図した理由で失敗するTestを作り、Redを確認する。
-3. `implementation`へ必要な振る舞いを引き継ぐ。
-4. 実装後にTestをGreenにする。
-5. Refactor後もGreenを維持する。
-6. Done Criteriaを満たすまで繰り返す。
+新しい振る舞いとBug Fixは原則として次を繰り返す。
 
-文書・Skill・機械的Configだけの変更で先行Testに価値がない場合は、理由を記録し、構造・Link・frontmatter・参照整合など決定的な代替検証を選ぶ。
+1. Requirement／Contractから次の最小Caseを選ぶ。
+2. 関連docsに従って最小のTestまたは決定的検証を用意する。
+3. 新しい振る舞いでは意図した理由でRedになることを確認する。
+4. `implementation`へ必要な振る舞いを引き継ぐ。
+5. 実装後にGreenを確認する。
+6. Refactor後もGreenを維持する。
+7. Done Criteriaが残る場合は次のCaseへ進む。
 
-## Test Levelの選択
+文書、Skill、設定等で先行Testに価値がない場合は、理由を記録し、関連docsが定める構造・参照・Schema・静的Check等の代替検証を選ぶ。
 
-- Domain Unit Test: Rule、Invariant、Value Object、Aggregate Behavior
-- Application Test: Use Case、Authorization、Port連携、Transaction Boundary
-- Integration Test: Repository、Migration、DB Constraint、Concurrency、Idempotency
-- API／Schema Test: GraphQL／HTTP、Validation、Error、認証・認可、互換性
-- Frontend／Component／E2E: UI状態、Accessibility、主要経路
-- Operations Test: Batch、Retry、Rebuild、Backup／Restore、Migration
-- 文書／Skill検証: Link、構造、frontmatter、Routing、代表Scenario
+## Case選択
 
-必要なLevelだけを選び、E2EへDomain Ruleの全分岐を押し込まない。
+正常、境界、権限、失敗、競合、再試行等から、Done Criteriaと変更RiskへTraceできるCaseだけを選ぶ。形式的に全組合せを増やさない。
 
-## Caseの観点
-
-正常、境界、権限、失敗、競合、再試行を変更内容に応じて選ぶ。全項目を形式的に増やすのではなく、Done CriteriaとRiskへTraceする。
+Test LevelやIntegration範囲は変更対象の責務境界と関連docsから選ぶ。Domain Ruleを外側の高Cost Testだけへ押し込まない。
 
 ## 実行
 
-変更したPackageのScriptを先に実行し、必要な場合はRootのCheckへ広げる。Repositoryの正本Commandは[テストとTDD](../../../docs/engineering/testing.md)を参照する。
+Repositoryの正本Commandは[Testing Rule](../../../docs/engineering/testing.md)から取得する。変更範囲に必要な最小Checkから開始し、Riskに応じて広げる。
 
-実行していない検証は、理由と残Riskを明示する。Flaky TestをRetryだけで隠さない。
+実行していない検証は理由と残Riskを明示する。失敗をRetryだけで隠さず、変更起因、既存、環境を区別する。
 
 ## 出力
 
-- Requirement／Contract → Test Caseの対応
-- 追加・変更したTest
+- Requirement／Contract → Test／Verificationの対応
+- 追加・変更したTest／検証
 - Redで確認した失敗理由
 - 実行Commandと結果
 - 回帰確認範囲
-- 未実施の検証と残Risk
-- Findingがある場合に戻すSkill（domain／api／database／implementation）
+- 未実施検証と残Risk
+- Findingがある場合の戻り先Skill
 
 ## 完了条件
 
 - Done CriteriaがTestまたは明示的検証へTraceできる。
-- 新しいDomain Ruleに必要なUnit Testがある。
-- 変更に関係する失敗・競合・再試行を必要範囲で確認している。
-- 最終実装に対するGreenと回帰結果が記録されている。
+- 変更Riskに必要なCaseを確認している。
+- 最終実装に対するGreen／回帰結果が記録されている。
+- Testの具体RuleをSkill本文ではなくdocsから適用している。
