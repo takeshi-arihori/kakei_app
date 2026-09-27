@@ -107,7 +107,7 @@ Client／Version、Base／評価Diff、読み込んだConfig、role名、子識�
 | Planning P1（合成Case） | 新しい`work_planning_evaluator`が曖昧なDone Criteriaと検証方法の不足を`fail`として返した |
 | Planning P2 | P1に対しDone Criteriaと検証を補った。CLIの新規Evaluator起動が`no thread with id`で失敗し、判定JSONを得られなかった。独立Planning Reviewは未達 |
 | Planning P3 | 別のEvaluatorがPlanning案を`fail`。文書化と静的CheckだけではIssue #130が求める両Loopの実動Evidenceにならないと指摘 |
-| Planning B1 | Owner承認待ちという架空Caseに新しいEvaluatorが`blocked`を返し、Decision前にReadyへ進めないことを確認 |
+| Planning B1 | Owner承認待ちという架空Caseに新しいEvaluatorが`blocked`と判定し、Decision前にReadyへ進めないことを確認 |
 | Implementation I1 | `task_evaluator`がREADMEリンクの実在／解決結果の不足を`fail`として返した |
 | Implementation I2 | 親がREADMEのローカルLinkと手順見出しを確認し、`pnpm check`の成功結果を追加。**新しい**`task_evaluator`が`pass`（findings／missingEvidenceなし） |
 | 実効権限 | 1つのread-only CLIセッションではPlanning子が実効`read-only`とrole指示の読込を報告。しかし別のEvaluator起動では`no thread with id`となり、両roleそれぞれの継続起動を証明できなかった。別の親subagent環境は`workspace-write`を報告。両roleの強制read-onlyが一貫して有効という条件は未達 |
