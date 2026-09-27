@@ -55,7 +55,7 @@ rtk proxy codex exec --strict-config --sandbox read-only \
 
 安全な一時File作成Probeでread-only Sandboxの拒否とFile不在を確認する。GitHubへの試験書込みは行わない。FilesystemのProbeだけでGitHub書込み不可とは推論せず、外部連携とShellのTool境界も確認する。CLI自体の起動が外側のSandboxで拒否される場合は実行許可を得る。CLI内部の`--sandbox read-only`は維持し、Sandbox無効化で回避しない。`--ephemeral`は今回のCLIでは子Agentの親Thread解決に失敗して`no thread with id`になったため使用しない。これは観測結果であり、全Versionでの原因確定ではない。
 
-子の実効権限情報、実施Tool、親による変更前後のGit状態をEvidenceへ記録する。Git状態だけではGitHubへの書込み禁止を証明できないため、外部Toolの利用履歴も確認する。権限情報が得られなければ強制read-onlyは未確認とする。
+子の実効権限情報、実施Tool、親による変更前後のGit状態をEvidenceへ記録する。Git状態だけではGitHubへの書込み禁止を証明できないため、**利用可能Tool一覧と実際のTool呼出しを分けて確認する。** command executor、書込み可能なMCP／外部Toolが利用可能な場合は、未使用であっても書込み不能のEvidenceにはしない。権限情報が得られなければ強制read-onlyは未確認とする。
 
 ## 合否と再評価
 
@@ -89,11 +89,11 @@ rtk proxy codex exec --strict-config --sandbox read-only \
 - Evaluatorが変更を行う: そのCycleを合格にせず、変更範囲を確認して原因を解消する。
 - CLI版とApp版で結果が異なる: Versionと起動方法を別々に記録する。片方の結果をもう片方の成功証拠にしない。
 - `--ephemeral`で`no thread with id`: 保存ありの新規CLI Sessionで再試行し、親と子のThread識別子・結果を確認する。
-- Filesystemはread-onlyでもGitHub書込みToolが子へ公開される: Tool一覧と実効権限を別途確認し、書込みを禁止できない環境ではHarness前提未達としてGateを止める。CLIの`--ignore-user-config`やApps／Pluginsの無効化だけで外部Tool・Shell経由のGitHubアクセスが消えるとは仮定しない。
+- Filesystemはread-onlyでもGitHub書込みToolが子へ公開される: Tool一覧と実効権限を別途確認し、書込みを禁止できない環境ではHarness前提未達としてGateを止める。Apps／Pluginsの無効化だけでMCP、command executor、その他の外部書込み経路まで消えるとは仮定しない。
 
 ## Evidenceの記録項目
 
-Client／Version、Base／評価Diff、読み込んだConfig、role名、子識別子、ReviewInput概要、実際のJSON結果、親の修正、再検証、新しい子、実効権限、Tool履歴、Gate判断、Draft PRまたは検証終了結果を記録する。
+Client／Version、Base／評価Diff、読み込んだConfig、role名、子識別子、ReviewInput概要、実際のJSON結果、親の修正、再検証、新しい子、実効権限、**利用可能Tool一覧、実際のTool呼出し**、Gate判断、Draft PRまたは検証終了結果を記録する。
 
 `pnpm check`はRepository QAであり、Subagent起動と権限制御を自動検証するものではない。文書・Configのみの場合は構文・Schema・リンク確認をTDDの代替とし、実動検証と区別して報告する。
 
