@@ -126,7 +126,7 @@ Client／Version、Base／評価Diff、読み込んだConfig、role名、子識�
 
 ## 追補: 文書Taskを使ったHarnessの実動確認（2026-09-27）
 
-上のBlocked判定はPR #138時点の記録である。今回は文書だけを変更する#130を検証対象にした。文書の内容確認にProduct機能のE2E Testは不要だが、#130の完了条件である**Harness自体の両Evaluator起動・権限境界・Draft PR Gate**は実行して確かめる必要がある。`pnpm check`はRepository QAであり、この実動確認の代わりにはならない。
+上のBlocked判定はPR #138時点の記録である。今回は文書だけを変更する#130を検証対象にした。**Product機能のE2E Testは対象外である。** Product Requirement、Domain Rule、DB Schema、API Schema、UIなどのProduct挙動を変更していないためである。一方、#130の成果物はCodex Harnessそのものなので、完了条件である**HarnessのPlanning／Implementation Loop、両Evaluatorの独立起動・権限境界・Draft PR GateはE2Eで実動確認する。** `pnpm check`はRepository QAであり、このHarness E2Eの代わりにはならない。
 
 利用者の#130実装指示を受け、`origin/develop`の`cc2328158171ae6af53be936b98ff5e5bbaa565c`から`codex/chore-issue-130-harness-gates`を作成した。PR #129、#132、#138はMerge済み、#127はClosedで、未Merge PRへの依存はない。Project #9の#130は、追補計画の保存前評価後にTask／Validation／AI・Tooling／Medium／Estimate 1／Milestone「開発支援基盤」としてReadyに設定し、保存後評価のpassを確認してからIn Progressに移した。元のIssue作成より前にD3を通したとは主張しない。
 
