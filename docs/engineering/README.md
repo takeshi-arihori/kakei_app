@@ -32,6 +32,7 @@ Skillは特定の言語、DB、Framework、ORM、API Protocol、Runtimeを固定
 - [delivery-workflow.md](delivery-workflow.md): Epic／Task、Ready、Git、PR、文書更新
 - [worktree-management.md](worktree-management.md): Project root内の追加Worktree配置・作成・後片付け
 - [codex-configuration.md](codex-configuration.md): Codex設定の責務、監査、trust・実効権限の確認
+- [codex-harness.md](codex-harness.md): 独立Evaluatorの起動、実動検証、再評価とTroubleshooting
 - [pr-dependency-gate.md](pr-dependency-gate.md): Task／PR依存とStacked PR
 - [stacked-pr-delivery.md](stacked-pr-delivery.md): gh-stackとRepository RuleのIntegration境界
 - [diagram-governance.md](diagram-governance.md): 正式図、Knowledge State、検討用入力との境界

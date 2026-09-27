@@ -77,6 +77,13 @@ docker compose up -d swagger-ui
 - 実装対象はReadyになったGitHub Taskから選び、PR前に関連文書を更新します。
 - Codexでは`$prepare-github-work`でEpic／Taskを整え、`$implement-github-task`でReady TaskをTDD実装します。
 
+### Codex Evaluator Harness
+
+- Issueを保存する前に`work_planning_evaluator`でRequirement、Done Criteria、Design、Dependencies、Ready条件を確認します。
+- 実装後は最新Diff、Issue、検証結果、Self Reviewを`task_evaluator`へ渡します。`pass`でFindingと不足Evidenceがない場合だけDraft PRへ進みます。
+- `fail`は修正後に新しいEvaluatorで再評価し、`blocked`は阻害要因を解消するまで依存作業を止めます。
+- [設定とRole](docs/engineering/codex-configuration.md)、[Harnessの実動確認手順](docs/engineering/codex-harness.md)
+
 ## TypeScript
 
 - `tsc`: TypeScript 7 native compiler
