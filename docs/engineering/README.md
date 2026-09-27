@@ -30,6 +30,7 @@ Skillは特定の言語、DB、Framework、ORM、API Protocol、Runtimeを固定
 - [frontend.md](frontend.md): Frontendの責務、構成、状態、Accessibility
 - [testing.md](testing.md): TDD、Test Level、検証Command、Done Criteria
 - [delivery-workflow.md](delivery-workflow.md): Epic／Task、Ready、Git、PR、文書更新
+- [codex-configuration.md](codex-configuration.md): Codex設定の責務、監査、trust・実効権限の確認
 - [pr-dependency-gate.md](pr-dependency-gate.md): Task／PR依存とStacked PR
 - [diagram-governance.md](diagram-governance.md): 正式図、Knowledge State、検討用入力との境界
 - [08. 設計変更・意思決定](../governance/README.md): ADR、未確定事項、文書Conflict
