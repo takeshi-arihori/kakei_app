@@ -1,12 +1,9 @@
 #:schema https://developers.openai.com/codex/config-schema.json
 
-[agents]
-enabled = true
-
+# 共通値はCodexの既定値を使用する。監査理由: docs/engineering/codex-configuration.md
+# roleの説明・指示・read-only設定は参照先を正本とする。
 [agents.task_evaluator]
-description = "実装後の最終差分をRequirement、Repositoryルール、検証結果に照らしてread-onlyで独立評価する。"
 config_file = "agents/task-evaluator.toml"
 
 [agents.work_planning_evaluator]
-description = "要求から設計・Epic・Task・依存関係・Ready判定までのPlanningをread-onlyで独立評価する。"
 config_file = "agents/work-planning-evaluator.toml"
