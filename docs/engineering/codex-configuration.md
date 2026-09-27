@@ -61,13 +61,15 @@ Agent TOMLは子の設定Layerである。Model／Reasoningのrole指定はな�
 
 ## 読み込み・権限の確認
 
-1. Repositoryを作業Directoryとして開き、`rtk proxy codex --version`を記録する。App利用時はApp Versionを別途記録し、CLI Versionで代用しない。
+1. Repositoryを作業Directoryとして開き、`codex --version`を記録する。App利用時はApp Versionを別途記録し、CLI Versionで代用しない。
 2. User-levelの対象Projectがtrustedか確認する。未信頼なら利用者が内容を確認してtrustを設定する。利用者の絶対Pathやtrust設定をRepositoryへ保存しない。
 3. TOML構文、参照Path、role名を確認する。変更後は新しいセッションを開く。
 4. Agent一覧または起動Toolで両roleを確認する。role固有の指示とJSON契約が読み込まれることも確認する。
 5. Evaluatorの実効権限とTool履歴を確認する。親だけがCode、文書、Index、GitHubを変更し、Evaluatorは読取りと判定だけを行う。
 
-`sandbox_mode = "read-only"`はファイルシステムの既定値であり、GitHub等の外部サービスへの書込み権限を単独で取り消すものではない。外部Toolの許可は別途確認する。両roleはCode／文書／GitHub変更を指示で禁止しており、Evaluatorへ書込みToolや認証情報を追加しない。
+`sandbox_mode = "read-only"`はファイルシステムの既定値であり、GitHub等の外部サービスへの書込み権限を単独で取り消すものではない。#131で保証するのは、Evaluatorのfilesystem read-only既定値と、両roleの`developer_instructions`によるCode／文書／GitHub変更禁止までとする。Repository-local設定だけで外部Toolの実効書込み権限を保証できるとは扱わない。
+
+GitHub等の外部Toolの実効権限は#130で検証する。Evaluatorに書込みToolが利用可能、または書込み不可を確認できない場合はHarness前提未達として`blocked`にする。Evaluatorへ書込みToolや認証情報を追加しない。
 
 親の実行時Permission指定が子にも再適用され、roleのSandbox既定値より優先される場合がある。実効権限が`workspace-write`等ならOSによるread-onlyの成立を主張しない。実効read-onlyを確認できる環境で再検証し、確認できない間は#130の該当条件を未達として報告する。親全体を恒久的にread-onlyにして回避しない。
 
