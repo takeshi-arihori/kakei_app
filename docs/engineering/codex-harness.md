@@ -124,12 +124,14 @@ Client／Version、Base／評価Diff、読み込んだConfig、role名、子識�
 
 **Issue #130はBlockedのままとする。** CLIのread-only SandboxからGitHubへ到達でき、子AgentのTool一覧を絞ってもShell経由の外部書込み不能を立証できない。#131で定めた外部Tool境界を満たす実行方法を確定し、最新Diffで両roleの実効権限と全Loopを再検証する必要がある。書込みToolを使わなかったことだけで書込み不能とは扱わず、Draft PR Gateは通過させない。
 
-## 追補: Issue #130自身を使った実Task検証（2026-09-27）
+## 追補: 文書Taskを使ったHarnessの実動確認（2026-09-27）
 
-上のBlocked判定はPR #138時点の記録である。その後、利用者の#130実装指示を受け、`origin/develop`の`cc2328158171ae6af53be936b98ff5e5bbaa565c`から`codex/chore-issue-130-harness-gates`を作成した。PR #129、#132、#138はMerge済み、#127はClosedで、未Merge PRへの依存はない。Project #9の#130は、追補計画の保存前評価後にTask／Validation／AI・Tooling／Medium／Estimate 1／Milestone「開発支援基盤」としてReadyに設定し、保存後評価のpassを確認してからIn Progressに移した。元のIssue作成より前にD3を通したとは主張しない。
+上のBlocked判定はPR #138時点の記録である。今回は文書だけを変更する#130を検証対象にした。文書の内容確認にProduct機能のE2E Testは不要だが、#130の完了条件である**Harness自体の両Evaluator起動・権限境界・Draft PR Gate**は実行して確かめる必要がある。`pnpm check`はRepository QAであり、この実動確認の代わりにはならない。
 
-CLI 0.157.1の専用Sessionで、上記の隔離Flagを使いproject-localの`work_planning_evaluator`を起動した。親がIssue #130／#131、PR #132の現況、Project Field、Repository Rule、既存runbook、修正案を内容付きで渡した。最初の評価はReady根拠と依存状態で`fail`、以降もE2E条件の不足、fail-cycleの代替条件、Estimate根拠を指摘する`fail`が続いた。親が計画を修正し、**毎回新しい子**で再評価した結果、GitHub保存前の子`01a0e2cc-5684-7b81-8fce-9de01fb42771`が`pass`（findings／missingEvidence空）となった。その後に親がIssue本文とProject Fieldを保存し、再取得した内容を別の子`01a0e2d1-2aff-7ba1-a917-331dcdb29144`が`pass`（同じく空）と判定した。これが実Taskでの`fail → 親が修正 → 再評価 → 新Evaluator`とPlanning Gateの観測結果である。
+利用者の#130実装指示を受け、`origin/develop`の`cc2328158171ae6af53be936b98ff5e5bbaa565c`から`codex/chore-issue-130-harness-gates`を作成した。PR #129、#132、#138はMerge済み、#127はClosedで、未Merge PRへの依存はない。Project #9の#130は、追補計画の保存前評価後にTask／Validation／AI・Tooling／Medium／Estimate 1／Milestone「開発支援基盤」としてReadyに設定し、保存後評価のpassを確認してからIn Progressに移した。元のIssue作成より前にD3を通したとは主張しない。
+
+CLI 0.157.1の専用Sessionで、上記の隔離Flagを使いproject-localの`work_planning_evaluator`を起動した。親がIssue #130／#131、PR #132の現況、Project Field、Repository Rule、既存runbook、修正案を内容付きで渡した。最初の評価はReady根拠と依存状態で`fail`、以降もHarness検証条件の不足、fail-cycleの代替条件、Estimate根拠を指摘する`fail`が続いた。親が計画を修正し、**毎回新しい子**で再評価した結果、GitHub保存前の子`01a0e2cc-5684-7b81-8fce-9de01fb42771`が`pass`（findings／missingEvidence空）となった。その後に親がIssue本文とProject Fieldを保存し、再取得した内容を別の子`01a0e2d1-2aff-7ba1-a917-331dcdb29144`が`pass`（同じく空）と判定した。これが文書Taskを使った`fail → 親が修正 → 再評価 → 新Evaluator`とPlanning Gateの観測結果である。
 
 この2つの子Sessionの記録には、CLI Version 0.157.1、親Thread ID、`sandbox_policy: read-only`、`approval_policy: never`、Tool呼出しなしが残る。read-only CLIでの安全な一時File作成Probeは`patch rejected: writing is blocked by read-only sandbox; rejected by user approval settings`となり、Fileは存在しなかった。隔離FlagでShell、Apps、Plugins、操作型Browser、Computerを無効化したため、子へGitHub書込みToolとShellを公開していない。読み取り専用のWeb検索Toolは残り得る。個人の認証設定やSession全文はRepositoryへ保存しない。
 
-Implementation側は本Diffの`pnpm check`、Link、`git diff --check`、Self Reviewの後、**新しい**`task_evaluator`へIssue正本・関連docs・最終Diff・検証結果を渡す。子の実効権限とTool境界を確認し、`pass`かつfindings／missingEvidence空、評価Diff一致を満たした場合にだけCommit、Push、Draft PRを行う。最終結果、子ID、Draft PR URLはIssue／PRへ追記する。`task_evaluator`の合格を得る前に本段落を成功実績として扱わない。
+文書差分については`pnpm check`、Link、`git diff --check`、Self Reviewの後、**新しい**`task_evaluator`へIssue正本・関連docs・最終Diff・検証結果を渡した。子`01a0e2da-9671-7742-8c00-043b895cdd7e`は`pass`（findings／missingEvidence空）で、実効Sandboxは`read-only`、承認Policyは`never`、Tool呼出しはなかった。評価Diff一致を確認した後にCommit、Push、[Draft PR #139](https://github.com/takeshi-arihori/kakei_app/pull/139)を作成した。これはHarnessのDelivery Gateの検証結果であり、Product機能のE2E Test結果ではない。
