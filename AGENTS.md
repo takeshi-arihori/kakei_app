@@ -60,10 +60,11 @@ Directoryの責務と採用技術はRepository docsを正本とする。Rootで�
 
 Ready TaskのDelivery
     └─ implement-github-task
-          └─ feature-development
+          ├─ feature-development
+          └─ stacked-pr-delivery（PlanningでStacked PR確定時のみ）
 ```
 
-`feature-development`は変更内容から必要なSkillだけを選ぶ。
+`feature-development`は変更内容から必要なSkillだけを選ぶ。`stacked-pr-delivery`はStack要否を決めず、Planning済みDependency Graphを実際のBranch／PRへ反映する。
 
 | 作業 | Skill |
 | --- | --- |
@@ -74,6 +75,7 @@ Ready TaskのDelivery
 | Production変更 | `implementation` |
 | TDD／検証／回帰 | `testing` |
 | 最終Diffのセルフレビュー | `code-review` |
+| Planning済みStacked PRの作成・同期・追従 | `stacked-pr-delivery` |
 
 専門Skillは必要時だけ利用する。
 

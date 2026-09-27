@@ -7,7 +7,7 @@ description: Ready済みGitHub TaskのDelivery Lifecycleを管理し、実作業
 
 Ready済みTaskを、[Engineering Loop](../../../docs/engineering/engineering-loop.md)の実装フェーズに従ってDraft PRまで届ける。Notionは読み書きしない。
 
-本SkillはGitHub Lifecycle、独立Evaluator、Draft PRを担当し、設計・TDD・Production変更・Self Reviewは`feature-development`へ委譲する。
+本SkillはGitHub Lifecycle、独立Evaluator、Draft PRを担当し、設計・TDD・Production変更・Self Reviewは`feature-development`へ委譲する。PlanningでStacked PRが必要と確定している場合、Stackの作成・同期・PR Base／Dependency検証は`stacked-pr-delivery`へ委譲する。
 
 ## 最初に読む
 
@@ -25,11 +25,11 @@ Ready済みTaskを、[Engineering Loop](../../../docs/engineering/engineering-lo
 1. TaskがRepositoryのReady条件を満たすか確認する。
 2. Task、Requirement、Done Criteria、Dependencies、Decision、関連docsを取得する。
 3. 現在Branch、作業Tree、Remote、最新`develop`、同TaskのOpen PRを確認する。
-4. Dependencyがある場合、[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)に従って通常BranchかStacked Branchかを決める。
+4. Dependencyがある場合、[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)に従って通常BranchかStacked Branchかを確認する。PlanningでStacked PRが確定済みなら`stacked-pr-delivery`へTask、直接Base、Dependency Graph、Merge順序を渡し、Branch／Stack状態を準備する。
 5. 無関係または所有者不明の変更を移動、破棄、Stage、Commitしない。
 6. GitHubへの書き込み前にRepositoryの公開Gateを確認する。
 
-ReadyでないTask、未承認Decisionに依存するTask、前提Dependencyを満たさないTaskは実装へ進めない。
+ReadyでないTask、未承認Decisionに依存するTask、前提Dependencyを満たさないTaskは実装へ進めない。Stack要否や直接BaseがPlanningで未確定の場合、I0で推測せず`prepare-github-work`へ戻す。
 
 ## 実作業を委譲する
 
@@ -57,7 +57,7 @@ Evaluatorはread-onlyで、Code／文書／GitHub状態を変更させない。
 
 Evaluator pass後だけ、RepositoryのDelivery Ruleに従ってCommit、Push、Draft PR、Issue追跡を完了する。
 
-Stacked PRの場合は[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)のBaseと`Depends-On`を維持する。
+Stacked PRの場合は`stacked-pr-delivery`へ最新Diff、Task、直接Base、Dependency、Evaluator結果を渡し、[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)に一致するPR Base、`Depends-On`、Stack順序を維持してDraft PRを作成・検証する。Stack操作で評価対象Diffが変化した場合は、同Skillの再検証条件に従ってSelf Reviewと新しい`task_evaluator`まで戻す。
 
 PR Ready化・Mergeは利用者の明示依頼がある場合だけ行う。
 

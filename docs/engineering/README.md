@@ -32,18 +32,20 @@ Skillは特定の言語、DB、Framework、ORM、API Protocol、Runtimeを固定
 - [delivery-workflow.md](delivery-workflow.md): Epic／Task、Ready、Git、PR、文書更新
 - [codex-configuration.md](codex-configuration.md): Codex設定の責務、監査、trust・実効権限の確認
 - [pr-dependency-gate.md](pr-dependency-gate.md): Task／PR依存とStacked PR
+- [stacked-pr-delivery.md](stacked-pr-delivery.md): gh-stackとRepository RuleのIntegration境界
 - [diagram-governance.md](diagram-governance.md): 正式図、Knowledge State、検討用入力との境界
 - [08. 設計変更・意思決定](../governance/README.md): ADR、未確定事項、文書Conflict
 - [API設計書](../api/README.md): 現行の公開契約方式とその正本
 
 ## Skill構成
 
-`feature-development`はReadyな変更の実作業を統括し、必要なSkillだけを選択する。`implement-github-task`はGitHub Lifecycleと独立Evaluator、Draft PRまでを担当する。設計前のEpic／Task作成は`prepare-github-work`を入口にする。
+`feature-development`はReadyな変更の実作業を統括し、必要なSkillだけを選択する。`implement-github-task`はGitHub Lifecycleと独立Evaluator、Draft PRまでを担当する。設計前のEpic／Task作成は`prepare-github-work`を入口にする。PlanningでStacked PRが必要と確定した場合だけ、実Deliveryを`stacked-pr-delivery`へ委譲する。
 
 | Skill | Workflow上の責務 |
 | --- | --- |
 | `prepare-github-work` | 要求・設計成果をEpic／Task／Dependencies／Ready状態へ変換 |
 | `implement-github-task` | Ready TaskのBranch開始、実作業委譲、独立評価、Draft PR |
+| `stacked-pr-delivery` | Planning済みStacked PRの作成・同期・PR Base／Dependency検証・親Merge後の追従 |
 | `feature-development` | 変更種別のRouting、TDD、実装、Self Reviewの修正Loop |
 | `pre-investigation` | 現状、Gap、Domain要素、設計品質、影響範囲の調査 |
 | `domain-design` | 確認済み業務RuleをDomain設計へ変換 |
