@@ -30,6 +30,7 @@ Skillは特定の言語、DB、Framework、ORM、API Protocol、Runtimeを固定
 - [frontend.md](frontend.md): Frontendの責務、構成、状態、Accessibility
 - [testing.md](testing.md): TDD、Test Level、検証Command、Done Criteria
 - [delivery-workflow.md](delivery-workflow.md): Epic／Task、Ready、Git、PR、文書更新
+- [worktree-management.md](worktree-management.md): Project root内の追加Worktree配置・作成・後片付け
 - [codex-configuration.md](codex-configuration.md): Codex設定の責務、監査、trust・実効権限の確認
 - [pr-dependency-gate.md](pr-dependency-gate.md): Task／PR依存とStacked PR
 - [stacked-pr-delivery.md](stacked-pr-delivery.md): gh-stackとRepository RuleのIntegration境界
