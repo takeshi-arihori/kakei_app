@@ -146,7 +146,9 @@ describe('Postgres Group Management Retention adapter', () => {
       pool.query('DELETE FROM group_aggregate_record WHERE group_id = $1', [
         groupId.value,
       ]),
-    ).rejects.toMatchObject({ code: '23001' });
+    ).rejects.toMatchObject({
+      constraint: 'group_close_intent_registry_group_id_fkey',
+    });
   });
 
   it.each([
