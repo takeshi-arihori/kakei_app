@@ -38,9 +38,24 @@ rtk proxy codex exec --strict-config --sandbox read-only \
   - < /tmp/harness-prompt.txt > /tmp/harness-events.jsonl
 ```
 
-このCommandは起動診断用であり、GitHubへの書込み不能を保証しない。使用Versionの`--help`でOption対応を確認する。Promptは合成Caseの評価だけを依頼し、Repository／GitHub／Indexを変更しないことを明示する。CLI自体の起動が外側のSandboxで拒否される場合は実行許可を得る。CLI内部の`--sandbox read-only`は維持し、Sandbox無効化で回避しない。`--ephemeral`はSessionのRolloutを保存しない。今回のCLIではその指定時に子Agentの親Threadを解決できず`no thread with id`になったため、Subagentの実動検証では指定しない。これは観測結果であり、全Versionでの原因確定ではない。
+上記は初回の起動診断で使った例であり、Shell経由のGitHubアクセスを残すため合格用には使わない。実TaskのEvaluatorは次の隔離条件で起動する。使用するCLIの`--version`と`exec --help`で全Optionが利用可能なことを先に確認する。`PATH`に古いCLIがある場合は、確認済みの実行Fileを例中の`codex`の代わりに指定する。OptionがないVersionでは同等の隔離を確認できるまでGateを止める。
 
-子の実効権限情報、実施Tool、親による変更前後のGit状態をEvidenceへ記録する。Git状態だけではGitHubへの書込み禁止を証明できないため、外部Toolの利用履歴も確認する。権限情報が得られなければ強制read-onlyは未確認とする。
+```bash
+rtk proxy codex exec --strict-config --sandbox read-only \
+  -c 'approval_policy="never"' \
+  --disable shell_tool --disable apps --disable plugins \
+  --disable browser_use --disable browser_use_external \
+  --disable computer_use --disable in_app_browser \
+  --json --output-last-message /tmp/harness-result.json \
+  -C "$PROJECT_CHECKOUT" \
+  - < /tmp/harness-prompt.txt > /tmp/harness-events.jsonl
+```
+
+`PROJECT_CHECKOUT`はtrustedな対象Checkoutの絶対Pathを親が指定する。実行Fileの場所や個人の設定PathをRepositoryへ固定しない。Promptには対象IssueのRequirement／Done Criteria、関連docs、Project状態、Dependency、基準Commit、最新Diff、Test結果、Self Review、既知Riskを**内容付きで**渡す。Shellを無効にした子はFile PathやURLだけでは正本を取得できない。`--output-last-message`のJSONだけでなく、Eventと子Sessionを見てproject-local role名、子ID、実効Sandbox、使えるToolと実際のTool呼出しを確認する。外部書込みTool、Shell、操作型Browser／Computerが子へ残る場合、または権限を確認できない場合は`blocked`にする。
+
+安全な一時File作成Probeでread-only Sandboxの拒否とFile不在を確認する。GitHubへの試験書込みは行わない。FilesystemのProbeだけでGitHub書込み不可とは推論せず、外部連携とShellのTool境界も確認する。CLI自体の起動が外側のSandboxで拒否される場合は実行許可を得る。CLI内部の`--sandbox read-only`は維持し、Sandbox無効化で回避しない。`--ephemeral`は今回のCLIでは子Agentの親Thread解決に失敗して`no thread with id`になったため使用しない。これは観測結果であり、全Versionでの原因確定ではない。
+
+子の実効権限情報、実施Tool、親による変更前後のGit状態をEvidenceへ記録する。Git状態だけではGitHubへの書込み禁止を証明できないため、**利用可能Tool一覧と実際のTool呼出しを分けて確認する。** command executor、書込み可能なMCP／外部Toolが利用可能な場合は、未使用であっても書込み不能のEvidenceにはしない。権限情報が得られなければ強制read-onlyは未確認とする。
 
 ## 合否と再評価
 
@@ -74,11 +89,11 @@ rtk proxy codex exec --strict-config --sandbox read-only \
 - Evaluatorが変更を行う: そのCycleを合格にせず、変更範囲を確認して原因を解消する。
 - CLI版とApp版で結果が異なる: Versionと起動方法を別々に記録する。片方の結果をもう片方の成功証拠にしない。
 - `--ephemeral`で`no thread with id`: 保存ありの新規CLI Sessionで再試行し、親と子のThread識別子・結果を確認する。
-- Filesystemはread-onlyでもGitHub書込みToolが子へ公開される: Tool一覧と実効権限を別途確認し、書込みを禁止できない環境ではHarness前提未達としてGateを止める。CLIの`--ignore-user-config`やApps／Pluginsの無効化だけで外部Tool・Shell経由のGitHubアクセスが消えるとは仮定しない。
+- Filesystemはread-onlyでもGitHub書込みToolが子へ公開される: Tool一覧と実効権限を別途確認し、書込みを禁止できない環境ではHarness前提未達としてGateを止める。Apps／Pluginsの無効化だけでMCP、command executor、その他の外部書込み経路まで消えるとは仮定しない。
 
 ## Evidenceの記録項目
 
-Client／Version、Base／評価Diff、読み込んだConfig、role名、子識別子、ReviewInput概要、実際のJSON結果、親の修正、再検証、新しい子、実効権限、Tool履歴、Gate判断、Draft PRまたは検証終了結果を記録する。
+Client／Version、Base／評価Diff、読み込んだConfig、role名、子識別子、ReviewInput概要、実際のJSON結果、親の修正、再検証、新しい子、実効権限、**利用可能Tool一覧、実際のTool呼出し**、Gate判断、Draft PRまたは検証終了結果を記録する。
 
 `pnpm check`はRepository QAであり、Subagent起動と権限制御を自動検証するものではない。文書・Configのみの場合は構文・Schema・リンク確認をTDDの代替とし、実動検証と区別して報告する。
 
@@ -108,3 +123,15 @@ Client／Version、Base／評価Diff、読み込んだConfig、role名、子識�
 したがって、両roleの独立起動、合成Caseでの`fail → 親が入力修正 → 新Evaluatorでpass`、Decision待ちの`blocked`を確認できた。Project ConfigとRole TOMLの認識も確認できた。一方、P2／I2の子ごとの実効権限、GitHub書込みToolの利用不可、実Taskの全Loopを通じたDraft PR Gateの実動Evidenceは未確認である。親subagentの`workspace-write`環境をroleのread-only設定と同等に扱わない。[公式Subagentsの権限説明](https://learn.chatgpt.com/docs/agent-configuration/subagents)でも、子は親の実行時SandboxとToolを継承し得るため、Role TOMLだけで外部Toolの制限を主張しない。
 
 **Issue #130はBlockedのままとする。** CLIのread-only SandboxからGitHubへ到達でき、子AgentのTool一覧を絞ってもShell経由の外部書込み不能を立証できない。#131で定めた外部Tool境界を満たす実行方法を確定し、最新Diffで両roleの実効権限と全Loopを再検証する必要がある。書込みToolを使わなかったことだけで書込み不能とは扱わず、Draft PR Gateは通過させない。
+
+## 追補: 文書Taskを使ったHarnessの実動確認（2026-09-27）
+
+上のBlocked判定はPR #138時点の記録である。今回は文書だけを変更する#130を検証対象にした。**Product機能のE2E Testは対象外である。** Product Requirement、Domain Rule、DB Schema、API Schema、UIなどのProduct挙動を変更していないためである。一方、#130の成果物はCodex Harnessそのものなので、完了条件である**HarnessのPlanning／Implementation Loop、両Evaluatorの独立起動・権限境界・Draft PR GateはE2Eで実動確認する。** `pnpm check`はRepository QAであり、このHarness E2Eの代わりにはならない。
+
+利用者の#130実装指示を受け、`origin/develop`の`cc2328158171ae6af53be936b98ff5e5bbaa565c`から`codex/chore-issue-130-harness-gates`を作成した。PR #129、#132、#138はMerge済み、#127はClosedで、未Merge PRへの依存はない。Project #9の#130は、追補計画の保存前評価後にTask／Validation／AI・Tooling／Medium／Estimate 1／Milestone「開発支援基盤」としてReadyに設定し、保存後評価のpassを確認してからIn Progressに移した。元のIssue作成より前にD3を通したとは主張しない。
+
+CLI 0.157.1の専用Sessionで、上記の隔離Flagを使いproject-localの`work_planning_evaluator`を起動した。親がIssue #130／#131、PR #132の現況、Project Field、Repository Rule、既存runbook、修正案を内容付きで渡した。最初の評価はReady根拠と依存状態で`fail`、以降もHarness検証条件の不足、fail-cycleの代替条件、Estimate根拠を指摘する`fail`が続いた。親が計画を修正し、**毎回新しい子**で再評価した結果、GitHub保存前の子`01a0e2cc-5684-7b81-8fce-9de01fb42771`が`pass`（findings／missingEvidence空）となった。その後に親がIssue本文とProject Fieldを保存し、再取得した内容を別の子`01a0e2d1-2aff-7ba1-a917-331dcdb29144`が`pass`（同じく空）と判定した。これが文書Taskを使った`fail → 親が修正 → 再評価 → 新Evaluator`とPlanning Gateの観測結果である。
+
+この2つの子Sessionの記録には、CLI Version 0.157.1、親Thread ID、`sandbox_policy: read-only`、`approval_policy: never`、Tool呼出しなしが残る。read-only CLIでの安全な一時File作成Probeは`patch rejected: writing is blocked by read-only sandbox; rejected by user approval settings`となり、Fileは存在しなかった。隔離FlagでShell、Apps、Plugins、操作型Browser、Computerを無効化したため、子へGitHub書込みToolとShellを公開していない。読み取り専用のWeb検索Toolは残り得る。個人の認証設定やSession全文はRepositoryへ保存しない。
+
+文書差分については`pnpm check`、Link、`git diff --check`、Self Reviewの後、**新しい**`task_evaluator`へIssue正本・関連docs・最終Diff・検証結果を渡した。子`01a0e2da-9671-7742-8c00-043b895cdd7e`は`pass`（findings／missingEvidence空）で、実効Sandboxは`read-only`、承認Policyは`never`、Tool呼出しはなかった。評価Diff一致を確認した後にCommit、Push、[Draft PR #139](https://github.com/takeshi-arihori/kakei_app/pull/139)を作成した。これはHarnessのDelivery Gateの検証結果であり、Product機能のE2E Test結果ではない。
