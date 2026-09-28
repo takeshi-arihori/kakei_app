@@ -1,6 +1,6 @@
 # Group Managementの最初の実装境界（設計案）
 
-- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptance、2026-09-13のADR #52 Acceptance、Task #57の内部契約実装、2026-09-20のC1充足、2026-09-21のADR #73 Acceptance、2026-09-22のADR #85 Acceptance、2026-09-23のADR #102 Acceptanceを反映。残るOpen QuestionとBlockedを分離する。
+- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptance、2026-09-13のADR #52 Acceptance、Task #57の内部契約実装、2026-09-20のC1充足、2026-09-21のADR #73 Acceptance、2026-09-22のADR #85 Acceptance、2026-09-23のADR #102 Acceptance、2026-09-26のADR #115 AcceptanceとTask #118／#119の契約を反映。残るOpen QuestionとBlockedを分離する。
 - Baseline: [実装開始時のdevelop固定Commit](https://github.com/takeshi-arihori/kakei_app/tree/68d9c469605f554306f773a929250d8b1f642d05)
 - 根拠: [現行業務モデル](../product/current-model.md)、[Accepted ADR #24](../adr/shared-expense-domain-boundaries.md)
 - Decision: [整合性境界](../adr/group-management-consistency-boundary.md)、[本人性・認可・再試行](../adr/group-management-command-authorization.md)、[招待・再参加](../adr/group-invitation-and-rejoin.md)、[Group終了](../adr/group-close-consistency-and-retention-boundary.md)、[CloseIntentId保持](../adr/close-intent-id-retention-boundary.md)、[operation locator／Group ID](../adr/group-operation-locator-and-group-id-contract.md)
@@ -42,6 +42,20 @@ CreateGroup、TransferGroupOwnership、LeaveGroupのCommand名・入力・戻り
 | 終了取消 / CancelGroupClosing（#75）    | 現在Ownerが終了処理を取り消す           | Closing、現在Owner、期待版一致                                                | unfence前にCASで`Canceling` phaseを予約し、両Contextの一致するunfence Receipt後だけ`Active`へ戻す | 非Owner、片方未解除、別Group／Intent、Archive先勝ちを拒否。取消予約先勝ち後はArchive不可     |
 
 通常のMembership／Owner変更契約はActive Groupに限定し、Closing／ArchivedではGroupNotActiveとして状態変更を拒否する。Closing中は従来許可された既存履歴のread-only参照とcurrent Ownerによる取消だけを許可する。Archive時に`ownerAtArchiveParticipantId`を固定し、保持期限までの履歴参照とCSV責任を持つ。Group名等の表示属性は最初の境界に必須とせず、必要になれば制約を別途確定する。
+
+### 3.1 Group Management Retention adapter契約（#103）
+
+Task #119の信頼済み検証経路が発行したopaque `VerifiedRetentionDeletionEvidence`だけをApplication入口で受け付け、Receipt recordのoperation ID／intent versionがevidenceのPrepared bindingと一致する場合に限りGroup Management Retention Portを呼ぶ。この入口は削除認可、Retention Coordinator、Prepared/fence生成、他Context削除を実装しない。
+
+PostgreSQL adapterは、対象CloseIntent registryが指定Groupへ束縛されたlive形状であることをtransaction内でlockして確認し、同じtransactionで次をcommitする。
+
+1. registryを`group_id = NULL`、`created_at = NULL`、`retain_until = deletedAtのAsia/Tokyo基準1暦年後`へ退役する。2月29日は翌年2月28日へclampする。
+2. Group rootを削除し、FK cascadeでGroup Management所有のcurrent row、履歴、索引、operation result／locatorを削除する。
+3. operation ID、intent version、opaque canonical GM ReceiptだけのControl Ledger recordを保存する。
+
+commit後にだけReceiptを返す。同じoperation ID／intent versionの再試行で保存済みReceiptがあれば再削除せず返し、別version、別Receipt、registry／Group不一致はfail closedにする。期限cleanupは削除transactionとは別のGM所有transactionで、開始後に一度だけ得たUTC `txNow`に対し`retain_until <= txNow`のretired行だけをpurgeする。期限経過だけでは一意性を解除せず、purge commitまではCloseIntent IDの重複を拒否する。
+
+MigrationとadapterはProduction trafficを有効化しない。Coordinator、Context別削除／verification、Checkpoint／Witness、Backup／WAL／Restore、Alert／Runbook、本番wiringはADR #55のGateとして残る。
 
 ## 4. Concrete Examples / Object Model
 
