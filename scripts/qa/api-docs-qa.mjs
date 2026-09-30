@@ -1,6 +1,12 @@
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { isAbsolute, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+import { validateGraphqlContractCatalog } from './api-docs-validator.mjs';
+
+const read = (path) =>
+  readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -19,7 +25,9 @@ const collectOpenApiOperations = (source) => {
       continue;
     }
 
-    const methodMatch = line.match(/^    (get|post|put|patch|delete|options|head):\s*$/);
+    const methodMatch = line.match(
+      /^    (get|post|put|patch|delete|options|head):\s*$/,
+    );
     if (currentPath && methodMatch) {
       operations.push(`${methodMatch[1].toUpperCase()} ${currentPath}`);
     }
@@ -34,24 +42,62 @@ const collectReadmeEndpoints = (source) =>
     .sort();
 
 const expectedPublicEndpoints = ['GET /health', 'POST /graphql'];
-const [openApi, apiDocsReadme, apiReadme, compose, app, rootReadme, envExample] =
-  await Promise.all([
-    read('docs/api/openapi.yaml'),
-    read('docs/api/README.md'),
-    read('apps/api/README.md'),
-    read('compose.yml'),
-    read('apps/api/src/app.ts'),
-    read('README.md'),
-    read('.env.example'),
-  ]);
+const catalogUrl = new URL(
+  '../../docs/api/graphql-contracts.md',
+  import.meta.url,
+);
+const repositoryRootUrl = new URL('../../', import.meta.url);
+const repositoryRootPath = fileURLToPath(repositoryRootUrl);
+const repositoryReferenceExists = (reference) => {
+  try {
+    const resolvedPath = fileURLToPath(new URL(reference, catalogUrl));
+    const repositoryRelativePath = relative(repositoryRootPath, resolvedPath);
 
-assert(openApi.startsWith('openapi: 3.1.0\n'), 'OpenAPI 3.1.0 must be declared');
+    return (
+      repositoryRelativePath !== '..' &&
+      !repositoryRelativePath.startsWith(`..${sep}`) &&
+      !isAbsolute(repositoryRelativePath) &&
+      existsSync(resolvedPath)
+    );
+  } catch {
+    return false;
+  }
+};
+const [
+  openApi,
+  apiDocsReadme,
+  apiReadme,
+  compose,
+  app,
+  rootReadme,
+  envExample,
+  graphqlSchema,
+  graphqlCatalog,
+] = await Promise.all([
+  read('docs/api/openapi.yaml'),
+  read('docs/api/README.md'),
+  read('apps/api/README.md'),
+  read('compose.yml'),
+  read('apps/api/src/app.ts'),
+  read('README.md'),
+  read('.env.example'),
+  read('apps/api/schema.graphql'),
+  read('docs/api/graphql-contracts.md'),
+]);
+
+assert(
+  openApi.startsWith('openapi: 3.1.0\n'),
+  'OpenAPI 3.1.0 must be declared',
+);
 assert(
   JSON.stringify(collectOpenApiOperations(openApi)) ===
     JSON.stringify(expectedPublicEndpoints),
   'OpenAPI operations must match the supported public HTTP endpoints',
 );
-assert(openApi.includes('operationId: getHealth'), 'GET /health needs operationId');
+assert(
+  openApi.includes('operationId: getHealth'),
+  'GET /health needs operationId',
+);
 assert(
   openApi.includes('operationId: executeGraphQL'),
   'POST /graphql needs operationId',
@@ -112,5 +158,11 @@ assert(
   envExample.includes('SWAGGER_UI_PORT=8081'),
   '.env.example must document the Swagger UI port',
 );
+
+validateGraphqlContractCatalog({
+  schemaSource: graphqlSchema,
+  catalogSource: graphqlCatalog,
+  referenceExists: repositoryReferenceExists,
+});
 
 console.log('API documentation contract check passed');

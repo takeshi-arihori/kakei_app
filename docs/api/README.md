@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | HTTP transport | [`openapi.yaml`](openapi.yaml) | 公開Endpoint、Method、Content-Type、HTTP envelope |
 | GraphQL業務契約 | [`apps/api/schema.graphql`](../../apps/api/schema.graphql) | Query／Mutation、Input、Result、GraphQL Type／Field |
+| GraphQL Operation Trace | [`graphql-contracts.md`](graphql-contracts.md) | 実装済みOperationとContext、Use Case、認可、失敗、Testの対応 |
 | 生成型 | `apps/api/src/presentation/graphql/generated`、`apps/web/src/shared/graphql/generated.ts` | SDLから生成し、手書きしない |
 | 実装 | [`apps/api/src/app.ts`](../../apps/api/src/app.ts) | HonoとGraphQL YogaのHTTP Adapter |
 
@@ -38,14 +39,16 @@ docker compose stop swagger-ui
 
 公開HTTP契約を変更するTaskは、実装、`openapi.yaml`、API README、互換性とRollbackまたはForward-fixを同じ差分で更新します。GraphQL Type／Fieldの変更はSDLと生成型を更新し、OpenAPIへ複製しません。
 
+top-level GraphQL Operationを追加・変更・削除するTaskの担当者は、同じ差分で[`graphql-contracts.md`](graphql-contracts.md)の対応entryとTest参照を更新します。SDLを契約構造の正本、Operation catalogをUse Caseと実装EvidenceへのTrace正本として分離します。catalogのKnowledge Stateは`Confirmed`、`Proposed`、`Open Question`だけを使い、未決事項を実装済みとして記載しません。
+
 ```bash
 pnpm api-docs:check
 docker compose config
 pnpm check
 ```
 
-`api-docs:check`はOpenAPIとREADMEの公開Method集合、GraphQL SDLへのLink、固定Image、read-only mount、Request送信と外部Validatorの無効化を検査します。
+`api-docs:check`は専用validator testを実行した後、OpenAPIとREADMEの公開Method集合、GraphQL SDLとOperation catalogの完全一致、entryの必須項目とRepository参照、固定Image、read-only mount、Request送信と外部Validatorの無効化を検査します。
 
 Knowledge State: `GET /health`と`POST /graphql`は現行公開契約。各Contextの未実装Operation、認証Provider、公開Error、Rate limitは未決または別Taskの対象です。
 
-関連Task: [#93](https://github.com/takeshi-arihori/kakei_app/issues/93)
+関連Task: [#93](https://github.com/takeshi-arihori/kakei_app/issues/93)、[#142](https://github.com/takeshi-arihori/kakei_app/issues/142)
