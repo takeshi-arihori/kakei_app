@@ -47,10 +47,10 @@ TimestampはCallerからvalid Dateを受け取りUTC ISOへコピーする。Dom
 
 ## 後続Gate・文書・Rollback
 
-[Settlement Inventory](../product/mvp-web-settlement-payment-inventory.md)にある公開認可・具体Port／lock／冪等結果／予約保存・保護Record種別／Migration／Key／Audit／本番Auth・Read契約は未完了。Current OwnerやLeft Participantのアクセス範囲、Source facts取得と原子性、競合時部分反映なしはApplication／各Owner Adapterで実検証を要する。再申請／Withdrawの純Domain部分はTask162で追加する。Rejected元Expense訂正・実Application接続、Attempt／全受取完了Archiveの純DomainはTask164で追加し、取消は後続Task。本ScopeのRejected／PaymentActiveを全Lifecycleの終端と扱わない。再申請とWithdrawnの契約・全履歴保持は[追加契約](settlement-case-revision-contract.md)を参照する。
+[Settlement Inventory](../product/mvp-web-settlement-payment-inventory.md)にある公開認可・具体Port／lock／冪等結果／予約保存・保護Record種別／Migration／Key／Audit／本番Auth・Read契約は未完了。Current OwnerやLeft Participantのアクセス範囲、Source facts取得と原子性、競合時部分反映なしはApplication／各Owner Adapterで実検証を要する。再申請／Withdrawの純Domain部分はTask162で追加する。Rejected元Expense訂正・実Application接続、Attempt／全受取完了Archiveの純DomainはTask164で追加し、取消の純Domainは[Task166](settlement-cancellation-contract.md)で追加する。本ScopeのRejected／PaymentActiveを全Lifecycleの終端と扱わない。再申請とWithdrawnの契約・全履歴保持は[追加契約](settlement-case-revision-contract.md)を参照する。
 
 Domain plaintext値をDB／Log／Auditへ直接保存してはならない。ADR #55のContext別保護とRetentionを維持し、既存snapshot-revision kindへCase可変状態や別Recordを押し込まない。SourceOwner／購入日等の追加factsを含む保存契約は別途設計する。既存solverの指数探索とhistorical unionについて公開接続前の入力規模・CPU／timeout／制限方針を引き継ぐ。6人fixtureはProduct上限ではない。
 
 新しい[初回承認図](../diagrams/settlement-initial-approval.mermaid.md)はConfirmedな初回遷移だけを可視化する。現行モデル／ADR本文／既存ContextmapのRule・境界、公開Schema／Migration／UI／Runbookは変更しない。データ移行なし、未接続CodeのrevertでRollbackできる。数値Coverage、実認可／保存／障害注入は純Domain Test成功から主張しない。
 
-[Task164の支払Attempt契約](settlement-payment-attempt-contract.md)で本人全額報告・受取確認・理由付き差し戻し・全受取Archiveを追加する。初回内容と承認履歴は維持し、取消と実認可・保存・公開は後続Gate。
+[Task164の支払Attempt契約](settlement-payment-attempt-contract.md)で本人全額報告・受取確認・理由付き差し戻し・全受取Archiveを追加する。初回内容と承認履歴は維持し、[Task166の全体取消契約](settlement-cancellation-contract.md)で全員同意を追加する。実認可・保存・公開は後続Gate。

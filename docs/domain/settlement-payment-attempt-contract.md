@@ -36,7 +36,7 @@ Testは`apps/api/src/settlement/domain/settlement-payment.spec.ts`。既存初�
 
 1指示の受取だけでは、他の指示が未確認ならPaymentActiveを維持する。全指示の受取でRootがArchivedとなり、`archiveReason`はAllPaymentsReceived、`archivedAt`は最後の受取UTCになる。全0のNoPaymentRequired Archiveは従来どおり、支払報告／受取記録を捏造しない。Archive後は全変更入口が拒否され、候補・履歴は参照できるが指示は再実行不可。Expenseを別Caseへ解放せず、Groupも自動終了しない。
 
-Asia/Tokyoの完了月表示は既存Ruleを維持するが、月別Query／Read Model／UIはこのTaskに含めない。[正式部分図](../diagrams/settlement-payment-lifecycle.mermaid.md)はPaymentだけを表す。取消要求・同意・拒否は別Taskで、本履歴から「Attemptが1件もない」を判定する必要がある。Returnedを削除して取消可能にすることはできない。
+Asia/Tokyoの完了月表示は既存Ruleを維持するが、月別Query／Read Model／UIはこのTaskに含めない。[正式部分図](../diagrams/settlement-payment-lifecycle.mermaid.md)はPaymentだけを表す。[Task166の取消契約](settlement-cancellation-contract.md)が取消要求・同意・拒否を追加し、本履歴から「Attemptが1件もない」を判定する。Returnedを削除して取消可能にすることはできない。
 
 ## 拒否分類・接続前Gate
 
