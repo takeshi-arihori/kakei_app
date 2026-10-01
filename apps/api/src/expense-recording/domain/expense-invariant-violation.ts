@@ -10,7 +10,15 @@ export type ExpenseInvariantViolationCode =
   | 'JOIN_ORDER_DUPLICATED'
   | 'PERCENTAGE_INVALID'
   | 'PERCENTAGE_TOTAL_INVALID'
-  | 'PAYER_NOT_PARTICIPANT';
+  | 'PAYER_NOT_PARTICIPANT'
+  | 'EXPENSE_VERSION_CONFLICT'
+  | 'CASE_FACT_MISMATCH'
+  | 'CASE_REFERENCE_INVALID'
+  | 'CASE_VERSION_CONFLICT'
+  | 'EXPENSE_NOT_CORRECTABLE'
+  | 'ACTOR_NOT_SOURCE_OWNER_OR_OWNER'
+  | 'CORRECTION_REASON_EMPTY'
+  | 'UTC_INSTANT_INVALID';
 
 /** 無効な入力から支出を生成しないための、機械判定可能なDomain拒否。 */
 export class ExpenseInvariantViolation extends Error {

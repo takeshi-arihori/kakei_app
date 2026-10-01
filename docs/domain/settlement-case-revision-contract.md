@@ -27,6 +27,8 @@ Test正本は`apps/api/src/settlement/domain/settlement-case-revision.spec.ts`�
 
 CallerがSourceから取得した訂正済みContentを渡し、Caseが同じGroup・同じ対象Expense ID集合を照合する。Content／solverを再利用して新版に必要承認者・残高・候補を固定し、現在membershipへ置換しない。元Expenseの購入日・額・payer・割合・Participant固定や訂正履歴の正しさはERと後続Source契約の責務。本Taskは元Expense訂正を実装せず、RootへのContent入力だけで訂正権限・履歴の完成を主張しない。
 
+[Task168の手入力金額訂正契約](manual-expense-amount-correction-contract.md)は、明示済み条件で同Expense IDの金額と負担を訂正し、版・前後値・変更者／時刻／理由を純Domainへ保持する。現在factsを新版の入力へ写像するSource照会と、訂正／再申請の実先着・共通commitは未接続Gateのままである。通常編集や他Field訂正をこの契約から推測しない。
+
 各新版は新canonical Snapshot IDと候補順の新指示IDを持つ。Case内の旧Snapshot参照と全指示IDの再利用を拒否する。初回と同じID・候補数・コピー検証を再利用し、IDのRandom／グローバル新規性／DB Uniqueは後続PRE。旧候補を実行可能な指示として扱わない。
 
 旧版は不変なまま、ordinalとpreviousSnapshotIdで同じCaseの直前版へ連鎖する。Caseの元申請者は最初の実申請者を維持し、新版の実申請者がOwnerへ変わっても上書きしない。新版の申請者が旧必要承認者と同じでも、新版に属する承認を新しく記録する。
