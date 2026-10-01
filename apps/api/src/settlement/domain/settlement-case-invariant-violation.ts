@@ -1,4 +1,4 @@
-/** 初回Caseと本人判断の拒否分類。公開Error契約や認可結果ではない。 */
+/** Case承認・再申請・取り下げの拒否分類。公開Error契約や認可結果ではない。 */
 export type SettlementCaseInvariantViolationCode =
   | 'SNAPSHOT_CONTENT_INVALID'
   | 'CASE_ID_INVALID'
@@ -14,7 +14,16 @@ export type SettlementCaseInvariantViolationCode =
   | 'SNAPSHOT_MISMATCH'
   | 'PARTICIPANT_NOT_REQUIRED'
   | 'APPROVAL_ALREADY_RECORDED'
-  | 'REJECTION_REASON_EMPTY';
+  | 'REJECTION_REASON_EMPTY'
+  | 'CASE_NOT_REJECTED'
+  | 'CASE_CANNOT_BE_WITHDRAWN'
+  | 'CURRENT_OWNER_SUBJECT_EMPTY'
+  | 'ACTOR_NOT_CASE_APPLICANT_OR_OWNER'
+  | 'REVISION_GROUP_MISMATCH'
+  | 'TARGET_EXPENSE_SET_MISMATCH'
+  | 'SNAPSHOT_ID_REUSED'
+  | 'INSTRUCTION_ID_REUSED'
+  | 'WITHDRAWAL_REASON_EMPTY';
 
 /** 業務状態を変えずに返す拒否。参照・理由・金額をmessageへ含めない。 */
 export class SettlementCaseInvariantViolation extends Error {
