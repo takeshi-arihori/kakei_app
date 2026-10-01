@@ -6,7 +6,7 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 
 [ADR #24](../adr/shared-expense-domain-boundaries.md)は2026-09-06に案Aを条件付きAcceptedとした。3 Context（Group Management、Expense Recording、Settlement）、MVP Modular Monolith、State model＋必要な不変業務履歴、Command／Query責務分離を採用する。全面Event Sourcingと別Store／非同期Projectionは初期採用しない。
 
-- Group Managementの最初のData Owner、Aggregate、Repository Port、内部Command認可は後続ADR #35／#36で条件付きAcceptedとなった。Group終了のContext間Portは[ADR #73](../adr/group-close-consistency-and-retention-boundary.md)でAcceptedとなった。Category所属、他ContextのAggregate、Expense予約・競合のTransaction方式、終了以外のContext間Portは未決。
+- Group Managementの最初のData Owner、Aggregate、Repository Port、内部Command認可は後続ADR #35／#36で条件付きAcceptedとなった。Group終了のContext間Portは[ADR #73](../adr/group-close-consistency-and-retention-boundary.md)でAcceptedとなった。[ADR #152](../adr/expense-settlement-consistency-boundary.md)でER個別Group Expense Root、Settlement Case Rootと不変Revision、予約／精算更新の同期原子的commitを2026-10-01に採用した。Receipt／Bundle、Category所属、具体Port／lock順／冪等キー・結果、保護Record kind／Schema、終了以外のContext間認可は未決または未実装。
 - Invitation lifecycleと再参加Participant寿命はADR #52でAcceptedとなった。Invitation／冪等記録の保存保護、Retention、BackupのDecisionはADR #55でAccepted済みであり、S1〜S3と#42／#94〜#97で段階的に実装・検証する。Persistence、本番本人性・認証・配送、Context間認可、Projectionの未決部分は必要な後続Decisionを経て確定する。
 - 条件C1は2026-09-20に充足した。[保護・保持Decision](../adr/snapshot-revision-security-and-retention.md)のOwner Accepted、[正式Security Review pass](https://github.com/takeshi-arihori/kakei_app/issues/55#issuecomment-5748185586)、[PR #70](https://github.com/takeshi-arihori/kakei_app/pull/70)のdevelop統合（merge commit `d0546e46c614d4c081bb2adfd59da27cce9f70af`）を証拠とする。
 - C1充足だけではPersistence TaskをReadyにしない。S0〜S3、[ADR #85](../adr/group-operation-locator-and-group-id-contract.md)と[ADR #102](../adr/close-intent-id-retention-boundary.md)のRepository同期、#86のApplication／Domain契約整合、#42のv2 Migration／PostgreSQL CIはDoneである。CloseIntent registryのDB強制一意性はGroup存続中と削除後1年のcleanup commitまでとし、期限後はCSPRNG UUIDv4の実用上一意性へ移る。読取・再送 #94は#42完了後の個別Ready評価を通過した。状態writer #95、公開commit #96、固定版認可lock #97は各依存完了後に個別Ready評価する。最新StatusはGitHub Projectを正本とする。実Context fence／Receipt配送、Key Provider、Audit Store、Retention／Backup Gateが揃うまで本番へwireしない。
@@ -37,3 +37,7 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 ## Group Management初回境界
 
 [設計分析](../domain/group-management-first-boundary.md)、[整合性境界Decision](../adr/group-management-consistency-boundary.md)、[認可Decision](../adr/group-management-command-authorization.md)、[招待・再参加Decision](../adr/group-invitation-and-rejoin.md)、[Group終了Decision](../adr/group-close-consistency-and-retention-boundary.md)、[CloseIntentId保持Decision](../adr/close-intent-id-retention-boundary.md)、[operation locator／Group ID Decision](../adr/group-operation-locator-and-group-id-contract.md)へ具体化した。S0〜S3、#86、#42はDone。#94は読取Adapterとして個別Ready評価を通過し、#95〜#97は依存順に個別Ready評価する。#96はADR #102 Repository同期後に個別Ready評価する。本番本人性・配送、実Context fence／Receipt配送は未決または未実装であり、Production Key Provider／Audit Store／Retention Checkpoint／Backup／Deployment Gateも未実装である。
+
+## 支出・精算の純Domain実装境界
+
+[ADR #152](../adr/expense-settlement-consistency-boundary.md)の承認に基づき、[Task #154](https://github.com/takeshi-arihori/kakei_app/issues/154)は手入力支出の登録時固定factsと整数配賦の内部Domainを個別Ready評価した。現在GroupのActive／Actor本人性／Closing fenceは後続Applicationの責務であり、factoryを公開登録Use Caseとして使わない。Case／Port／Persistence／公開APIの後続Taskは具体契約とSecurity・運用Gateを別に満たす。本ADRはReceipt／Categoryや本番認証の採用、本番Protectionの有効化を意味しない。

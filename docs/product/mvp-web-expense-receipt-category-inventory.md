@@ -163,3 +163,7 @@ deleteEligibleAtはGroupのarchivedAtをAsia/Tokyoへ変換した同時刻の1�
 新しい業務挙動を追加しない文書Taskなので、振る舞いTestは追加しない。Source／Actor／Owner／失敗のTrace、一意分類と理由、Markdownの構造・Link／見出し参照、Knowledge State・公開Gateを検証し、Issue #146のDone Criteriaに従いRepository標準のpnpm checkを実行する。ローカルE2Eは文書のみのため省略可能で、実施範囲と結果はIssue／PRへ記録する。
 
 残Risk: 画面分類はOwner UX確認前のProposed。Receipt／CategoryのOwnership、集約・公開認可／API・OCR／画像・Retention接続がReadyになるまで機能画面をProductionへ接続できない。文書TaskのReadyはこれら機能Gateを解除しない。
+
+## 後続Decisionの追跡（2026-10-01）
+
+[ADR #152](../adr/expense-settlement-consistency-boundary.md)で、ERの個別Group Expense Root、Settlement Case Rootと不変Revision、予約／精算更新の同期原子的commitを採用した。G1の個別Group Expense境界と原子性方針は部分解決したが、Receipt／Category、具体Port／版・再送／保存／認可の契約は残る。[Task #154](https://github.com/takeshi-arihori/kakei_app/issues/154)は手入力登録の純Domainだけを実装する。39操作の分類・Route・公開API・機能画面のReadyはこのDecisionだけで確定しない。
