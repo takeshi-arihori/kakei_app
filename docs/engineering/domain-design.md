@@ -11,7 +11,8 @@ DDDは、共有割り勘の業務RuleをDB、Prisma、GraphQL、Honoの都合で
 - Confirmed: 共有GroupのProduct Scope、主要Concept、GitHubで確認済みのBusiness Rule／Invariant
 - Accepted Architecture: [ADR #24](../adr/shared-expense-domain-boundaries.md)の3 Context、MVP Modular Monolith、State model＋不変業務履歴、Command／Query責務分離
 - Accepted Group Management: [ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)の最初のData Owner、Group Aggregate、Repository Port、内部Command認可。[ADR #52](../adr/group-invitation-and-rejoin.md)のInvitation lifecycle、受諾原子性、新Participantによる再参加
-- Pending Decision: Category所属、他ContextのAggregateとData Owner、Context間Port、Persistence実装、本番本人性・配送、非同期Projection。保存保護・Retentionの条件C1は充足済みだが、S0〜S3が完了するまで依存Persistence実装Ready不可
+- Accepted Expense / Settlement: [ADR #152](../adr/expense-settlement-consistency-boundary.md)のER個別Group Expense Root、Settlement Case Rootと不変Revision、予約／精算更新の同期原子的commit。実Adapter／認可／公開Use Caseの完成を意味しない。
+- Pending Decision: Receipt／BundleのAggregate、Category所属、具体Context間Port・lock順・冪等結果契約、Persistence実装・保護Record種別、本番本人性・配送、非同期Projection。保存保護・Retentionの条件C1は充足済みだが、S0〜S3が完了するまで依存Persistence実装Ready不可
 - Deprecated: 個人用Household、Account、収入Transaction、日付境界Archive、2人限定の単一Payer／Payeeモデル
 
 Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repositoryを作らない。関連ADRがAcceptedとなり、仕様とRepository実装が整合するまで実装Readyへ進めない。
@@ -68,7 +69,7 @@ Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repos
 - Receipt Draftは最終編集から30日後、またはGroup終了後の次回Batchで、Draft、OCR結果、Item候補、画像を冪等に削除する。閲覧だけでは期限を延長しない。
 - 月別Category集計はAsia/Tokyoの`occurredOn`、Settlement Archiveの所属月はAsia/Tokyoの`archivedAt`で判定する。
 
-Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。3 Contextと保存の基本方針はADR #24、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36、Invitation lifecycleと再参加Participant寿命はADR #52、保存保護・Retentionの条件C1はADR #55で採用した。C1は2026-09-20に充足した。他ContextのData OwnerとAggregate、PersistenceとProjection実装、本番本人性・配送、Context間認可は[設計Gate](../product/design-gates.md)で追跡し、S0〜S3を含む必要条件が揃うまで依存実装Readyへ進めない。
+Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。3 Contextと保存の基本方針はADR #24、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36、Invitation lifecycleと再参加Participant寿命はADR #52、保存保護・Retentionの条件C1はADR #55で採用した。C1は2026-09-20に充足した。ERの個別Group ExpenseとSettlement CaseのData Owner／Aggregateおよび予約／精算更新の原子性はADR #152で採用した。Receipt／Category、具体Port、PersistenceとProjection実装、本番本人性・配送、Context間認可は[設計Gate](../product/design-gates.md)で追跡し、S0〜S3を含む必要条件が揃うまで依存実装Readyへ進めない。
 
 ## Modelの選択
 
@@ -100,7 +101,7 @@ Aggregateは同一TransactionでInvariantを守る必要がある最小境界と
 - Failure時に一緒にRollbackすべき範囲
 - 他Conceptとの参照・所有関係
 
-画面、GraphQL Mutation、Table、既存Classを理由にAggregate境界を決めない。現時点で採用済みなのは、ADR #35のGroup ManagementにおけるGroup Aggregateだけである。他Contextへ一般化しない。
+画面、GraphQL Mutation、Table、既存Classを理由にAggregate境界を決めない。採用済みの境界は、ADR #35のGroup ManagementのGroup、ADR #152のExpense Recordingの個別Group ExpenseとSettlementのCaseである。Receipt／Category等へ一般化しない。Case配下のRevisionは不変値／保存Recordとし、別の可変Rootにしない。予約とCase更新の共通原子的commitの具体Port／Adapterは後続Taskで定める。
 
 ### Bounded Context
 
@@ -113,7 +114,7 @@ Aggregateは同一TransactionでInvariantを守る必要がある最小境界と
 - 1つのEntity／Value Objectへ自然に属さないStatelessなDomain RuleだけをDomain Service候補とする。
 - Aggregateを跨ぐRule、認可、Read Model導出、Application Coordinationを1つのDomain Serviceへ集約しない。
 - Group全体の相殺とPayment Instruction導出は、具体例、決定性、計算量、整合性境界を確認して配置を決める。
-- Group ManagementはGroupをRootとして現在のParticipantとOwner Roleを所有する。Category、Receipt、Expense Recording／Settlementが参照するParticipant情報、Context間の所有権とPortは未確定であり、Application層へ仮置きして既成事実化しない。
+- Group ManagementはGroupをRootとして現在のParticipantとOwner Roleを所有する。ERはGroup Expenseの登録時Participant／payer／Split／負担とSource Ownerを固定する。Settlementは固定Case集合と不変Revisionを所有する。現在Membershipの判定と過去事実を混同しない。Category、Receipt、具体Participant照会／認可Portは未確定であり、Application層へ仮置きして既成事実化しない。
 
 ## Eventと永続化
 

@@ -82,7 +82,7 @@ Receipt、Reporting／Retentionまで分け、SettlementだけEvent Sourcingを�
 
 上記証拠によりC1は充足した。ただし、依存するPersistence実装TaskはS0〜S3とTask固有のReady条件が揃うまでBacklog／Blocked Yesとする。設計調査と承認済み3 Contextの可視化は、各TaskのReady評価を経て進められる。
 
-本ADRをAcceptedとした時点では、Categoryの所属、個別Data Owner、Aggregate境界、Expense予約と競合のTransaction方式、Port契約、非同期Projectionは未決であった。その後、ADR #35／#36でGroup Management初回のData Owner、Group Aggregate、Repository Port、内部Command認可だけを条件付き採用した。Category所属、他ContextのAggregate、Context間Port、Expense予約と競合のTransaction方式、非同期Projectionは引き続き未決である。
+2026-09-06のAcceptanceと後続Group Management初回Decisionの時点では、Categoryの所属、個別Data Owner、Aggregate境界、Expense予約と競合のTransaction方式、Port契約、非同期Projectionは未決であった。その後、ADR #35／#36でGroup Management初回のData Owner、Group Aggregate、Repository Port、内部Command認可だけを条件付き採用した。Category所属、他ContextのAggregate、Context間Port、Expense予約と競合のTransaction方式、非同期Projectionは引き続き未決である。
 
 ## Implementation after Acceptance
 
@@ -115,3 +115,7 @@ Proposed中はRepository ADRとGitHub ADR IssueをClose／Rejectedとして記�
 ### Subsequent resolution（2026-09-20）
 
 上段のPR #27に関する記述は2026-09-07時点の履歴である。その後、ADR #55のOwner Accepted、正式Security Review pass、PR #70のdevelop統合が完了し、C1は充足した。個別Persistence実装はS0〜S3と#42の順で検証し、本番wiringはProduction Gateが揃うまで禁止する。
+
+## 後続Decisionによる部分解決（2026-10-01）
+
+[ADR #152](expense-settlement-consistency-boundary.md)のOwner承認で、ERの個別Group Expense Root、Settlement Case Rootと不変Revision、予約／精算更新の同期原子的commitを採用した。本ADRの3 Context／Modular Monolith／State model＋不変業務履歴を維持し、上の過去Decision記録を消さない。Receipt／Bundle、Category、具体Port／lock順／冪等結果／保護Record種別、本番本人性と運用Gateは残る。[Task #154](https://github.com/takeshi-arihori/kakei_app/issues/154)は登録Domainだけを実装し、Case／Application／Persistence／公開APIは後続個別Ready評価とする。
