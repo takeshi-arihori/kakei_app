@@ -3,11 +3,11 @@
 - Task: [148](https://github.com/takeshi-arihori/kakei_app/issues/148)／親Epic [#90](https://github.com/takeshi-arihori/kakei_app/issues/90)。
 - Baseline: develop `583adf327a7a912f847ac8fcfa46a652c4e68e70`（PR #147統合済み）。
 - Scope: 精算選択・申請・承認／却下・新版・取り下げ・取消、支払報告／確認・差し戻し、Archive、認可・回復・Group lifecycleの観測。
-- Knowledge State: 業務RuleはConfirmed／Accepted出典の転記、全画面分類はProposed。未決Aggregate・公開契約・本人性や具体Route／Layoutを採用しない。
+- Knowledge State: 業務RuleはConfirmed／Accepted出典の転記、全画面分類はProposed。後続ADR #152で確定した境界と、未決Port・公開契約・本人性・具体Route／Layoutを区別する。
 
 ## 1. Ownershipと未決境界
 
-ADR #24の3 ContextとState model、ADR #55のSettlement保護Data Owner／読取Policy、ADR #73のSettlement close fenceと進行中factの所有はAcceptedである。Settlement Case、Snapshot Revision、Approval、Payment Instruction、Payment AttemptはConfirmed業務概念だが、具体Aggregate／Repository／Expense予約・解放の原子性は未決。候補の[設計比較](../domain/shared-expense-design-boundaries.md)を一括採用しない。
+ADR #24の3 ContextとState model、ADR #55のSettlement保護Data Owner／読取Policy、ADR #73のSettlement close fenceと進行中factの所有はAcceptedである。本Inventory作成時点では具体Aggregate／予約原子性は未決だったが、後続ADR #152で個別Expense Root、Case Rootと不変Revision、予約／Case更新の同期原子的commitがAcceptedとなった。具体Repository／Port／lock／保存契約はG1で残る。候補の[設計比較](../domain/shared-expense-design-boundaries.md)の他の案まで一括採用しない。
 
 Expense Recordingは未精算Expenseを、Group ManagementはMembership／Owner／lifecycle／固定版Access Policyを所有する。Context間は公開Portを使い他ContextのTable／Key／暗号化Payloadを直接参照・複製しない。FrontendはServerの正本結果を表示し、金額・Balance・送金最適化・最終認可を所有しない。
 
@@ -29,6 +29,7 @@ Confirmed Ruleは公開済み・実装済みという意味ではない。Propos
 | A52 | [ADR #52](../adr/group-invitation-and-rejoin.md) | 再参加の新IDと過去責務。 |
 | A55 | [ADR #55](../adr/snapshot-revision-security-and-retention.md) | 保護方式、Snapshot最小保存・関与Policy、固定版Read、Audit／Retention。 |
 | A73 | [ADR #73](../adr/group-close-consistency-and-retention-boundary.md) | close fence／終了判定Receipt、Closing・Canceling／ArchivedとOwner固定期限。 |
+| A152 | [ADR #152](../adr/expense-settlement-consistency-boundary.md) | 後続Owner AcceptedなExpense／Case集約と同期原子的commit。具体Port／保存・本番接続は別Gate。 |
 | GMI | [Group Management Inventory](mvp-web-group-management-inventory.md) | 在籍・Owner・Group終了・CSV／期限の入力。 |
 | ERI | [Expense／Receipt／Category Inventory](mvp-web-expense-receipt-category-inventory.md) | 元支出訂正・Receipt不変・購入月／画像保持。 |
 | D | [design-gates](design-gates.md) | 具体集約・予約／Context契約・本番接続のGate。 |
@@ -81,7 +82,7 @@ Confirmed Ruleは公開済み・実装済みという意味ではない。Propos
 
 | Gate | 未決／不足 | 後続Ready条件 |
 | --- | --- | --- |
-| G1 Domain／整合性 | Case／Revision／Instruction／Attempt集約、Expense選択・予約／解放・訂正／新版競合、保存単位・版・再送結果。 | 個別Accepted Design／必要ADR、Context Portと原子的InvariantをTestへTrace。旧Transaction候補を流用しない。 |
+| G1 Domain／整合性 | A152のCase Rootと不変Revision・同期原子的commitは採用済み。具体Repository／Port、Expense選択・予約／解放・訂正／新版競合、保存単位・版・再送結果は未決／未実装。 | 採用境界内の個別Accepted Design、Context Portと原子的InvariantをTestへTrace。純Domainだけで保存原子性の成立を主張せず、旧Transaction候補を流用しない。 |
 | G2 公開契約／本人性 | 業務Query／Mutation、本人性・Group scope、認可時点、Read範囲・公開Error、FieldとKey。 | Selected Use Caseの認証認可・Error契約、SDL・catalog・生成型・Testとwiringを揃える。内部Unavailable／requestIdを公開契約へ暗黙採用しない。 |
 | G3 保護の本番接続 | A55の保護方式はAccepted。Case／Revision保存、Key Provider、durable Audit、原子性と配送の本番Adapterは未実装。 | Adopted方式の適用Record／PortとProduction Adapter・障害・版整合のEvidenceを揃える。方式を再び未決としない。 |
 | G4 運用／Retention | Group削除連携、Snapshot／Attempt／画像・Backup／Key失効、Checkpointと回復Runbook。 | 各Data Ownerの冪等Port、部分失敗・期限・失効・再実行と監視を検証。 |
@@ -105,7 +106,7 @@ Group Archiveは別の明示Owner操作で、未精算Expense／進行中Settlem
 
 | Open Question | 扱い |
 | --- | --- |
-| Case・Instructionの集約と保存、Expense予約・全件解放 | G1。単一Transaction／別Port等を未承認で確定しない。 |
+| Case・Instructionの具体保存、Expense予約・全件解放Port | 集約と同期原子的commitはA152でAccepted。G1の具体Port signature／lock順／版確認／保存契約を未承認で確定しない。 |
 | 一覧・選択支出のRead範囲／入力Field／公開Error | G2。A55のSnapshot Read Policy以外へ無条件展開しない。 |
 | 承認／取消／支払競合、一般CommandのKey・再送結果確認 | G1/G2。明示済み訂正／再申請RuleだけConfirmed。 |
 | Cancellation拒否の理由、支払証憑・新しい通知・代理操作 | 正本根拠なし。MVP追加機能として採用しない。 |
@@ -143,3 +144,11 @@ Dependency: 本Inventory→F3 UX→Owner確認→App shell。F1とF2/F4の設計
 文書のみのため新しい振る舞いTest／TDDは追加しない。Source trace、構造・参照・公開情報とpnpm checkで検証し、ローカルE2Eは省略理由をIssue／PRへ記録する。Self Review後に新しいtask_evaluatorへ最新文書ハッシュを渡す。実結果はIssue／PRで追跡する。
 
 既存Rule・Accepted ADRを変更しないためDomain／Schema／生成型／Migration／図／Runbook／AGENTS／skill更新は不要。新規文書とTask／Epic追跡のみを同期。残RiskはProposed UXとG1〜G5であり、仕様整理の完了で本番Gateは解除しない。
+
+## 9. 後続Decision・実装との同期（2026-10-01）
+
+ADR #152のOwner承認とPR #155の統合後、§1／G1／Open Questionを採用済み3点へ同期した。§3の33操作とPresentation分類は変更していない。各行が参照するG1は具体Port・保存・認可判断点等の残Gateであり、Case集約の採否を再び未決にはしない。
+
+Task #156／PR #157は内部残高からの最少送金候補を実装し、Task #158は選択支出から固定する[Snapshot算術内容の契約](../domain/settlement-snapshot-content-contract.md)を追加する。これらはCase発番／Approval状態／予約保存／本人性／公開Use Caseの完成ではない。必要承認者は割合が正ならburdenやnet Balanceが0でも保持し、候補が空でも承認を省略しない。
+
+Task #150／PR #151でApp shellの入口と共通状態は統合済み。詳細業務画面・公開操作接続・状態別回復のG2〜G5とEpic #90はその完成だけでは解除しない。
