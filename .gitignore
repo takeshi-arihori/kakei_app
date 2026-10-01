@@ -49,3 +49,7 @@ next-env.d.ts
 
 /specs
 /.worktree/
+
+# Webブラウザ検証の生成物
+/apps/web/test-results/
+/apps/web/playwright-report/

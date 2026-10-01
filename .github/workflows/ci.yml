@@ -63,3 +63,9 @@ jobs:
 
       - name: API疎通とPostgreSQL結合を検証
         run: pnpm --filter @kakei/api test:e2e
+
+      - name: Web E2E用Chromiumを準備
+        run: pnpm --filter @kakei/web exec playwright install --with-deps chromium
+
+      - name: Web入口とAccessibilityを検証
+        run: pnpm --filter @kakei/web test:e2e
