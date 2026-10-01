@@ -10,6 +10,8 @@
 
 ERは元Expenseと最大剰余配賦を所有する。Settlementは配賦を再計算しない。後続Applicationが、認可された同一Group・同一判断点の未精算支出をERの公開Applicationから取得し、正しい配賦済みfactsとして渡す必要がある。値・集合・保存則の検証は、そのSource確認、本人性、Active状態、fence、期待Expense版、予約commitの証明にならない。
 
+[Task168の手入力金額訂正](manual-expense-amount-correction-contract.md)はERで現在額と負担を版・変更履歴付きで生成する。既存Contentに訂正を伝播させず、後続ApplicationがSourceを再取得して新Contentへ写像する。Source Port／実原子性／通常編集／他FieldのGateは維持する。
+
 ContentはCase／SnapshotのID発番、作成時刻、`previousSnapshotId`、全Revision履歴、Approval／Attempt状態、支出の訂正や予約、保存を扱わない。登録Actor・購入日・表示名等の保存／画面用の追加factsも本算術内容のScope外。実Revision化・保存・公開接続の前には、それぞれの契約とGateを満たす必要がある。[ADR #55](https://github.com/takeshi-arihori/kakei_app/issues/55)の保護Record完成を、このplaintext Domain値の存在から推測しない。
 
 ## 契約とTest Trace
