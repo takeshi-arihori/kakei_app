@@ -70,7 +70,7 @@ Pending Decisionを採用済みとみなしてDirectory、Schema、Event、Repos
 - Receipt Draftは最終編集から30日後、またはGroup終了後の次回Batchで、Draft、OCR結果、Item候補、画像を冪等に削除する。閲覧だけでは期限を延長しない。
 - 月別Category集計はAsia/Tokyoの`occurredOn`、Settlement Archiveの所属月はAsia/Tokyoの`archivedAt`で判定する。
 
-Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。3 Contextと保存の基本方針はADR #24、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36、Invitation lifecycleと再参加Participant寿命はADR #52、保存保護・Retentionの条件C1はADR #55で採用した。C1は2026-09-20に充足した。ERの個別Group ExpenseとSettlement CaseのData Owner／Aggregateおよび予約／精算更新の原子性はADR #152で採用した。Receipt／Category、具体Port、PersistenceとProjection実装、本番本人性・配送、Context間認可は[設計Gate](../product/design-gates.md)で追跡し、S0〜S3を含む必要条件が揃うまで依存実装Readyへ進めない。
+Issue #9のDomain Ruleは2026-08-24に確定し、Awaiting ApprovalからのWithdraw Ruleは2026-08-29に追加確認した。3 Contextと保存の基本方針はADR #24、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36、Invitation lifecycleと再参加Participant寿命はADR #52、保存保護・Retentionの条件C1はADR #55で採用した。C1は2026-09-20に充足した。ERの個別Group ExpenseとSettlement CaseのData Owner／Aggregateおよび予約／精算更新の原子性はADR #152で採用した。Receipt／CategoryのOwner／Rootと1Bundle・Expense登録原子性はADR #170で採用した。具体Port、PersistenceとProjection実装、本番本人性・配送、Context間認可は[設計Gate](../product/design-gates.md)で追跡し、S0〜S3を含む必要条件が揃うまで依存実装Readyへ進めない。
 
 ## Modelの選択
 
@@ -115,7 +115,7 @@ Aggregateは同一TransactionでInvariantを守る必要がある最小境界と
 - 1つのEntity／Value Objectへ自然に属さないStatelessなDomain RuleだけをDomain Service候補とする。
 - Aggregateを跨ぐRule、認可、Read Model導出、Application Coordinationを1つのDomain Serviceへ集約しない。
 - Group全体の相殺とPayment Instruction導出は、具体例、決定性、計算量、整合性境界を確認して配置を決める。
-- Group ManagementはGroupをRootとして現在のParticipantとOwner Roleを所有する。ERはGroup Expenseの登録時Participant／payer／Split／負担とSource Ownerを固定する。Settlementは固定Case集合と不変Revisionを所有する。現在Membershipの判定と過去事実を混同しない。Category、Receipt、具体Participant照会／認可Portは未確定であり、Application層へ仮置きして既成事実化しない。
+- Group ManagementはGroupをRootとして現在のParticipantとOwner Roleを所有する。ERはGroup Expenseの登録時Participant／payer／Split／負担とSource Ownerを固定する。Settlementは固定Case集合と不変Revisionを所有する。現在Membershipの判定と過去事実を混同しない。Receiptと個別CategoryのRootはADR #170に従う。具体Participant照会／認可Portは未確定であり、Application層へ仮置きして既成事実化しない。
 
 ## Eventと永続化
 
