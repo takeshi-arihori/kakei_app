@@ -1,7 +1,15 @@
 import {
-  SettlementCaseInvariantViolation,
-  type SettlementCaseInvariantViolationCode,
-} from './settlement-case-invariant-violation.js';
+  canonicalUuid,
+  copyUtc,
+  nonempty,
+  requireCondition,
+} from './settlement-case-validation.js';
+import {
+  PaymentAttempt,
+  type ReportSettlementPayment,
+  type DecideSettlementReceipt,
+  type ReturnSettlementPayment,
+} from './entities/payment-attempt.js';
 import { SettlementSnapshotContent } from './value-objects/settlement-snapshot-content.js';
 
 declare const caseIdBrand: unique symbol;
@@ -24,7 +32,7 @@ export type PaymentInstructionId = string & {
   readonly [instructionIdBrand]: true;
 };
 
-/** 承認・再申請・取り下げのCase状態。支払・取消は後続Task。 */
+/** 承認・新版・取り下げ・支払完了のCase状態。取消は後続Task。 */
 export type SettlementCaseStatus =
   'AwaitingApproval' | 'Rejected' | 'PaymentActive' | 'Archived' | 'Withdrawn';
 
@@ -48,6 +56,14 @@ export type SnapshotPaymentInstruction = {
   readonly amount: bigint;
   /** 内部額の通貨。公開Scalar表現は後続契約とする。 */
   readonly currency: 'JPY';
+};
+
+/** 指示の不変内容に、報告履歴から導出する現在状態を添える。 */
+export type SettlementPaymentInstruction = SnapshotPaymentInstruction & {
+  /** 差し戻し後はUnpaidへ戻り、過去報告は別履歴として残る。 */
+  readonly status: 'Unpaid' | 'Reported' | 'Received';
+  /** この指示の最新Attempt。未報告ならnull。 */
+  readonly latestAttemptId: PaymentAttempt['attemptId'] | null;
 };
 
 /** Caseが所有する不変なRevision内容。暗号化保存Schemaではない。 */
@@ -159,24 +175,6 @@ export type SettlementWithdrawal = {
   readonly withdrawnAt: string;
 };
 
-const requireCondition = (
-  condition: boolean,
-  code: SettlementCaseInvariantViolationCode,
-): void => {
-  if (!condition) throw new SettlementCaseInvariantViolation(code);
-};
-const canonicalUuid = (value: string): boolean =>
-  typeof value === 'string' &&
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
-const nonempty = (value: string): boolean =>
-  typeof value === 'string' && value.trim().length > 0;
-const copyUtc = (date: Date): string => {
-  requireCondition(
-    date instanceof Date && Number.isFinite(date.getTime()),
-    'UTC_INSTANT_INVALID',
-  );
-  return date.toISOString();
-};
 const noInstructions: readonly SnapshotPaymentInstruction[] = Object.freeze([]);
 const noExpenseIds: readonly string[] = Object.freeze([]);
 
@@ -197,11 +195,13 @@ export class SettlementCase {
     readonly approvals: readonly SettlementApproval[],
     /** 本人判断・再申請・全体取り下げからRootが確定するCase状態。 */
     readonly status: SettlementCaseStatus,
-    /** 初回1、判断・再申請・取り下げ成功ごと+1。保存CASは後続契約。 */
+    /** 初回1、判断・再申請・取り下げ・支払操作成功ごと+1。実保存CASは別契約。 */
     readonly version: number,
+    /** 同指示の全支払報告と受取判断。Root経由でのみ履歴を進める。 */
+    readonly paymentAttempts: readonly PaymentAttempt[],
     /** 理由付き全体取り下げの記録。未取り下げならnull。 */
     readonly withdrawal: SettlementWithdrawal | null,
-    /** No Payment Required成立時の最終承認UTC、その他はnull。 */
+    /** 全0承認または全受取成立の最終操作UTC。未Archiveならnull。 */
     readonly archivedAt: string | null,
   ) {
     this.originalApplicant = revisions[0].applicant;
@@ -475,11 +475,149 @@ export class SettlementCase {
   }
 
   /**
-   * 初回・新版の承認で成立するArchive結果。支払完了Archiveは後続Task。
-   * @returns 全0円の全員承認ならNoPaymentRequired、それ以外はnull。
+   * 支払なしの全員承認と、全支払受取確認によるArchiveを区別する。
+   * @returns 全0承認ならNoPaymentRequired、全受取ならAllPaymentsReceived、未完了ならnull。
    */
-  get archiveReason(): 'NoPaymentRequired' | null {
-    return this.status === 'Archived' ? 'NoPaymentRequired' : null;
+  get archiveReason(): 'NoPaymentRequired' | 'AllPaymentsReceived' | null {
+    if (this.status !== 'Archived') return null;
+    return this.snapshot.paymentInstructionCandidates.length === 0
+      ? 'NoPaymentRequired'
+      : 'AllPaymentsReceived';
+  }
+
+  /**
+   * 支払者本人の全額報告を新Attemptとして記録する。実送金は行わない。
+   * @param input 本人・版・固定指示に束縛した内部報告事実。
+   * @returns 全履歴と新報告を保持し、受取確認を待つ新Root。
+   * @throws SettlementCaseInvariantViolation 状態・参照・版・本人・額・ID・時刻・既存報告が無効な場合。
+   */
+  reportPayment(input: ReportSettlementPayment): SettlementCase {
+    const instruction = this.requirePaymentInstruction(input);
+    const latest = this.latestAttempt(instruction.instructionId);
+    requireCondition(
+      !latest || latest.status === 'Returned',
+      'INSTRUCTION_NOT_UNPAID',
+    );
+    requireCondition(
+      !this.paymentAttempts.some((a) => a.attemptId === input.attemptId),
+      'ATTEMPT_ID_REUSED',
+    );
+    const ordinal =
+      this.paymentAttempts.filter(
+        (a) => a.instructionId === instruction.instructionId,
+      ).length + 1;
+    const attempt = PaymentAttempt.report(
+      this.snapshot.snapshotId,
+      instruction,
+      input,
+      ordinal,
+    );
+    return this.withPaymentAttempt(attempt, attempt.reportedAt);
+  }
+
+  /**
+   * 受取側本人が最新報告を確認し、全件成立時だけCaseをArchiveする。
+   * @param input 本人・現在版・指示・最新Attemptに束縛した内部判断。
+   * @returns 受取記録と全件完了判定を保持する新Root。
+   * @throws SettlementCaseInvariantViolation 状態・参照・版・最新報告・本人・時刻が無効な場合。
+   */
+  confirmReceipt(input: DecideSettlementReceipt): SettlementCase {
+    const attempt = this.requireLatestAttempt(input).confirmReceipt(input);
+    return this.withPaymentAttempt(attempt, attempt.receipt!.decidedAt);
+  }
+
+  /**
+   * 最新報告を受取側本人が理由付きで差し戻し、同指示の再報告を可能にする。
+   * @param input 本人・現在版・最新Attemptと空でない理由。
+   * @returns 旧報告factsと差し戻し履歴を保持する新Root。
+   * @throws SettlementCaseInvariantViolation 状態・版・参照・本人・理由・時刻が無効な場合。
+   */
+  returnPayment(input: ReturnSettlementPayment): SettlementCase {
+    const attempt = this.requireLatestAttempt(input).returnPayment(input);
+    return this.withPaymentAttempt(attempt, attempt.receipt!.decidedAt);
+  }
+
+  /**
+   * 承認済み固定指示の現在状態を、不変な履歴参照とともに返す。
+   * @returns 未承認なら空、承認済みなら全指示。Returned後はUnpaid、履歴は削除しない。
+   */
+  get paymentInstructions(): readonly SettlementPaymentInstruction[] {
+    if (this.revisionStatus !== 'Approved') return Object.freeze([]);
+    return Object.freeze(
+      this.snapshot.paymentInstructionCandidates.map((instruction) => {
+        const latest = this.latestAttempt(instruction.instructionId);
+        return Object.freeze({
+          ...instruction,
+          status:
+            !latest || latest.status === 'Returned'
+              ? ('Unpaid' as const)
+              : latest.status,
+          latestAttemptId: latest?.attemptId ?? null,
+        });
+      }),
+    );
+  }
+
+  private requirePaymentInstruction(
+    input: ReportSettlementPayment | DecideSettlementReceipt,
+  ): SnapshotPaymentInstruction {
+    requireCondition(
+      this.status === 'PaymentActive',
+      'CASE_NOT_PAYMENT_ACTIVE',
+    );
+    this.requireCurrentRevision(input.expectedVersion, input.snapshotId);
+    const instruction = this.snapshot.paymentInstructionCandidates.find(
+      (i) => i.instructionId === input.instructionId,
+    );
+    requireCondition(!!instruction, 'INSTRUCTION_NOT_FOUND');
+    return instruction!;
+  }
+
+  private latestAttempt(instructionId: string): PaymentAttempt | undefined {
+    return this.paymentAttempts.findLast(
+      (a) => a.instructionId === instructionId,
+    );
+  }
+
+  private requireLatestAttempt(input: DecideSettlementReceipt): PaymentAttempt {
+    const instruction = this.requirePaymentInstruction(input);
+    const attempt = this.latestAttempt(instruction.instructionId);
+    requireCondition(
+      !!attempt && attempt.attemptId === input.attemptId,
+      'ATTEMPT_MISMATCH',
+    );
+    return attempt!;
+  }
+
+  private withPaymentAttempt(
+    attempt: PaymentAttempt,
+    decidedAt: string,
+  ): SettlementCase {
+    const existing = this.paymentAttempts.some(
+      (a) => a.attemptId === attempt.attemptId,
+    );
+    const attempts = Object.freeze(
+      existing
+        ? this.paymentAttempts.map((a) =>
+            a.attemptId === attempt.attemptId ? attempt : a,
+          )
+        : [...this.paymentAttempts, attempt],
+    );
+    const received = this.snapshot.paymentInstructionCandidates.every(
+      (instruction) =>
+        attempts.findLast((a) => a.instructionId === instruction.instructionId)
+          ?.status === 'Received',
+    );
+    return new SettlementCase(
+      this.caseId,
+      this.revisions,
+      this.approvals,
+      received ? 'Archived' : 'PaymentActive',
+      this.version + 1,
+      attempts,
+      this.withdrawal,
+      received ? decidedAt : null,
+    );
   }
 
   private requireDecision(input: DecideSettlementApproval): void {
@@ -597,6 +735,7 @@ export class SettlementCase {
       approvals,
       status,
       version,
+      Object.freeze([]),
       withdrawal,
       status === 'Archived' ? decidedAt : null,
     );

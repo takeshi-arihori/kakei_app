@@ -37,7 +37,7 @@ CallerがSourceから取得した訂正済みContentを渡し、Caseが同じGro
 
 Application／ER Adapterはこの全集合とCase終端をADR152の同じcommit境界で確定し、最新の訂正済みExpenseを別Caseへ解放する必要がある。中途半端な解放やRootだけの保存を許さない。予約／版／失敗・故障注入・実際の別Case選択は後続検証。
 
-Withdrawnは終端として同じCaseを再申請・再開せず、全SnapshotとApproval／却下を残す。WithdrawalはApprovalではなく、最新RevisionのAwaitingApprovalまたはRejectedという元の判断状態を保持する。Payment Active以降は別Cancellation Rule、Attempt／取消は後続Task。
+Withdrawnは終端として同じCaseを再申請・再開せず、全SnapshotとApproval／却下を残す。WithdrawalはApprovalではなく、最新RevisionのAwaitingApprovalまたはRejectedという元の判断状態を保持する。Payment Active以降は別Cancellation Rule、Attemptの純DomainはTask164、取消は後続Task。
 
 ## 拒否・競合・接続前Gate
 
@@ -59,3 +59,5 @@ Withdrawnは終端として同じCaseを再申請・再開せず、全Snapshot�
 Case履歴のcopy／read費用はRevisionと判断数に比例して増える。公開保存前に実履歴規模・CPU／timeout／容量／CAS戦略を評価する。既存最少solverの指数Costとhistorical union人数も別に評価し、fixture数やJS安全整数の技術限界をProduct上限にしない。
 
 [正式なpre-payment部分図](../diagrams/settlement-case-revision-lifecycle.mermaid.md)を追加し、[初回図](../diagrams/settlement-initial-approval.mermaid.md)の目的は維持する。既存Rule／Owner境界を実装しcurrent-model／ADR／既存Contextmapを変更しない。公開Schema／DB／Migration／UI／Key／Audit／Runbookに接続せず更新不要。ADR55の保護・Retentionは維持、Domain plaintextをDB／Logへ直接保存しない。未接続CodeのrevertでRollback、Data変更なし。
+
+[Task164の支払Attempt契約](settlement-payment-attempt-contract.md)は新版の全員承認後も固定内容と旧判断を保持する。新版を支払段階で作り直さず、全受取ArchiveとNo Payment Requiredを区別する。取消と実予約解放・保存の未接続Gateは維持する。
