@@ -275,7 +275,7 @@
 
 実装Ready前に残る設計Gate:
 
-1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可は[ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)、Invitation lifecycleと再参加Participant寿命は[ADR #52](../adr/group-invitation-and-rejoin.md)、Snapshot保護・保持の条件C1は[ADR #55](../adr/snapshot-revision-security-and-retention.md)で採用・充足した。[ADR #152](../adr/expense-settlement-consistency-boundary.md)でERの個別Group Expense、Settlement Caseと不変Revision、予約／精算更新の同期原子的commitを採用した。Receipt／Bundle、Category所属、具体Context間Port／lock順／冪等契約、Projection、本番本人性・配送は後続設計で解消する。
+1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可は[ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)、Invitation lifecycleと再参加Participant寿命は[ADR #52](../adr/group-invitation-and-rejoin.md)、Snapshot保護・保持の条件C1は[ADR #55](../adr/snapshot-revision-security-and-retention.md)で採用・充足した。[ADR #152](../adr/expense-settlement-consistency-boundary.md)でERの個別Group Expense、Settlement Caseと不変Revision、予約／精算更新の同期原子的commitを採用した。[ADR #170](../adr/receipt-category-consistency-boundary.md)でERのReceipt Root、個別Category Root、1Bundleと対応Expenseの共通原子的commitを採用した。具体Context間Port／lock順／冪等契約、Projection、本番本人性・配送は後続設計で解消する。
 2. 旧「Transaction限定Event Sourcing／日付境界Archive」のProposalを現行仕様として扱わない。ADR #24とADR #55の承認範囲を優先する。
 3. 未移行または未確認のDecisionに依存するTaskは、GitHub上に根拠が揃うまでBlockedにする。
 
@@ -285,6 +285,6 @@
 
 - 2人限定・個人用家計・単一Payer／Payeeの旧記述は現行Ruleとして使用しない。
 - RepositoryのREADME、AGENTS、engineering docsは2026-08-23の共有割り勘Scopeへ同期済み。旧語はDeprecatedな前提を説明する場合だけ使用する。
-- 旧Issue #9で確認されたDomain Ruleはこの文書へ統合した。3 Contextと保存の基本方針はADR #24、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36、Invitation lifecycleと再参加Participant寿命はADR #52、保存保護・RetentionとSnapshot保護条件C1はADR #55に従う。ERの個別Group ExpenseとSettlement Caseの境界、予約／精算更新の原子性はADR #152に従う。Receipt／Category、具体Port、Persistence実装・保護Record種別、本番本人性・配送、Context間認可、Projectionは依存実装前に対象Taskで確定する。
+- 旧Issue #9で確認されたDomain Ruleはこの文書へ統合した。3 Contextと保存の基本方針はADR #24、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36、Invitation lifecycleと再参加Participant寿命はADR #52、保存保護・RetentionとSnapshot保護条件C1はADR #55に従う。ERの個別Group ExpenseとSettlement Caseの境界、予約／精算更新の原子性はADR #152に従う。Receipt Root／個別Category RootとBundle登録原子性は[ADR #170](../adr/receipt-category-consistency-boundary.md)に従う。具体Port、Persistence実装・保護Record種別、本番本人性・配送、Context間認可、Projectionは依存実装前に対象Taskで確定する。
 - 作業の管理先はPrivate GitHub Project #9とIssue。管理先の切替は未確定の業務設計Gateを解消しない。
 - Conflictを実装で吸収しない。

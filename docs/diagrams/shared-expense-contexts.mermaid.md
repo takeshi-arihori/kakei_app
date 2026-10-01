@@ -3,7 +3,7 @@
 - Status: Confirmed（採用済み3 Contextの範囲のみ）
 - Source of Truth: [共有割り勘の設計境界と永続化方針](../adr/shared-expense-domain-boundaries.md#decision)（Accepted、条件C1は充足済み）
 - Related: [Task #31](https://github.com/takeshi-arihori/kakei_app/issues/31)、[ADR #24](https://github.com/takeshi-arihori/kakei_app/issues/24)、[Group終了ADR #73](../adr/group-close-consistency-and-retention-boundary.md)、[支出・精算ADR #152](../adr/expense-settlement-consistency-boundary.md)
-- Last Confirmed: 2026-10-01（ADR #152の集約／原子性を追跡。図の3 Context構造は変更なし）
+- Last Confirmed: 2026-10-02（ADR #170のReceipt／Category境界を追跡。図の3 Context構造は変更なし）
 
 ## 図の目的と読み方
 
@@ -30,7 +30,7 @@ Group終了についてはADR #73で、Group ManagementがClose Intentを所有�
 
 ## 未決事項と実装Gate
 
-ADR #35／#36のGroup Management初回境界、ADR #73のGroup終了Portに加え、ADR #152でER個別Group Expense Root、Settlement Case Rootと不変Revision、予約／精算更新の同期原子的commitを採用した。この図は個別Rootやtransaction構造を描かず、文章のADRを正本とする。Receipt／Bundle、Category、具体Context間Port／lock順／冪等契約、非同期Projectionは未決であり、この図で採用しない。Group ManagementのRepository Portは[ADR #35](../adr/group-management-consistency-boundary.md)、Group終了契約は[ADR #73](../adr/group-close-consistency-and-retention-boundary.md)を正本とする。
+ADR #35／#36のGroup Management初回境界、ADR #73のGroup終了Portに加え、ADR #152でER個別Group Expense Root、Settlement Case Rootと不変Revision、予約／精算更新の同期原子的commitを採用した。この図は個別Rootやtransaction構造を描かず、文章のADRを正本とする。[ADR #170](../adr/receipt-category-consistency-boundary.md)でER Receipt Root／個別Category Rootと1Bundle・対応Expense登録原子性を採用した。具体Context間Port／lock順／冪等契約、Suggestion所有／保存、非同期Projectionは未決であり、この図で採用しない。Group ManagementのRepository Portは[ADR #35](../adr/group-management-consistency-boundary.md)、Group終了契約は[ADR #73](../adr/group-close-consistency-and-retention-boundary.md)を正本とする。
 
 条件C1はOwner Accepted、独立Security Review pass、PR #70のdevelop統合により充足した。依存Persistence実装TaskはC1だけでReadyにせず、S0〜S3とTask固有Gateを満たすまでBacklog／Blocked Yesとする。詳細は[ADRの条件C1](../adr/shared-expense-domain-boundaries.md#承認条件-c1-snapshot-revisionの保護と保存)と[設計Gate](../product/design-gates.md)で追跡する。
 
