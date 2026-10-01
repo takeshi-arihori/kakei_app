@@ -1,4 +1,9 @@
 import {
+  SettlementCancellationRequest,
+  type RequestSettlementCancellation,
+  type DecideSettlementCancellation,
+} from './entities/settlement-cancellation-request.js';
+import {
   canonicalUuid,
   copyUtc,
   nonempty,
@@ -32,9 +37,15 @@ export type PaymentInstructionId = string & {
   readonly [instructionIdBrand]: true;
 };
 
-/** 承認・新版・取り下げ・支払完了のCase状態。取消は後続Task。 */
+/** 承認・新版・取り下げ・支払・取消のCase状態。保存の成立は別契約。 */
 export type SettlementCaseStatus =
-  'AwaitingApproval' | 'Rejected' | 'PaymentActive' | 'Archived' | 'Withdrawn';
+  | 'AwaitingApproval'
+  | 'Rejected'
+  | 'PaymentActive'
+  | 'Archived'
+  | 'Withdrawn'
+  | 'CancellationPending'
+  | 'Cancelled';
 
 /** 本人性確立後にApplicationが解決する参照。Client申告を認可証拠にしない。 */
 export type SettlementApplicant = {
@@ -193,12 +204,14 @@ export class SettlementCase {
     readonly revisions: readonly SettlementSnapshotRevision[],
     /** 記録順の判断履歴。Readonlyだけでなく配列・各記録をfreezeする。 */
     readonly approvals: readonly SettlementApproval[],
-    /** 本人判断・再申請・全体取り下げからRootが確定するCase状態。 */
+    /** 承認・再申請・取り下げ・支払・全体取消からRootが確定するCase状態。 */
     readonly status: SettlementCaseStatus,
-    /** 初回1、判断・再申請・取り下げ・支払操作成功ごと+1。実保存CASは別契約。 */
+    /** 初回1、承認・再申請・取り下げ・支払・取消操作成功ごと+1。実保存CASは別契約。 */
     readonly version: number,
     /** 同指示の全支払報告と受取判断。Root経由でのみ履歴を進める。 */
     readonly paymentAttempts: readonly PaymentAttempt[],
+    /** 取消要求と全判断の履歴。拒否後も削除しない。 */
+    readonly cancellations: readonly SettlementCancellationRequest[],
     /** 理由付き全体取り下げの記録。未取り下げならnull。 */
     readonly withdrawal: SettlementWithdrawal | null,
     /** 全0承認または全受取成立の最終操作UTC。未Archiveならnull。 */
@@ -439,11 +452,13 @@ export class SettlementCase {
   }
 
   /**
-   * Case取り下げ時に解放すべき全対象を返す。Adapterの実解放済み証拠ではない。
-   * @returns Withdrawnなら初回固定集合全件、その他は不変な空配列。
+   * 取り下げまたは全員取消成立時の全対象解放判断。実解放の証拠ではない。
+   * @returns WithdrawnまたはCancelledなら初回固定集合全件、その他は不変空配列。
    */
   get expenseIdsToRelease(): readonly string[] {
-    return this.status === 'Withdrawn' ? this.targetExpenseIds : noExpenseIds;
+    return this.status === 'Withdrawn' || this.status === 'Cancelled'
+      ? this.targetExpenseIds
+      : noExpenseIds;
   }
 
   /**
@@ -615,8 +630,129 @@ export class SettlementCase {
       received ? 'Archived' : 'PaymentActive',
       this.version + 1,
       attempts,
+      this.cancellations,
       this.withdrawal,
       received ? decidedAt : null,
+    );
+  }
+
+  /**
+   * 支払Attemptが一件もないCaseの全体取消を理由付きで求める。
+   * @param input 元申請者または現在Ownerとして束縛した内部要求。
+   * @returns 全員の明示同意を待ち、支払報告を禁止する新Root。
+   * @throws SettlementCaseInvariantViolation 状態・Attempt存在・版・参照・資格・理由・ID・時刻が無効な場合。
+   */
+  requestCancellation(input: RequestSettlementCancellation): SettlementCase {
+    requireCondition(
+      this.status === 'PaymentActive',
+      'CASE_NOT_PAYMENT_ACTIVE',
+    );
+    this.requireCurrentRevision(input.expectedVersion, input.snapshotId);
+    this.requireCaseActor(input);
+    requireCondition(
+      this.paymentAttempts.length === 0,
+      'CANCELLATION_HAS_ATTEMPTS',
+    );
+    requireCondition(
+      !this.cancellations.some(
+        (c) => c.cancellationId === input.cancellationId,
+      ),
+      'CANCELLATION_ID_REUSED',
+    );
+    const request = SettlementCancellationRequest.request(
+      this.snapshot.snapshotId,
+      this.snapshot.content.requiredApproverIds,
+      input,
+      this.cancellations.length + 1,
+    );
+    return this.withCancellation(request);
+  }
+
+  /**
+   * 固定必要本人の取消同意を記録し、全員成立時だけ全体をCancelledにする。
+   * @param input 現在版・Snapshot・取消要求へ束縛した本人判断。
+   * @returns 全員前Pending、全員後全対象解放の判断を返す新Root。
+   * @throws SettlementCaseInvariantViolation 状態・版・参照・本人・重複・時刻が無効な場合。
+   */
+  agreeCancellation(input: DecideSettlementCancellation): SettlementCase {
+    return this.withCancellation(this.requireCancellation(input).agree(input));
+  }
+
+  /**
+   * 固定必要本人の取消拒否を残し、固定内容の支払を再開する。
+   * @param input 現在版・Snapshot・要求へ束縛した本人判断。拒否理由は必須にしない。
+   * @returns 要求・同意・拒否を保持するPaymentActiveの新Root。
+   * @throws SettlementCaseInvariantViolation 状態・版・参照・本人・重複・時刻が無効な場合。
+   */
+  declineCancellation(input: DecideSettlementCancellation): SettlementCase {
+    return this.withCancellation(
+      this.requireCancellation(input).decline(input),
+    );
+  }
+
+  /**
+   * 同Caseの最新要求を返す。過去の拒否済み要求はcancellationsに保持する。
+   * @returns 最新の不変要求。未要求ならnull。
+   */
+  get latestCancellation(): SettlementCancellationRequest | null {
+    return this.cancellations.at(-1) ?? null;
+  }
+
+  /**
+   * 全員同意で成立した取消時刻を返す。Archiveとは区別する。
+   * @returns Cancelledなら最後の同意UTC、その他null。
+   */
+  get cancelledAt(): string | null {
+    return this.status === 'Cancelled'
+      ? this.latestCancellation!.decisions.at(-1)!.decidedAt
+      : null;
+  }
+
+  private requireCancellation(
+    input: DecideSettlementCancellation,
+  ): SettlementCancellationRequest {
+    requireCondition(
+      this.status === 'CancellationPending',
+      'CASE_NOT_CANCELLATION_PENDING',
+    );
+    this.requireCurrentRevision(input.expectedVersion, input.snapshotId);
+    const request = this.latestCancellation;
+    requireCondition(
+      !!request && request.cancellationId === input.cancellationId,
+      'CANCELLATION_MISMATCH',
+    );
+    return request!;
+  }
+
+  private withCancellation(
+    request: SettlementCancellationRequest,
+  ): SettlementCase {
+    const existing = this.cancellations.some(
+      (c) => c.cancellationId === request.cancellationId,
+    );
+    const cancellations = Object.freeze(
+      existing
+        ? this.cancellations.map((c) =>
+            c.cancellationId === request.cancellationId ? request : c,
+          )
+        : [...this.cancellations, request],
+    );
+    const status: SettlementCaseStatus =
+      request.status === 'Agreed'
+        ? 'Cancelled'
+        : request.status === 'Declined'
+          ? 'PaymentActive'
+          : 'CancellationPending';
+    return new SettlementCase(
+      this.caseId,
+      this.revisions,
+      this.approvals,
+      status,
+      this.version + 1,
+      this.paymentAttempts,
+      cancellations,
+      this.withdrawal,
+      null,
     );
   }
 
@@ -735,6 +871,7 @@ export class SettlementCase {
       approvals,
       status,
       version,
+      Object.freeze([]),
       Object.freeze([]),
       withdrawal,
       status === 'Archived' ? decidedAt : null,
