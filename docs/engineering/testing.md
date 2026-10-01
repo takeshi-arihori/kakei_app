@@ -108,6 +108,23 @@ pnpm build
 
 必要に応じて`pnpm test:e2e`、Integration、Schema差分、Migration検証を追加する。実行しないCheckは理由と残リスクをPRへ記載する。
 
+## Web入口のブラウザ検証
+
+Webの `test:e2e` はPlaywrightを使用し、`*.e2e.ts` を対象にする。Vitestの `*.spec.ts` とは分離する。Production Buildを先に用意し、設定が専用の127.0.0.1:3180 Serverを起動・終了する。既存Serverは再利用しない。
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter @kakei/web exec playwright install --no-remove chromium
+pnpm --filter @kakei/web build
+pnpm --filter @kakei/web test:e2e
+```
+
+CIは `pnpm check` のBuild後、Chromiumを `playwright install --with-deps chromium` で準備して同じE2Eを実行する。Retriesは0。結果・Trace・Screenshotは `apps/web/test-results/` に生成し、Gitへ含めない。Screenshotは架空データのない入口のReflow確認用とする。
+
+入口の検証は目的・日本語・Keyboard Focus・320px／Desktop・200%のCSS zoom／文字拡大・Contrast・Reduced Motion・不明Routeからの復帰を対象にする。Chromiumの検証結果から全BrowserやWCAG全適合を主張しない。NativeブラウザZoom、Screen Reader実機、Firefox／WebKitは別Evidenceが必要。機能接続後の主要業務journeyは各Sliceで追加する。
+
+開発依存 `@playwright/test` は1.63.0に固定する。公式の[導入手順](https://playwright.dev/docs/intro)、[Release Notes](https://playwright.dev/docs/release-notes)、[Apache-2.0 License](https://github.com/microsoft/playwright/blob/main/LICENSE)、[Security Advisories](https://github.com/microsoft/playwright/security/advisories)を2026-10-01に確認。公開Advisory一覧に掲載なし。Production依存への追加は行わず、LockfileのNext optional peer解決とPlaywright自身だけを更新する。
+
 ## 完了条件
 
 - RequirementとDone Criteriaの各項目がTestまたは明示的な検証へTraceできる。
