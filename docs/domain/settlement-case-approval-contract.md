@@ -6,7 +6,7 @@
 
 `SettlementCase`はCase ID、初回対象Expense ID集合、元申請者の安定Actor subjectとParticipant、不変な初回Revision、別に追記するApprovalを所有し、全員承認のInvariantを判断する。各成功操作は同じCase IDの新Rootを返し、元Root・Revision・記録済み判断を変更しない。Rootを保存・復元するRepositoryやApplicationはまだ追加しない。
 
-Revisionは独立した可変Rootではなく、freezeした内部内容Record。初回ordinal=1、previousSnapshotId=null、Case／Snapshot ID、実申請者、UTC申請時刻、[算術Content](settlement-snapshot-content-contract.md)、識別済み指示候補を固定する。Caseの現在Revision状態はCaseの判断履歴から導出し、内容Recordを書き換えない。登録Actor、購入日、表示名など追加保存／画面factsの取得契約、全Revision履歴、再申請は後続Taskへ分離する。このRecordを実Snapshot保存／公開DTOの完成と扱わない。
+Revisionは独立した可変Rootではなく、freezeした内部内容Record。初回ordinal=1、previousSnapshotId=null、Case／Snapshot ID、実申請者、UTC申請時刻、[算術Content](settlement-snapshot-content-contract.md)、識別済み指示候補を固定する。Caseの現在Revision状態は同じSnapshot IDの判断履歴から導出し、内容Recordを書き換えない。登録Actor、購入日、表示名など追加保存／画面factsの取得契約、全Revision履歴と再申請・取り下げは[Task162の契約](settlement-case-revision-contract.md)で追加する。このRecordを実Snapshot保存／公開DTOの完成と扱わない。
 
 候補の額・相手・canonical順は既存[最少計算](settlement-calculation-contract.md)から再利用する。Callerが同順に渡す指示IDを固定し、全員承認時に同じID／金額／相手の指示全件を有効にする。個別Instruction／Attemptの状態更新・支払報告・受取確認・差し戻し・完了Archive・取消は別Task。現在は支払実行Portやアプリ内送金を提供しない。
 
@@ -34,7 +34,7 @@ Contractの業務条件はcurrent-modelのConfirmed、Root ownershipはADR #152�
 | ACTOR_SUBJECT_EMPTY / PARTICIPANT_ID_EMPTY | 空／空白だけ／文字列以外の初回主体参照 |
 | UTC_INSTANT_INVALID | valid Date以外の申請／判断時刻 |
 | INSTRUCTION_COUNT_MISMATCH / INSTRUCTION_ID_DUPLICATED | 候補とIDの数が不一致、候補内ID重複 |
-| CASE_NOT_AWAITING_APPROVAL | Rejected／PaymentActive／Archivedに対する追加判断 |
+| CASE_NOT_AWAITING_APPROVAL | Rejected／PaymentActive／Archived／Withdrawnに対する追加判断 |
 | CASE_VERSION_CONFLICT / SNAPSHOT_MISMATCH | 読取Case版が不一致または安全整数以外、現在Snapshot参照が不一致 |
 | PARTICIPANT_NOT_REQUIRED / APPROVAL_ALREADY_RECORDED | 固定集合外の判断、同Participantの二重／反転判断 |
 | REJECTION_REASON_EMPTY | 空／空白だけ／文字列以外の却下理由 |
@@ -47,7 +47,7 @@ TimestampはCallerからvalid Dateを受け取りUTC ISOへコピーする。Dom
 
 ## 後続Gate・文書・Rollback
 
-[Settlement Inventory](../product/mvp-web-settlement-payment-inventory.md)にある公開認可・具体Port／lock／冪等結果／予約保存・保護Record種別／Migration／Key／Audit／本番Auth・Read契約は未完了。Current OwnerやLeft Participantのアクセス範囲、Source facts取得と原子性、競合時部分反映なしはApplication／各Owner Adapterで実検証を要する。Case元申請者の再申請／Withdraw、Rejected訂正、Attempt／取消／全受取完了Archiveも後続Task。本ScopeのRejected／PaymentActiveを全Lifecycleの終端と扱わない。
+[Settlement Inventory](../product/mvp-web-settlement-payment-inventory.md)にある公開認可・具体Port／lock／冪等結果／予約保存・保護Record種別／Migration／Key／Audit／本番Auth・Read契約は未完了。Current OwnerやLeft Participantのアクセス範囲、Source facts取得と原子性、競合時部分反映なしはApplication／各Owner Adapterで実検証を要する。再申請／Withdrawの純Domain部分はTask162で追加する。Rejected元Expense訂正・実Application接続、Attempt／取消／全受取完了Archiveは後続Task。本ScopeのRejected／PaymentActiveを全Lifecycleの終端と扱わない。再申請とWithdrawnの契約・全履歴保持は[追加契約](settlement-case-revision-contract.md)を参照する。
 
 Domain plaintext値をDB／Log／Auditへ直接保存してはならない。ADR #55のContext別保護とRetentionを維持し、既存snapshot-revision kindへCase可変状態や別Recordを押し込まない。SourceOwner／購入日等の追加factsを含む保存契約は別途設計する。既存solverの指数探索とhistorical unionについて公開接続前の入力規模・CPU／timeout／制限方針を引き継ぐ。6人fixtureはProduct上限ではない。
 

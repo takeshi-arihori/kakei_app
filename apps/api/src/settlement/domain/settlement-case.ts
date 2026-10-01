@@ -24,9 +24,9 @@ export type PaymentInstructionId = string & {
   readonly [instructionIdBrand]: true;
 };
 
-/** 初回承認だけのCase状態。後続の再申請・支払・取消は別Taskで追加する。 */
+/** 承認・再申請・取り下げのCase状態。支払・取消は後続Task。 */
 export type SettlementCaseStatus =
-  'AwaitingApproval' | 'Rejected' | 'PaymentActive' | 'Archived';
+  'AwaitingApproval' | 'Rejected' | 'PaymentActive' | 'Archived' | 'Withdrawn';
 
 /** 本人性確立後にApplicationが解決する参照。Client申告を認可証拠にしない。 */
 export type SettlementApplicant = {
@@ -50,16 +50,16 @@ export type SnapshotPaymentInstruction = {
   readonly currency: 'JPY';
 };
 
-/** Caseが所有する初回の不変な業務内容。暗号化保存Schemaではない。 */
+/** Caseが所有する不変なRevision内容。暗号化保存Schemaではない。 */
 export type SettlementSnapshotRevision = {
   /** 所有するCaseとの不変な関連。 */
   readonly caseId: SettlementCaseId;
   /** この内容を識別する不変参照。 */
   readonly snapshotId: SnapshotRevisionId;
-  /** 初回のみを扱う。再申請のOrdinal契約は後続Task。 */
-  readonly ordinal: 1;
-  /** 初回には前版がない。却下後の再申請は未実装。 */
-  readonly previousSnapshotId: null;
+  /** 初回1、再申請ごと+1。同じCase内の連鎖順。 */
+  readonly ordinal: number;
+  /** 初回null、新版は直前のRejected Revision参照。 */
+  readonly previousSnapshotId: SnapshotRevisionId | null;
   /** 実際の申請者。Caseの最初の申請者を将来版で置き換えない。 */
   readonly applicant: SettlementApplicant;
   /** 信頼するCaller時刻をUTCへコピーした申請時刻。 */
@@ -118,6 +118,47 @@ export type RejectSettlementApproval = DecideSettlementApproval & {
   readonly reason: string;
 };
 
+/** 再申請・取り下げの内部資格事実。具体認可PortやClient role proofではない。 */
+export type SettlementCaseActor = {
+  /** Applicationが本人へ束縛して解決した操作Participantと安定主体参照。 */
+  readonly applicant: SettlementApplicant;
+  /** 同一Group・同一判断点で取得する現在Ownerの主体参照。正しさはSource PRE。 */
+  readonly currentOwnerSubject: string;
+};
+
+/** 訂正済みSourceから同じ対象集合を再申請する内部入力。 */
+export type ResubmitSettlementCase = Omit<StartSettlementCase, 'caseId'> &
+  SettlementCaseActor & {
+    /** 読取時のCase版。実保存CASはApplication/Adapterが検証する。 */
+    readonly expectedVersion: number;
+    /** 新snapshotIdとは別の、再申請元の現在Revision参照。 */
+    readonly currentSnapshotId: string;
+  };
+
+/** AwaitingApprovalまたはRejected Case全体の理由付き取り下げ入力。 */
+export type WithdrawSettlementCase = SettlementCaseActor & {
+  /** 読取時のCase版。実予約解放とのatomic commitは後続責務。 */
+  readonly expectedVersion: number;
+  /** 取り下げ時点の現在Revision参照。 */
+  readonly snapshotId: string;
+  /** 元の理由を履歴へ保持し、空白だけを拒否する。 */
+  readonly reason: string;
+  /** 信頼するCaller時刻をUTCへコピーして記録する。 */
+  readonly withdrawnAt: Date;
+};
+
+/** 全Revisionと判断を残してCaseを終端にした不変な取り下げ記録。 */
+export type SettlementWithdrawal = {
+  /** 取り下げ時の最新Revision。不成立な内容を承認済みに変更しない。 */
+  readonly snapshotId: SnapshotRevisionId;
+  /** 実際の操作本人。現在Owner factをこの記録で証明しない。 */
+  readonly applicant: SettlementApplicant;
+  /** 取り下げ理由を元の内容で保持する。Logへ出さない。 */
+  readonly reason: string;
+  /** Caller DateからコピーしたUTC時刻。 */
+  readonly withdrawnAt: string;
+};
+
 const requireCondition = (
   condition: boolean,
   code: SettlementCaseInvariantViolationCode,
@@ -137,10 +178,11 @@ const copyUtc = (date: Date): string => {
   return date.toISOString();
 };
 const noInstructions: readonly SnapshotPaymentInstruction[] = Object.freeze([]);
+const noExpenseIds: readonly string[] = Object.freeze([]);
 
 /** 固定対象・不変Revision・本人判断と全員承認Invariantを所有するRoot。 */
 export class SettlementCase {
-  /** 初回から変えない対象Expense集合。現在未精算一覧から再選択しない。 */
+  /** 初回から変えない対象Expense集合。新版にも追加・除外を許可しない。 */
   readonly targetExpenseIds: readonly string[];
 
   /** Case最初の申請者。Participant寿命と安定Actor参照を区別して保持する。 */
@@ -149,20 +191,22 @@ export class SettlementCase {
   private constructor(
     /** Caseを追跡する安定参照。 */
     readonly caseId: SettlementCaseId,
-    /** 初回内容は判断操作で置換・変更しない。 */
-    readonly snapshot: SettlementSnapshotRevision,
+    /** 旧内容を変えずに追記する全Revision履歴。 */
+    readonly revisions: readonly SettlementSnapshotRevision[],
     /** 記録順の判断履歴。Readonlyだけでなく配列・各記録をfreezeする。 */
     readonly approvals: readonly SettlementApproval[],
-    /** Rootだけが全員承認または却下から確定する状態。 */
+    /** 本人判断・再申請・全体取り下げからRootが確定するCase状態。 */
     readonly status: SettlementCaseStatus,
-    /** 初回1、判断成功ごと+1。保存AdapterのCASは後続契約。 */
+    /** 初回1、判断・再申請・取り下げ成功ごと+1。保存CASは後続契約。 */
     readonly version: number,
+    /** 理由付き全体取り下げの記録。未取り下げならnull。 */
+    readonly withdrawal: SettlementWithdrawal | null,
     /** No Payment Required成立時の最終承認UTC、その他はnull。 */
     readonly archivedAt: string | null,
   ) {
-    this.originalApplicant = snapshot.applicant;
+    this.originalApplicant = revisions[0].applicant;
     this.targetExpenseIds = Object.freeze(
-      snapshot.content.expenses.map((expense) => expense.expenseId),
+      revisions[0].content.expenses.map((expense) => expense.expenseId),
     );
     Object.freeze(this);
   }
@@ -174,6 +218,21 @@ export class SettlementCase {
    * @throws SettlementCaseInvariantViolation 内容VO、ID、主体参照、時刻、指示ID束縛が無効な場合。
    */
   static start(input: StartSettlementCase): SettlementCase {
+    const snapshot = SettlementCase.createRevision(input, 1, null);
+    return SettlementCase.withDecisions(
+      Object.freeze([snapshot]),
+      SettlementCase.selfApproval(snapshot),
+      1,
+      snapshot.submittedAt,
+      null,
+    );
+  }
+
+  private static createRevision(
+    input: StartSettlementCase,
+    ordinal: number,
+    previousSnapshotId: SnapshotRevisionId | null,
+  ): SettlementSnapshotRevision {
     requireCondition(
       input.content instanceof SettlementSnapshotContent,
       'SNAPSHOT_CONTENT_INVALID',
@@ -207,8 +266,8 @@ export class SettlementCase {
     const snapshot: SettlementSnapshotRevision = Object.freeze({
       caseId: input.caseId as SettlementCaseId,
       snapshotId: input.snapshotId as SnapshotRevisionId,
-      ordinal: 1,
-      previousSnapshotId: null,
+      ordinal,
+      previousSnapshotId,
       applicant: Object.freeze({
         actorSubject: input.applicant.actorSubject,
         participantId: input.applicant.participantId,
@@ -217,7 +276,13 @@ export class SettlementCase {
       content: input.content,
       paymentInstructionCandidates: Object.freeze(candidates),
     });
-    const approvals: readonly SettlementApproval[] = Object.freeze(
+    return snapshot;
+  }
+
+  private static selfApproval(
+    snapshot: SettlementSnapshotRevision,
+  ): readonly SettlementApproval[] {
+    return Object.freeze(
       snapshot.content.requiredApproverIds.includes(
         snapshot.applicant.participantId,
       )
@@ -226,13 +291,12 @@ export class SettlementCase {
               snapshotId: snapshot.snapshotId,
               participantId: snapshot.applicant.participantId,
               decision: 'Approved' as const,
-              decidedAt: submittedAt,
+              decidedAt: snapshot.submittedAt,
               reason: null,
             }),
           ]
         : [],
     );
-    return SettlementCase.withDecisions(snapshot, approvals, 1, submittedAt);
   }
 
   /**
@@ -259,13 +323,145 @@ export class SettlementCase {
   }
 
   /**
+   * 同じ対象集合の訂正済み内容を新版にし、旧判断を継承せず改めて承認を求める。
+   * @param input 資格・Source・期待Expense版のPREをApplicationで満たす内部事実。
+   * @returns 旧Revisionと全判断を残す新Root。元申請者と対象集合は不変。
+   * @throws SettlementCaseInvariantViolation 状態・資格・版・参照・集合・新規ID・内容・時刻が無効な場合。
+   */
+  resubmit(input: ResubmitSettlementCase): SettlementCase {
+    requireCondition(this.status === 'Rejected', 'CASE_NOT_REJECTED');
+    this.requireCurrentRevision(input.expectedVersion, input.currentSnapshotId);
+    this.requireCaseActor(input);
+    const snapshot = SettlementCase.createRevision(
+      {
+        caseId: this.caseId,
+        snapshotId: input.snapshotId,
+        content: input.content,
+        applicant: input.applicant,
+        submittedAt: input.submittedAt,
+        instructionIds: input.instructionIds,
+      },
+      this.revisions.length + 1,
+      this.snapshot.snapshotId,
+    );
+    requireCondition(
+      snapshot.content.groupId === this.revisions[0].content.groupId,
+      'REVISION_GROUP_MISMATCH',
+    );
+    const ids = snapshot.content.expenses.map((expense) => expense.expenseId);
+    requireCondition(
+      ids.length === this.targetExpenseIds.length &&
+        ids.every((id, i) => id === this.targetExpenseIds[i]),
+      'TARGET_EXPENSE_SET_MISMATCH',
+    );
+    requireCondition(
+      !this.revisions.some(
+        (revision) => revision.snapshotId === snapshot.snapshotId,
+      ),
+      'SNAPSHOT_ID_REUSED',
+    );
+    const usedInstructions = new Set(
+      this.revisions.flatMap((revision) =>
+        revision.paymentInstructionCandidates.map(
+          (candidate) => candidate.instructionId,
+        ),
+      ),
+    );
+    requireCondition(
+      snapshot.paymentInstructionCandidates.every(
+        (candidate) => !usedInstructions.has(candidate.instructionId),
+      ),
+      'INSTRUCTION_ID_REUSED',
+    );
+    return SettlementCase.withDecisions(
+      Object.freeze([...this.revisions, snapshot]),
+      Object.freeze([
+        ...this.approvals,
+        ...SettlementCase.selfApproval(snapshot),
+      ]),
+      this.version + 1,
+      snapshot.submittedAt,
+      null,
+    );
+  }
+
+  /**
+   * 理由を残してCase全体を取り下げる。実予約解放は共通commitの後続責務。
+   * @param input 元申請者または現在Ownerとして本人へ束縛した操作事実。
+   * @returns 全履歴と全対象解放の判断を保持するWithdrawn終端Root。
+   * @throws SettlementCaseInvariantViolation 状態・資格・版・Revision・理由・時刻が無効な場合。
+   */
+  withdraw(input: WithdrawSettlementCase): SettlementCase {
+    requireCondition(
+      this.status === 'AwaitingApproval' || this.status === 'Rejected',
+      'CASE_CANNOT_BE_WITHDRAWN',
+    );
+    this.requireCurrentRevision(input.expectedVersion, input.snapshotId);
+    this.requireCaseActor(input);
+    requireCondition(nonempty(input.reason), 'WITHDRAWAL_REASON_EMPTY');
+    const withdrawnAt = copyUtc(input.withdrawnAt);
+    const withdrawal = Object.freeze({
+      snapshotId: this.snapshot.snapshotId,
+      applicant: Object.freeze({
+        actorSubject: input.applicant.actorSubject,
+        participantId: input.applicant.participantId,
+      }),
+      reason: input.reason,
+      withdrawnAt,
+    });
+    return SettlementCase.withDecisions(
+      this.revisions,
+      this.approvals,
+      this.version + 1,
+      withdrawnAt,
+      withdrawal,
+    );
+  }
+
+  /**
+   * 最新Revision内容を返す。旧版はrevisionsに保持し、再申請で書き換えない。
+   * @returns 初回または最新の不変Revision内容。
+   */
+  get snapshot(): SettlementSnapshotRevision {
+    return this.revisions[this.revisions.length - 1];
+  }
+
+  /**
+   * 最新Revisionの判断だけを取り出す。旧承認を新版の成立条件へ混ぜない。
+   * @returns 最新Snapshot参照に属する不変の判断配列。
+   */
+  get currentRevisionApprovals(): readonly SettlementApproval[] {
+    return Object.freeze(
+      this.approvals.filter(
+        (approval) => approval.snapshotId === this.snapshot.snapshotId,
+      ),
+    );
+  }
+
+  /**
+   * Case取り下げ時に解放すべき全対象を返す。Adapterの実解放済み証拠ではない。
+   * @returns Withdrawnなら初回固定集合全件、その他は不変な空配列。
+   */
+  get expenseIdsToRelease(): readonly string[] {
+    return this.status === 'Withdrawn' ? this.targetExpenseIds : noExpenseIds;
+  }
+
+  /**
    * 内容を変えずに、Caseの判断履歴から現在Revisionの成立状態を返す。
-   * @returns 支払有効または0円ArchiveならApproved、それ以外は現在の判断状態。
+   * @returns 最新Revisionの判断状態。Case取り下げで承認成立へ変更しない。
    */
   get revisionStatus(): 'AwaitingApproval' | 'Rejected' | 'Approved' {
-    return this.status === 'PaymentActive' || this.status === 'Archived'
+    const approvals = this.currentRevisionApprovals;
+    if (approvals.some((approval) => approval.decision === 'Rejected'))
+      return 'Rejected';
+    return this.snapshot.content.requiredApproverIds.every((id) =>
+      approvals.some(
+        (approval) =>
+          approval.participantId === id && approval.decision === 'Approved',
+      ),
+    )
       ? 'Approved'
-      : this.status;
+      : 'AwaitingApproval';
   }
 
   /**
@@ -279,7 +475,7 @@ export class SettlementCase {
   }
 
   /**
-   * 初回承認で成立するArchive結果を返す。支払完了Archiveは後続Task。
+   * 初回・新版の承認で成立するArchive結果。支払完了Archiveは後続Task。
    * @returns 全0円の全員承認ならNoPaymentRequired、それ以外はnull。
    */
   get archiveReason(): 'NoPaymentRequired' | null {
@@ -291,24 +487,50 @@ export class SettlementCase {
       this.status === 'AwaitingApproval',
       'CASE_NOT_AWAITING_APPROVAL',
     );
-    requireCondition(
-      Number.isSafeInteger(input.expectedVersion) &&
-        input.expectedVersion === this.version,
-      'CASE_VERSION_CONFLICT',
-    );
-    requireCondition(
-      input.snapshotId === this.snapshot.snapshotId,
-      'SNAPSHOT_MISMATCH',
-    );
+    this.requireCurrentRevision(input.expectedVersion, input.snapshotId);
     requireCondition(
       this.snapshot.content.requiredApproverIds.includes(input.participantId),
       'PARTICIPANT_NOT_REQUIRED',
     );
     requireCondition(
-      !this.approvals.some(
+      !this.currentRevisionApprovals.some(
         (approval) => approval.participantId === input.participantId,
       ),
       'APPROVAL_ALREADY_RECORDED',
+    );
+  }
+
+  private requireCurrentRevision(
+    expectedVersion: number,
+    snapshotId: string,
+  ): void {
+    requireCondition(
+      Number.isSafeInteger(expectedVersion) && expectedVersion === this.version,
+      'CASE_VERSION_CONFLICT',
+    );
+    requireCondition(
+      snapshotId === this.snapshot.snapshotId,
+      'SNAPSHOT_MISMATCH',
+    );
+  }
+
+  private requireCaseActor(input: SettlementCaseActor): void {
+    requireCondition(
+      nonempty(input.applicant.actorSubject),
+      'ACTOR_SUBJECT_EMPTY',
+    );
+    requireCondition(
+      nonempty(input.applicant.participantId),
+      'PARTICIPANT_ID_EMPTY',
+    );
+    requireCondition(
+      nonempty(input.currentOwnerSubject),
+      'CURRENT_OWNER_SUBJECT_EMPTY',
+    );
+    requireCondition(
+      input.applicant.actorSubject === this.originalApplicant.actorSubject ||
+        input.applicant.actorSubject === input.currentOwnerSubject,
+      'ACTOR_NOT_CASE_APPLICANT_OR_OWNER',
     );
   }
 
@@ -329,24 +551,30 @@ export class SettlementCase {
       }),
     ]);
     return SettlementCase.withDecisions(
-      this.snapshot,
+      this.revisions,
       approvals,
       this.version + 1,
       decidedAt,
+      this.withdrawal,
     );
   }
 
   private static withDecisions(
-    snapshot: SettlementSnapshotRevision,
+    revisions: readonly SettlementSnapshotRevision[],
     approvals: readonly SettlementApproval[],
     version: number,
     decidedAt: string,
+    withdrawal: SettlementWithdrawal | null,
   ): SettlementCase {
-    const rejected = approvals.some(
+    const snapshot = revisions[revisions.length - 1];
+    const currentApprovals = approvals.filter(
+      (approval) => approval.snapshotId === snapshot.snapshotId,
+    );
+    const rejected = currentApprovals.some(
       (approval) => approval.decision === 'Rejected',
     );
     const allApproved = snapshot.content.requiredApproverIds.every((id) =>
-      approvals.some(
+      currentApprovals.some(
         (approval) =>
           approval.participantId === id && approval.decision === 'Approved',
       ),
@@ -354,19 +582,22 @@ export class SettlementCase {
     const zero = snapshot.content.balances.every(
       (balance) => balance.amount === 0n,
     );
-    const status: SettlementCaseStatus = rejected
-      ? 'Rejected'
-      : allApproved
-        ? zero
-          ? 'Archived'
-          : 'PaymentActive'
-        : 'AwaitingApproval';
+    const status: SettlementCaseStatus = withdrawal
+      ? 'Withdrawn'
+      : rejected
+        ? 'Rejected'
+        : allApproved
+          ? zero
+            ? 'Archived'
+            : 'PaymentActive'
+          : 'AwaitingApproval';
     return new SettlementCase(
       snapshot.caseId,
-      snapshot,
+      revisions,
       approvals,
       status,
       version,
+      withdrawal,
       status === 'Archived' ? decidedAt : null,
     );
   }
