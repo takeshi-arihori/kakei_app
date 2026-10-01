@@ -119,3 +119,8 @@ Proposed中はRepository ADRとGitHub ADR IssueをClose／Rejectedとして記�
 ## 後続Decisionによる部分解決（2026-10-01）
 
 [ADR #152](expense-settlement-consistency-boundary.md)のOwner承認で、ERの個別Group Expense Root、Settlement Case Rootと不変Revision、予約／精算更新の同期原子的commitを採用した。本ADRの3 Context／Modular Monolith／State model＋不変業務履歴を維持し、上の過去Decision記録を消さない。Receipt／Bundle、Category、具体Port／lock順／冪等結果／保護Record種別、本番本人性と運用Gateは残る。[Task #154](https://github.com/takeshi-arihori/kakei_app/issues/154)は登録Domainだけを実装し、Case／Application／Persistence／公開APIは後続個別Ready評価とする。
+
+
+## Receipt／Categoryの後続Decision（2026-10-02）
+
+[ADR #170](receipt-category-consistency-boundary.md)のOwner明示承認で、ER Receipt Root／個別Category Root（System標準とGroup専用を区別）、1Bundleと対応Expense登録の共通原子的commitを採用した。上段は各日付の比較・承認履歴として保持する。3 Context／Modular Monolith／State modelを維持し、具体Port、Suggestion所有／保存、公開本人性／認可、保護Record／運用／Projectionは別Gateを満たすまで実装Readyへ進めない。
