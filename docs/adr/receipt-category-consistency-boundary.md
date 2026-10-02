@@ -51,6 +51,8 @@ Receipt内の整合と分類定義の変化をERへ凝集できる。一方、Ro
 
 [Task #175](https://github.com/takeshi-arihori/kakei_app/issues/175)の[Receipt Adjustment整数配賦契約](../domain/receipt-adjustment-allocation-contract.md)は、種別／符号の検証、Item単位とReceipt全体の整数配賦、最終額Invariantを純Domainへ反映する。Draft確認、宣言Receipt合計との一致、公開認可、保存、Bundle／Expense登録は実装せず、G1／G2を維持する。これは採用済みDecisionのTraceであり、ADRの境界を拡張しない。
 
+[Task #177](https://github.com/takeshi-arihori/kakei_app/issues/177)の[Receipt Draft手動確定契約](../domain/receipt-manual-confirmation-contract.md)は、同一Receipt RootのDraft→Confirmed純Domain遷移、Uploaderが明示確認したItem／Adjustment facts、必須購入日、#175配賦後合計と宣言Receipt合計の一致、不変version履歴を実装する。実本人性・Group資格／fence、Category同時点確認、Persistence／CAS、公開API、Bundle／Expense登録・月次Projectionを完了済みとしない。これはAccepted境界のTraceであり、新しいProduct Ruleを追加しない。
+
 本番認証Provider、OCR製品、画像Storage、名称重複／正規化、公開GraphQL／Error、具体Port署名・lock順・operation再送、保護Record kind・Schema・Key・Audit・Backup・Deployment、実Retention・Projectionはこの承認で確定しない。Category再有効化・個人専用分類・Suggestion手動CRUD・全利用者学習を追加しない。
 
 文書同期対象はADR一覧、current-modelのArchitecture注記、design-gates、domain-designのKnowledge State、shared-expense-design-boundaries、Expense／Receipt／Category InventoryのOwner Gateである。Confirmed業務Rule・画面分類・Routeの採用状態は変更しない。
