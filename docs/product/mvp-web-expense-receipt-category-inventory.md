@@ -4,6 +4,8 @@ Category実装Trace: [Task #173](https://github.com/takeshi-arihori/kakei_app/is
 
 Receipt Adjustment実装Trace: [Task #175](https://github.com/takeshi-arihori/kakei_app/issues/175)／[整数配賦契約](../domain/receipt-adjustment-allocation-contract.md)がR05の種別・符号、Item／Receipt対象配賦と調整後金額Invariantを純Domainとして扱う。R06のDraft確定と宣言Receipt合計との一致確認、公開API・認可・保存は未接続であり、R05/R06の業務Rule、39操作の分類、Route、各Gate、機能画面のReadyを変更しない。
 
+Receipt Draft手動確定実装Trace: [Task #177](https://github.com/takeshi-arihori/kakei_app/issues/177)／[手動確定契約](../domain/receipt-manual-confirmation-contract.md)がR01/R02/R04/R06の同一Receipt Root Draft→Confirmed遷移、明示されたUploader確認facts、occurredOn検証、#175配賦後のReceipt合計一致を純Domainへ反映する。実本人性／Group fence／Category同時点照合、保存・CAS、公開API、Bundle／Expense登録、月次反映は未接続であり、39操作の分類、Route、各Gate、機能画面のReadyを変更しない。
+
 - Task: [#146](https://github.com/takeshi-arihori/kakei_app/issues/146)／親Epic [#90](https://github.com/takeshi-arihori/kakei_app/issues/90)。
 - Baseline: develop `4391624caef1075246be8aa8de79ba1d8c9bdf9f`。Group Managementの前提Inventoryは[#144 / PR #145](https://github.com/takeshi-arihori/kakei_app/pull/145)で統合済み。
 - Scope: Expense、Receipt、Adjustment／Bundle、Category／Suggestion、月別Category支出とそれらから見たGroup lifecycleの観測。Settlement／Paymentの実操作は後続Inventoryへ渡す。
