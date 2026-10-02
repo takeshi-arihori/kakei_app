@@ -1,5 +1,7 @@
 # 共有割り勘MVP Expense／Receipt／Category 操作・画面境界
 
+Category実装Trace: [Task #173](https://github.com/takeshi-arihori/kakei_app/issues/173)／[内部lifecycle契約](../domain/category-lifecycle-contract.md)がC02–C06のGroup専用追加・名称変更・無効化・安定ID／履歴を純Domainとして扱う。System共有定義の読取factsをGroup所有から分離する。名称Validation・過去名表示・公開管理操作・実Owner照会／Closing fence・ReceiptのInactive競合・保存／Retentionは未接続であり、39操作の分類、Route、各Gate、機能画面のReadyを変更しない。
+
 - Task: [#146](https://github.com/takeshi-arihori/kakei_app/issues/146)／親Epic [#90](https://github.com/takeshi-arihori/kakei_app/issues/90)。
 - Baseline: develop `4391624caef1075246be8aa8de79ba1d8c9bdf9f`。Group Managementの前提Inventoryは[#144 / PR #145](https://github.com/takeshi-arihori/kakei_app/pull/145)で統合済み。
 - Scope: Expense、Receipt、Adjustment／Bundle、Category／Suggestion、月別Category支出とそれらから見たGroup lifecycleの観測。Settlement／Paymentの実操作は後続Inventoryへ渡す。

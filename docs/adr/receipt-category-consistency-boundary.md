@@ -47,6 +47,8 @@ Receipt内の整合と分類定義の変化をERへ凝集できる。一方、Ro
 
 採用後も[Delivery Workflow](../engineering/delivery-workflow.md)に従って個別TaskをReady評価する。最初の候補はGroup専用Categoryの追加・名称変更・無効化・不変履歴という純Domain成果。その後にReceipt Adjustment整数配賦、Draft手動確定、Bundle対応を分ける。公開API・保存・本人性・Retentionはそれぞれ別の契約とSecurity／運用Gateを満たす。[Inventory](../product/mvp-web-expense-receipt-category-inventory.md)と[設計Gate](../product/design-gates.md)へTraceし、[ADR #55](snapshot-revision-security-and-retention.md)／[ADR #73](group-close-consistency-and-retention-boundary.md)の保護・保持を維持する。
 
+[Task #173](https://github.com/takeshi-arihori/kakei_app/issues/173)の[Category lifecycle契約](../domain/category-lifecycle-contract.md)は、Group専用の追加・名称変更・無効化・不変履歴とSystem定義読取factsを純Domainへ反映する。System管理履歴、実Source認可、名前Validation、Receiptとの同時点照合、保存・保持・公開操作の完成を意味せず、上記Gateを維持する。Decisionの変更ではなく実装Traceである。
+
 本番認証Provider、OCR製品、画像Storage、名称重複／正規化、公開GraphQL／Error、具体Port署名・lock順・operation再送、保護Record kind・Schema・Key・Audit・Backup・Deployment、実Retention・Projectionはこの承認で確定しない。Category再有効化・個人専用分類・Suggestion手動CRUD・全利用者学習を追加しない。
 
 文書同期対象はADR一覧、current-modelのArchitecture注記、design-gates、domain-designのKnowledge State、shared-expense-design-boundaries、Expense／Receipt／Category InventoryのOwner Gateである。Confirmed業務Rule・画面分類・Routeの採用状態は変更しない。
