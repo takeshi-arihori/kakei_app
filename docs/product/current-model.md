@@ -205,7 +205,7 @@
 - DraftのReceipt Item金額合計とReceipt合計が整合しない場合は確定できない。税・値引きなどは下記Receipt AdjustmentのRuleに従う。
 - 確定前のReceipt DraftとReceipt ItemはGroup Expense、Settlement Snapshot、月別Category集計へ含めない。
 - Uploaderが確定したReceiptとReceipt Itemだけを、Group Expense登録フローの入力として共有する。
-- 確定後のReceiptとReceipt Itemは、UploaderまたはGroup Ownerだけが修正できる。他のActive Participantは参照のみ可能とする。
+- 確定後のReceiptとReceipt Itemの明細値訂正は、UploaderまたはGroup Ownerだけが行える。他のActive Participantは参照のみ可能とする。Bundleへの割当・所属移動・payer／割合の変更は下記のUploader専用Ruleに従う。
 - 関連するGroup ExpenseがSettlement Snapshotへ選択されるまでは修正可能とする。Awaiting Approval中はReceiptとReceipt Itemも編集不可にし、RevisionがRejectedになった場合だけ同じIDと変更履歴を維持して訂正できる。Approved／Payment Active以後は編集不可とする。
 - 確定後の修正では変更者、変更時刻、変更前後の値を履歴として残す。
 - Snapshot固定前に金額またはCategoryを修正した場合は、関連するGroup Expenseの負担額と月別Category集計を再計算する。Receipt ItemとGroup Expenseは下記Expense Bundleの単位で対応する。
@@ -213,7 +213,12 @@
 - Expense Bundleごとに実支払者とSplit Allocationを設定できる。同じReceipt内でもBundleが異なれば割り勘率を変えられる。
 - 1つのReceiptから複数のExpense BundleとGroup Expenseを作成できる。
 - 各Receipt Itemは必ず1つのExpense Bundleだけに所属し、MVPでは1つのItemを複数Bundleへ分割しない。
-- Expense Bundleの金額は、所属するReceipt Item金額の合計と一致しなければならない。
+- Expense Bundleの金額は、所属する調整後Receipt Item金額の合計と一致しなければならない。
+- [ADR #179](../adr/receipt-bundle-edit-and-snapshot-lock.md)に従い、Bundleへの初回割当、Item移動、payer／Split割合変更はReceipt Uploaderだけが行える。Group Ownerであることだけでは許可しない。Bundleは空にできず、最後のItemを移す操作は拒否する。
+- 対応Group ExpenseがSnapshotへ初めて選ばれる前だけ、Bundle所属、payer、割合を変更できる。一度でも選ばれた後は永久固定とし、Rejected／Cancelled／関連付け解除後も再開しない。Item移動では移動元・移動先の両Bundleへこの条件を適用する。
+- 登録済みBundleを変更しても対応Group Expense IDを維持し、影響する各Expenseへ変更前後の不変履歴を追記する。金額と負担を再計算し、登録時Participant集合・ID・joinOrderを維持する。payer／割合変更でParticipantを追加・除外しない。
+- Rejected後の既存Receipt Item金額・Adjustment・Category訂正は現行Ruleを維持する。調整後金額をBundle由来Expenseの金額・負担へ、Categoryを月次集計へ反映し、Bundle所属・payer・割合の永久固定と旧Snapshotの不変性を保つ。他Fieldと手入力ExpenseのRuleは変更しない。
+- 初回の1 Bundleと対応Group Expenseは共通commitで登録し、複数Pairは段階登録できる。別Pairの失敗で成功済みPairを取り消さず、失敗Pairを再試行できる。応答喪失時の再送は同一Group Expenseを再利用し重複作成しないという結果要件とし、具体保存・冪等契約は後続Gateへ残す。
 - すべてのReceipt ItemがExpense Bundleへ割り当てられ、対応するGroup Expenseが登録されるまでは月別Category集計へ含めない。
 - Receiptを使わずGroup Expenseを手入力することも許可する。
 - Receipt画像は、関連するすべてのGroup Expenseを含むSettlement SnapshotがArchiveされるまで保持する。
@@ -275,7 +280,7 @@
 
 実装Ready前に残る設計Gate:
 
-1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可は[ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)、Invitation lifecycleと再参加Participant寿命は[ADR #52](../adr/group-invitation-and-rejoin.md)、Snapshot保護・保持の条件C1は[ADR #55](../adr/snapshot-revision-security-and-retention.md)で採用・充足した。[ADR #152](../adr/expense-settlement-consistency-boundary.md)でERの個別Group Expense、Settlement Caseと不変Revision、予約／精算更新の同期原子的commitを採用した。[ADR #170](../adr/receipt-category-consistency-boundary.md)でERのReceipt Root、個別Category Root、1Bundleと対応Expenseの共通原子的commitを採用した。具体Context間Port／lock順／冪等契約、Projection、本番本人性・配送は後続設計で解消する。
+1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可は[ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)、Invitation lifecycleと再参加Participant寿命は[ADR #52](../adr/group-invitation-and-rejoin.md)、Snapshot保護・保持の条件C1は[ADR #55](../adr/snapshot-revision-security-and-retention.md)で採用・充足した。[ADR #152](../adr/expense-settlement-consistency-boundary.md)でERの個別Group Expense、Settlement Caseと不変Revision、予約／精算更新の同期原子的commitを採用した。[ADR #170](../adr/receipt-category-consistency-boundary.md)でERのReceipt Root、個別Category Root、1Bundleと対応Expenseの共通原子的commitを採用した。[ADR #179](../adr/receipt-bundle-edit-and-snapshot-lock.md)でBundleのUploader専用編集、Snapshot初選択後の永久固定、Rejected後のItem訂正維持を採用した。具体Context間Port／lock順／冪等契約、Projection、本番本人性・配送は後続設計で解消する。
 2. 旧「Transaction限定Event Sourcing／日付境界Archive」のProposalを現行仕様として扱わない。ADR #24とADR #55の承認範囲を優先する。
 3. 未移行または未確認のDecisionに依存するTaskは、GitHub上に根拠が揃うまでBlockedにする。
 

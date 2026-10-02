@@ -60,3 +60,8 @@ Receipt内の整合と分類定義の変化をERへ凝集できる。一方、Ro
 ## Review Trigger / Rollback
 
 Receipt Rootの競合・履歴Cost、Category責務の分離、BundleとExpenseの原子性、Group終了削除との協調が境界を維持できない場合、新しいADRで見直す。Accepted後のDecision変更はOwnerの明示承認で行い、過去の証跡を消さない。未接続Codeはrevert可能だが、保存接続後の復旧は別TaskのMigration／Runbookで定める。
+
+
+## Forward trace: Bundle編集とSnapshot固定
+
+[ADR #179](receipt-bundle-edit-and-snapshot-lock.md)はOwnerの2026-10-02の統合本文承認により、ここで個別契約へ残したBundle操作Actorと所属／payer／割合の編集期間を追補する。Uploader専用、Snapshot初選択後の永久固定、既存Expense ID・登録Participant facts・履歴の維持、Rejected後のItem金額／Adjustment／Category訂正維持を採用する。本ADRの承認対象3点と初回Pair共通commit、段階登録・全対応登録前の月次非包含は保持し、過去のAccepted本文・承認証跡は変更しない。実保存・競合・本人性・Projection等の完成は主張しない。
