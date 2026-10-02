@@ -49,6 +49,8 @@ Receipt内の整合と分類定義の変化をERへ凝集できる。一方、Ro
 
 [Task #173](https://github.com/takeshi-arihori/kakei_app/issues/173)の[Category lifecycle契約](../domain/category-lifecycle-contract.md)は、Group専用の追加・名称変更・無効化・不変履歴とSystem定義読取factsを純Domainへ反映する。System管理履歴、実Source認可、名前Validation、Receiptとの同時点照合、保存・保持・公開操作の完成を意味せず、上記Gateを維持する。Decisionの変更ではなく実装Traceである。
 
+[Task #175](https://github.com/takeshi-arihori/kakei_app/issues/175)の[Receipt Adjustment整数配賦契約](../domain/receipt-adjustment-allocation-contract.md)は、種別／符号の検証、Item単位とReceipt全体の整数配賦、最終額Invariantを純Domainへ反映する。Draft確認、宣言Receipt合計との一致、公開認可、保存、Bundle／Expense登録は実装せず、G1／G2を維持する。これは採用済みDecisionのTraceであり、ADRの境界を拡張しない。
+
 本番認証Provider、OCR製品、画像Storage、名称重複／正規化、公開GraphQL／Error、具体Port署名・lock順・operation再送、保護Record kind・Schema・Key・Audit・Backup・Deployment、実Retention・Projectionはこの承認で確定しない。Category再有効化・個人専用分類・Suggestion手動CRUD・全利用者学習を追加しない。
 
 文書同期対象はADR一覧、current-modelのArchitecture注記、design-gates、domain-designのKnowledge State、shared-expense-design-boundaries、Expense／Receipt／Category InventoryのOwner Gateである。Confirmed業務Rule・画面分類・Routeの採用状態は変更しない。
