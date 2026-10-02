@@ -45,4 +45,11 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 
 ## Receipt／Category境界の部分解決（2026-10-02）
 
-[ADR #170](../adr/receipt-category-consistency-boundary.md)の承認対象はERのReceipt Root、System標準／Group専用を区別する個別Category Root、1Bundleと対応Expenseの共通原子的commitの3点だけである。System共有標準をGroup専用／Suggestionの削除へ巻き込まず、全Item割当・全Expense登録前の月次非包含を維持する。名称重複・正規化、Suggestion所有／保存、個別編集の影響範囲、Bundle操作Actor、確定後画像閲覧、具体Port／認可／再送／保護保存／運用／Projectionは未決または未実装Gateとして残る。純Domain Taskも個別Ready評価を行い、公開Use Caseの完成とは扱わない。
+[ADR #170](../adr/receipt-category-consistency-boundary.md)の承認対象はERのReceipt Root、System標準／Group専用を区別する個別Category Root、1Bundleと対応Expenseの共通原子的commitの3点だけである。System共有標準をGroup専用／Suggestionの削除へ巻き込まず、全Item割当・全Expense登録前の月次非包含を維持する。名称重複・正規化、Suggestion所有／保存、個別編集の影響範囲、確定後画像閲覧、具体Port／認可／再送／保護保存／運用／Projectionは未決または未実装Gateとして残る。純Domain Taskも個別Ready評価を行い、公開Use Caseの完成とは扱わない。
+
+
+## Receipt Bundle編集・Snapshot固定の解決範囲（2026-10-02）
+
+[ADR #179](../adr/receipt-bundle-edit-and-snapshot-lock.md)はUploaderだけのBundle操作、初Snapshot選択前の所属／payer／割合変更、選択後の永久固定、各既存Expense ID・Participant facts・履歴の維持、Rejected後のItem金額／Adjustment／Category訂正維持をAcceptedとする。初回Pair共通commit、段階登録、成功Pair保持、全Item／全Expense登録前の集計除外はADR #170を維持する。
+
+[Task #179](https://github.com/takeshi-arihori/kakei_app/issues/179)の本文承認・文書同期後、Bundle純Domain Taskを個別Planning／Ready評価する。複数Pair編集の実保存atomicity、Snapshot選択との競合裁定、durable初選択lock、同判断点の版／実認可／Group fence、operation-result replay、実月次Projectionは後続Gateのままであり、この承認では実装済みにならない。Category／明細訂正のOwner権限、他Field、手入力Expense、画像閲覧、Suggestion、本番Protection／RetentionのGateを拡張しない。

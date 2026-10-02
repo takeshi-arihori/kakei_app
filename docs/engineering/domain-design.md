@@ -13,6 +13,7 @@ DDDは、共有割り勘の業務RuleをDB、Prisma、GraphQL、Honoの都合で
 - Accepted Group Management: [ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)の最初のData Owner、Group Aggregate、Repository Port、内部Command認可。[ADR #52](../adr/group-invitation-and-rejoin.md)のInvitation lifecycle、受諾原子性、新Participantによる再参加
 - Accepted Expense / Settlement: [ADR #152](../adr/expense-settlement-consistency-boundary.md)のER個別Group Expense Root、Settlement Case Rootと不変Revision、予約／精算更新の同期原子的commit。実Adapter／認可／公開Use Caseの完成を意味しない。
 - Accepted Receipt / Category: [ADR #170](../adr/receipt-category-consistency-boundary.md)のER Receipt Root、個別Category Root（System標準／Group専用を区別）、1Bundle・対応Expense登録の共通原子的commit。具体契約・実Adapter／認可の完成を意味しない。
+- Accepted Bundle Product Rule: [ADR #179](../adr/receipt-bundle-edit-and-snapshot-lock.md)のUploader専用編集、Snapshot初選択後の所属／payer／割合永久固定、Rejected後のItem訂正維持。Receipt Rootと個別Expense Rootの所有を維持し、実保存・競合・認可・Projectionは別Gate。
 - Pending Decision: Suggestion所有／保存、具体Context間Port・lock順・冪等結果契約、Persistence実装・保護Record種別、本番本人性・配送、非同期Projection。保存保護・Retentionの条件C1は充足済みだが、S0〜S3が完了するまで依存Persistence実装Ready不可
 - Deprecated: 個人用Household、Account、収入Transaction、日付境界Archive、2人限定の単一Payer／Payeeモデル
 

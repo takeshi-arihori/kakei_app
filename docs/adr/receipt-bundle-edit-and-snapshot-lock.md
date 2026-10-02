@@ -1,10 +1,10 @@
 # Receipt Bundleの編集とSettlement Snapshot後の固定
 
-- Status: Proposed
+- Status: Accepted（Product編集Ruleのみ。実Adapter完成・本番有効化を意味しない）
 - Owner: takeshi-arihori
 - Proposed: 2026-10-02
-- Owner Accepted: 未承認（個別の業務条件は確認済み。統合した本ADR本文への明示承認待ち）
-- Proposal / Decision evidence: [Task #179](https://github.com/takeshi-arihori/kakei_app/issues/179)
+- Owner Accepted: 2026-10-02（PR #180の本文Review後、Ownerが統合本文を明示承認）
+- Proposal / Approval evidence: [Task #179](https://github.com/takeshi-arihori/kakei_app/issues/179)
 - Amends: [ADR #170](receipt-category-consistency-boundary.md)のBundle actor、編集範囲、精算後訂正のGate
 - Preserves: [ADR #152](expense-settlement-consistency-boundary.md)、[ADR #55](snapshot-revision-security-and-retention.md)、[ADR #73](group-close-consistency-and-retention-boundary.md)、3 Context、Modular Monolith、State model＋不変履歴
 
@@ -14,9 +14,9 @@
 
 [ADR #170](receipt-category-consistency-boundary.md)はExpense RecordingによるReceipt／Category所有と、初回の1 Bundle＋対応Group Expenseの共通commitをAcceptedとしている。一方、Bundle操作Actor、登録済みBundleの編集、精算中の編集、個別Fieldの影響は後続契約へ残している。[ADR #152](expense-settlement-consistency-boundary.md)はGroup Expenseの登録時Participant factsと履歴付き訂正、Settlement Snapshotの不変性を定める。
 
-Ownerは2026-10-02に、Bundle操作はUploaderのみ、Snapshot初選択前のBundle Item移動とpayer／Split割合変更を許可し、一度でもSnapshotに選ばれた後はこれらを却下・取消・関連付け解除の後も再開しないことを個別回答で確認した。さらに、Rejected後のReceipt Item金額・Adjustment・Category訂正は現行Ruleを維持し、対応するBundle由来Group Expense金額・負担および月次Category集計を更新する方針を確認した。本ADRの統合本文はまだOwner承認前である。
+Ownerは2026-10-02に、Bundle操作はUploaderのみ、Snapshot初選択前のBundle Item移動とpayer／Split割合変更を許可し、一度でもSnapshotに選ばれた後はこれらを却下・取消・関連付け解除の後も再開しないことを個別回答で確認した。さらに、Rejected後のReceipt Item金額・Adjustment・Category訂正は現行Ruleを維持し、対応するBundle由来Group Expense金額・負担および月次Category集計を更新する方針を確認した。統合本文は[PR #180](https://github.com/takeshi-arihori/kakei_app/pull/180)でReviewされ、Ownerは同日に「Bundle実装は、承認ということで進めてもらってOK」と明示承認した。承認証跡はTask #179へ保存した。
 
-## Decision (Proposal)
+## Decision
 
 1. **用語と対応**: Bundleは、1つ以上のConfirmed Receipt Itemをまとめ、そのまとまりからGroup Expense（支出）を1件作る単位である。各Itemはちょうど1つのBundleに属する。Bundleは空にできず、最後のItemを移す操作は拒否する。
 2. **操作主体**: Receipt UploaderだけがBundleへの初回割当、Item移動、Bundleに対応するpayerとSplit Allocation割合の変更を行える。Group OwnerであることだけではBundle操作権限を与えない。手入力Group ExpenseのRuleは変更しない。
@@ -37,7 +37,7 @@ Ownerは2026-10-02に、Bundle操作はUploaderのみ、Snapshot初選択前のB
 
 ## Consequences
 
-UploaderはSnapshot前に、Itemを一度だけBundleへ所属させ、明細構成に応じてpayerとSplit Allocationを整えられる。Item移動で関係する複数Bundleの合計と既存Group Expenseが変わる。Snapshotへ入った構成、payer、割合はその後も固定され、却下後の明細値訂正は既存Item訂正Ruleに沿って別に処理される。
+UploaderはSnapshot前に、各Itemを同時に1つのBundleだけへ所属させ、明細構成に応じてpayerとSplit Allocationを整えられる。Item移動で関係する複数Bundleの合計と既存Group Expenseが変わる。Snapshotへ入った構成、payer、割合はその後も固定され、却下後の明細値訂正は既存Item訂正Ruleに沿って別に処理される。
 
 複数の登録済みBundleをまたぐItem移動では、Receipt対応と影響する複数Expenseの更新が全て整合している必要がある。Snapshot選択と編集の同時発生をどう保存上直列化するか、複数Pair変更のcommit単位、CAS／version、成功結果の永続的な再取得、Projection更新条件はこのProduct Decisionだけでは解決しない。
 
@@ -56,4 +56,4 @@ Snapshotの不変内容を保つためにItem移動と精算開始を原子的�
 ## Owner Approval
 
 - 個別の業務条件確認: Ownerの2026-10-02の対話回答。
-- 本Proposalの統合本文: **Ownerの明示承認待ち**。承認Issue／日付を取得後に記録し、ApprovedとなるまでStatusをProposedに保つ。
+- 統合本文の承認: 2026-10-02、Ownerの「Bundle実装は、承認ということで進めてもらってOK」。[Task #179](https://github.com/takeshi-arihori/kakei_app/issues/179)に記録。具体保存・認可・再送・Projection Gateの承認とは区別する。
