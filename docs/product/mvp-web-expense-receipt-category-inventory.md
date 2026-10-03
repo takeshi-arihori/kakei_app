@@ -188,3 +188,7 @@ Ownerが案A3点へ「はい」と明示承認した。A170をOwner／Root／登
 ## Bundle初回登録の純Domain trace（2026-10-03）
 
 [Task #182](https://github.com/takeshi-arihori/kakei_app/issues/182)の[初回登録契約](../domain/receipt-bundle-registration-contract.md)とDomain Testは、Confirmed Itemの非空・一意割当、調整後合計と初回Expense対応、Uploader／版確認、不変履歴、段階登録と全割当完了の内部事実を扱う。実Group所属／本人性、共通atomic commit、durable再送結果、月次Projection、Bundle編集とSnapshot lock、Rejected後訂正の実装はこのSliceに含めない。Accepted Decisionを変更せず、公開API／画面Readyを引き上げない。
+
+## Bundle初Snapshot選択と永久編集Policyの純Domain trace（2026-10-03）
+
+[Task #184](https://github.com/takeshi-arihori/kakei_app/issues/184)の[初選択・永久編集lock契約](../domain/receipt-bundle-snapshot-lock-contract.md)は、Receiptが初回Pairを維持してSource初選択の参照・Actor・UTCを不変値として記録し、以後のItem所属／payer／割合の編集可否を永久に拒否する内部Policyを扱う。Rejected／Withdrawn／Cancelledでも解除しない。Sourceの選択ActorにUploader一致を要求せず、編集PolicyだけをUploader専用とする。実Sourceの初選択確認・選択資格、実編集Command、保存atomicity／CAS／durable lock／再送、本人性／Group fence、Rejected後Item訂正、Projection／API／画面は後続Gateのまま。Accepted Decisionと公開Ready状態を変更しない。

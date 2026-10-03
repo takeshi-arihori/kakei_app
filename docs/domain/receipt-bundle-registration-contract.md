@@ -34,7 +34,7 @@ JPY合計はBigIntで比較し、0円とsafe integer上限も扱う。safe integ
 
 - Receipt版とExpense新規性／一意対応を同判断点で確認する共通atomic commit、結果不明のdurable idempotency
 - Source本人性、Receipt実Group所属、現在Group資格／Closing fence、Category状態の照合
-- Bundle Item所属変更、payer／割合変更、Snapshot初選択との競合と永久lock
+- Bundle Item所属変更、payer／割合の実変更、Snapshot初選択との保存競合とdurable lock（初選択不変記録・永久編集Policyは[Task #184の契約](receipt-bundle-snapshot-lock-contract.md)へTrace）
 - Snapshot後RejectedのItem額／Adjustment／Category訂正と対応Expense反映
 - Persistence／保護Record／Schema、Projection、公開API／UI、OCR／画像／Retention
 
