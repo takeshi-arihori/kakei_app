@@ -57,3 +57,8 @@ Snapshotの不変内容を保つためにItem移動と精算開始を原子的�
 
 - 個別の業務条件確認: Ownerの2026-10-02の対話回答。
 - 統合本文の承認: 2026-10-02、Ownerの「Bundle実装は、承認ということで進めてもらってOK」。[Task #179](https://github.com/takeshi-arihori/kakei_app/issues/179)に記録。具体保存・認可・再送・Projection Gateの承認とは区別する。
+
+
+## Bundle初回登録の純Domain trace（2026-10-03）
+
+[Task #182](https://github.com/takeshi-arihori/kakei_app/issues/182)の[初回登録契約](../domain/receipt-bundle-registration-contract.md)とDomain Testは、Confirmed Itemの非空・一意割当、調整後合計と初回Expense対応、Uploader／版確認、不変履歴、段階登録と全割当完了の内部事実を扱う。実Group所属／本人性、共通atomic commit、durable再送結果、月次Projection、Bundle編集とSnapshot lock、Rejected後訂正の実装はこのSliceに含めない。Accepted Decisionを変更せず、公開API／画面Readyを引き上げない。

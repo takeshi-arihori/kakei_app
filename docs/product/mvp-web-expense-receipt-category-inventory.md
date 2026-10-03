@@ -183,3 +183,8 @@ Ownerが案A3点へ「はい」と明示承認した。A170をOwner／Root／登
 ## Bundle Product RuleのAccepted同期（2026-10-02）
 
 [A179: Receipt Bundle編集・Snapshot固定](../adr/receipt-bundle-edit-and-snapshot-lock.md)はR07–R12とG1のProduct Ruleを追補する。39操作の分類・Route・公開API・機能画面のReadyは変更しない。具体保存・CAS・冪等結果・実認可・Projectionは未完成で、純Domain Taskを別途Ready評価する。
+
+
+## Bundle初回登録の純Domain trace（2026-10-03）
+
+[Task #182](https://github.com/takeshi-arihori/kakei_app/issues/182)の[初回登録契約](../domain/receipt-bundle-registration-contract.md)とDomain Testは、Confirmed Itemの非空・一意割当、調整後合計と初回Expense対応、Uploader／版確認、不変履歴、段階登録と全割当完了の内部事実を扱う。実Group所属／本人性、共通atomic commit、durable再送結果、月次Projection、Bundle編集とSnapshot lock、Rejected後訂正の実装はこのSliceに含めない。Accepted Decisionを変更せず、公開API／画面Readyを引き上げない。

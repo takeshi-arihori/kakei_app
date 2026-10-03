@@ -1,3 +1,6 @@
+import { GroupExpense } from './group-expense.js';
+import { ReceiptBundleId } from './value-objects/receipt-bundle-id.js';
+import type { ExpenseId } from './value-objects/expense-id.js';
 import { CategoryId } from './value-objects/category-id.js';
 import { OccurredOn } from './value-objects/occurred-on.js';
 import { ReceiptId } from './value-objects/receipt-id.js';
@@ -118,9 +121,61 @@ export type ConfirmedReceiptSnapshot = {
   readonly adjustments: readonly ReceiptAdjustmentInput[];
   /** Adjustmentごとの符号付きItem配賦額。 */
   readonly allocations: readonly ReceiptAdjustmentAllocationResult[];
+  /** 初回登録済みのItemとExpense対応。実保存の証拠ではない。 */
+  readonly bundles: readonly ReceiptBundleRegistration[];
   /** Receiptの現在状態。共有・保存状態の証明ではない。 */
   readonly status: 'Confirmed';
 };
+
+/** Uploaderが未割当Itemと初回Expenseの対応を追記する内部入力。 */
+export type RegisterReceiptBundle = {
+  /** 現在Root版。保存CASを代替しない。 */
+  readonly expectedVersion: number;
+  /** 本人性を外側で確認する安定参照。DomainではUploaderとの値一致だけを検証。 */
+  readonly actorSubject: string;
+  /** 履歴へコピーする有限操作日時。時計はCallerが供給。 */
+  readonly registeredAt: Date;
+  /** Caller発番の未使用Bundle参照。公開形式は未確定。 */
+  readonly bundleId: string;
+  /** このReceipt内の未割当Confirmed Itemを重複なく1件以上指定。 */
+  readonly itemIds: readonly string[];
+  /** 対応を作るversion 1のExpense。実保存新規性は別Gate。 */
+  readonly expense: GroupExpense;
+};
+
+/** Receiptが所有する不変の初回Bundle対応facts。別Rootではない。 */
+export type ReceiptBundleRegistration = {
+  /** 後続編集でも対応を追跡する安定Bundle参照。 */
+  readonly id: ReceiptBundleId;
+  /** 初回登録のItem所属。登録操作では既存対応を変えない。 */
+  readonly itemIds: readonly string[];
+  /** 対応する個別Expense Rootの参照。Expense factsは複製しない。 */
+  readonly expenseId: ExpenseId;
+  /** 初回Expense由来の参照。Receipt実Group所属の証拠ではない。 */
+  readonly groupId: string;
+};
+
+/** 初回Pair登録で発生した不変のReceipt遷移履歴。 */
+export type ReceiptBundleRegistrationChange = {
+  /** 未割当Itemと初回Expense対応を追加した事実。 */
+  readonly action: 'BundleRegistered';
+  /** Uploaderと値一致したActor。実本人性は別Gate。 */
+  readonly actorSubject: string;
+  /** Caller時刻からコピーしたUTC操作日時。 */
+  readonly at: string;
+  /** 操作判断時の旧Root版。 */
+  readonly previousVersion: number;
+  /** 登録成功後の新版。 */
+  readonly version: number;
+  /** 既存Pairを保持する登録前facts。 */
+  readonly before: ConfirmedReceiptSnapshot;
+  /** 新Pairを追加した登録後facts。 */
+  readonly after: ConfirmedReceiptSnapshot;
+};
+
+/** 同Receiptの確認とBundle登録の順序付き履歴。 */
+export type ReceiptChange =
+  ReceiptConfirmationChange | ReceiptBundleRegistrationChange;
 
 /** DraftかConfirmedかを識別するRoot Snapshot。 */
 export type ReceiptSnapshot = ReceiptDraftSnapshot | ConfirmedReceiptSnapshot;
@@ -203,14 +258,14 @@ const utcInstant = (value: Date): string => {
   return value.toISOString();
 };
 
-/** ERがReceipt Draftの手動確認・合計Invariant・変更履歴を守る個別Root。 */
+/** ERがReceipt確認・Bundle対応・合計Invariant・不変履歴を守る個別Root。 */
 export class Receipt {
   private constructor(
     private readonly current: ReceiptSnapshot,
     /** Root内だけで進める版。永続層の先着・CASを証明しない。 */
     readonly version: number,
-    /** Confirmedへの遷移履歴。Audit Logや保存Schemaではない。 */
-    readonly changes: readonly ReceiptConfirmationChange[],
+    /** 確認とBundle登録の順序付き履歴。Audit Logや保存Schemaではない。 */
+    readonly changes: readonly ReceiptChange[],
   ) {
     Object.freeze(this);
   }
@@ -263,24 +318,7 @@ export class Receipt {
     if (before.status !== 'Draft') {
       throw new ReceiptInvariantViolation('RECEIPT_NOT_DRAFT');
     }
-    requireCondition(
-      Number.isSafeInteger(input.expectedVersion) &&
-        input.expectedVersion === this.version,
-      'VERSION_CONFLICT',
-    );
-    requireCondition(
-      typeof input.actorSubject === 'string' &&
-        input.actorSubject.trim().length > 0,
-      'ACTOR_REFERENCE_INVALID',
-    );
-    requireCondition(
-      input.actorSubject === before.uploaderSubject,
-      'ACTOR_NOT_UPLOADER',
-    );
-    requireCondition(
-      Number.isSafeInteger(this.version + 1),
-      'VERSION_OVERFLOW',
-    );
+    this.requireUploaderVersion(input.expectedVersion, input.actorSubject);
     const at = utcInstant(input.confirmedAt);
     let occurredOn: OccurredOn;
     try {
@@ -347,6 +385,7 @@ export class Receipt {
       items,
       adjustments: freezeAdjustments(input.adjustments),
       allocations: allocation.allocations,
+      bundles: Object.freeze([]),
       status: 'Confirmed',
     });
     const change: ReceiptConfirmationChange = Object.freeze({
@@ -362,6 +401,131 @@ export class Receipt {
       after,
       this.version + 1,
       Object.freeze([...this.changes, change]),
+    );
+  }
+
+  /**
+   * 未割当Confirmed Itemと初回Expenseの対応を追記する。
+   * @param input Uploader、期待版、操作時刻、Bundle参照と初回Expense Root。
+   * @returns 既存factsとPairを維持し、版・履歴を進めた新Receipt Root。
+   * @throws ReceiptInvariantViolation 状態、Actor、版、Item選択またはExpense対応が不正な場合。
+   */
+  registerBundle(input: RegisterReceiptBundle): Receipt {
+    const before = this.current;
+    if (before.status !== 'Confirmed') return reject('RECEIPT_NOT_CONFIRMED');
+    this.requireUploaderVersion(input.expectedVersion, input.actorSubject);
+    const at = utcInstant(input.registeredAt);
+    const id = ReceiptBundleId.from(input.bundleId);
+    requireCondition(
+      !before.bundles.some((bundle) => bundle.id.equals(id)),
+      'BUNDLE_ALREADY_REGISTERED',
+    );
+    requireCondition(
+      Array.isArray(input.itemIds) &&
+        input.itemIds.length > 0 &&
+        input.itemIds.every(
+          (itemId) => typeof itemId === 'string' && itemId.trim().length > 0,
+        ) &&
+        new Set(input.itemIds).size === input.itemIds.length,
+      'BUNDLE_ITEMS_INVALID',
+    );
+    const selected = new Set(input.itemIds);
+    const selectedItems = before.items.filter((item) => selected.has(item.id));
+    requireCondition(
+      selectedItems.length === selected.size,
+      'BUNDLE_ITEMS_INVALID',
+    );
+    requireCondition(
+      !before.bundles.some((bundle) =>
+        bundle.itemIds.some((itemId) => selected.has(itemId)),
+      ),
+      'ITEM_ALREADY_ASSIGNED',
+    );
+    requireCondition(
+      input.expense instanceof GroupExpense &&
+        input.expense.version === 1 &&
+        input.expense.corrections.length === 0,
+      'BUNDLE_EXPENSE_NOT_INITIAL',
+    );
+    const expense = input.expense.snapshot();
+    requireCondition(
+      !before.bundles.some((bundle) => bundle.expenseId.equals(expense.id)),
+      'EXPENSE_ALREADY_PAIRED',
+    );
+    const amount = selectedItems.reduce(
+      (sum, item) => sum + BigInt(item.adjustedAmount),
+      0n,
+    );
+    requireCondition(
+      expense.sourceOwnerSubject === before.uploaderSubject &&
+        expense.occurredOn.value === before.occurredOn.value &&
+        BigInt(expense.total.amount) === amount,
+      'BUNDLE_EXPENSE_MISMATCH',
+    );
+    requireCondition(
+      before.bundles.length === 0 ||
+        before.bundles[0].groupId === expense.groupId,
+      'BUNDLE_GROUP_MISMATCH',
+    );
+    const bundle: ReceiptBundleRegistration = Object.freeze({
+      id,
+      itemIds: Object.freeze([...input.itemIds]),
+      expenseId: expense.id,
+      groupId: expense.groupId,
+    });
+    const after: ConfirmedReceiptSnapshot = Object.freeze({
+      ...before,
+      bundles: Object.freeze([...before.bundles, bundle]),
+    });
+    const change: ReceiptBundleRegistrationChange = Object.freeze({
+      action: 'BundleRegistered',
+      actorSubject: input.actorSubject,
+      at,
+      previousVersion: this.version,
+      version: this.version + 1,
+      before,
+      after,
+    });
+    return new Receipt(
+      after,
+      this.version + 1,
+      Object.freeze([...this.changes, change]),
+    );
+  }
+
+  /**
+   * 全Confirmed Itemに初回Expense対応がある純Domain事実を返す。
+   * @returns Draftまたは未割当Itemがある場合false。trueも保存・月次包含の証拠ではない。
+   */
+  hasCompleteBundleRegistration(): boolean {
+    const current = this.current;
+    if (current.status !== 'Confirmed' || current.bundles.length === 0)
+      return false;
+    const assigned = new Set(
+      current.bundles.flatMap((bundle) => bundle.itemIds),
+    );
+    return current.items.every((item) => assigned.has(item.id));
+  }
+
+  private requireUploaderVersion(
+    expectedVersion: number,
+    actorSubject: string,
+  ): void {
+    requireCondition(
+      Number.isSafeInteger(expectedVersion) && expectedVersion === this.version,
+      'VERSION_CONFLICT',
+    );
+    requireCondition(
+      typeof actorSubject === 'string' && actorSubject.trim().length > 0,
+      'ACTOR_REFERENCE_INVALID',
+    );
+    requireCondition(
+      actorSubject === this.current.uploaderSubject,
+      'ACTOR_NOT_UPLOADER',
+    );
+    requireCondition(
+      Number.isSafeInteger(this.version + 1),
+      'VERSION_OVERFLOW',
     );
   }
 
