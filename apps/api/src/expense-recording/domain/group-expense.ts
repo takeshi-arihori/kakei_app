@@ -27,7 +27,7 @@ export type RegisterGroupExpenseInput = {
   readonly id: string;
   /** ADR #85のcanonical Group IDを値として参照する。 */
   readonly groupId: string;
-  /** 手入力の登録者。Participant寿命と別の安定Actor参照で本人性は証明しない。 */
+  /** 手入力登録者またはReceipt Uploader。Participant寿命と別の安定Actorで本人性は証明しない。 */
   readonly sourceOwnerSubject: string;
   /** 購入の暦日。登録Timestampと混同しない。 */
   readonly occurredOn: string;
@@ -57,7 +57,7 @@ export type GroupExpenseSnapshot = {
   readonly id: ExpenseId;
   /** この支出が所属するGroupのcanonical参照。 */
   readonly groupId: string;
-  /** 手入力のSource Ownerとして保持する登録Actor参照。 */
+  /** 手入力登録者またはReceipt UploaderであるSource Owner参照。 */
   readonly sourceOwnerSubject: string;
   /** 購入月の根拠となる購入暦日。 */
   readonly occurredOn: OccurredOn;
@@ -81,7 +81,7 @@ const requireReference = (value: string): void => {
 const immutableMoney = (amount: number): Money =>
   Object.freeze(Money.jpy(amount));
 
-/** 個別の手入力支出Rootとして登録facts・整数配賦・金額訂正履歴と版を守る。 */
+/** 個別支出Rootとして登録facts・整数配賦・版を守る。金額訂正操作は手入力の既存契約に従う。 */
 export class GroupExpense {
   private constructor(
     private readonly state: GroupExpenseSnapshot,

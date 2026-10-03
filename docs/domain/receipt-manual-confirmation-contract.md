@@ -35,7 +35,7 @@ Draft factoryは内部RootとしてCandidate factsをcopy／freezeする。Confi
 - CategoryのSource Active状態・版とReceipt確定の同時点照合
 - Receipt RootのPersistence、保護Record kind／Schema、CAS、operation再送と結果照会
 - OCR／画像Storage、候補抽出と障害・Retry、Retention／削除
-- Expense BundleのItem割当、1BundleとGroup Expense登録の原子性、全登録完了前の月次非包含
+- Expense Bundleの初回Item割当と完了照会は[初回登録契約](receipt-bundle-registration-contract.md)へ具体化。1BundleとGroup Expense登録の実原子性、全登録完了前の実月次非包含は後続Gate
 - 公開API／Error、確定後編集、画像閲覧、Suggestion、Projection
 
 ## Test Trace

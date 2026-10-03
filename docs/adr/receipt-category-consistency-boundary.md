@@ -65,3 +65,8 @@ Receipt Rootの競合・履歴Cost、Category責務の分離、BundleとExpense�
 ## Forward trace: Bundle編集とSnapshot固定
 
 [ADR #179](receipt-bundle-edit-and-snapshot-lock.md)はOwnerの2026-10-02の統合本文承認により、ここで個別契約へ残したBundle操作Actorと所属／payer／割合の編集期間を追補する。Uploader専用、Snapshot初選択後の永久固定、既存Expense ID・登録Participant facts・履歴の維持、Rejected後のItem金額／Adjustment／Category訂正維持を採用する。本ADRの承認対象3点と初回Pair共通commit、段階登録・全対応登録前の月次非包含は保持し、過去のAccepted本文・承認証跡は変更しない。実保存・競合・本人性・Projection等の完成は主張しない。
+
+
+## Bundle初回登録の純Domain trace（2026-10-03）
+
+[Task #182](https://github.com/takeshi-arihori/kakei_app/issues/182)の[初回登録契約](../domain/receipt-bundle-registration-contract.md)とDomain Testは、Confirmed Itemの非空・一意割当、調整後合計と初回Expense対応、Uploader／版確認、不変履歴、段階登録と全割当完了の内部事実を扱う。実Group所属／本人性、共通atomic commit、durable再送結果、月次Projection、Bundle編集とSnapshot lock、Rejected後訂正の実装はこのSliceに含めない。Accepted Decisionを変更せず、公開API／画面Readyを引き上げない。

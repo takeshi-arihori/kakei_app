@@ -53,3 +53,8 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 [ADR #179](../adr/receipt-bundle-edit-and-snapshot-lock.md)はUploaderだけのBundle操作、初Snapshot選択前の所属／payer／割合変更、選択後の永久固定、各既存Expense ID・Participant facts・履歴の維持、Rejected後のItem金額／Adjustment／Category訂正維持をAcceptedとする。初回Pair共通commit、段階登録、成功Pair保持、全Item／全Expense登録前の集計除外はADR #170を維持する。
 
 [Task #179](https://github.com/takeshi-arihori/kakei_app/issues/179)の本文承認・文書同期後、Bundle純Domain Taskを個別Planning／Ready評価する。複数Pair編集の実保存atomicity、Snapshot選択との競合裁定、durable初選択lock、同判断点の版／実認可／Group fence、operation-result replay、実月次Projectionは後続Gateのままであり、この承認では実装済みにならない。Category／明細訂正のOwner権限、他Field、手入力Expense、画像閲覧、Suggestion、本番Protection／RetentionのGateを拡張しない。
+
+
+## Bundle初回登録の純Domain trace（2026-10-03）
+
+[Task #182](https://github.com/takeshi-arihori/kakei_app/issues/182)の[初回登録契約](../domain/receipt-bundle-registration-contract.md)とDomain Testは、Confirmed Itemの非空・一意割当、調整後合計と初回Expense対応、Uploader／版確認、不変履歴、段階登録と全割当完了の内部事実を扱う。実Group所属／本人性、共通atomic commit、durable再送結果、月次Projection、Bundle編集とSnapshot lock、Rejected後訂正の実装はこのSliceに含めない。Accepted Decisionを変更せず、公開API／画面Readyを引き上げない。
