@@ -1,3 +1,8 @@
+import type { ReceiptBundleEditingFacts } from './receipt-bundle-editing-facts.js';
+import type {
+  ReflectReceiptBundleItemMovement,
+  ReceiptBundleItemMovement,
+} from './receipt-bundle-item-movement.js';
 import { Money } from '../../shared/domain/money.js';
 
 import {
@@ -85,13 +90,24 @@ const requireReference = (value: string): void => {
 const immutableMoney = (amount: number): Money =>
   Object.freeze(Money.jpy(amount));
 
+const requireBundleChange = (
+  condition: boolean,
+  code: ExpenseInvariantViolationCode,
+): void => {
+  if (!condition)
+    throw new ExpenseInvariantViolation(
+      code,
+      'Bundle change invariant violated',
+    );
+};
+
 /** 個別支出Rootとして登録facts・整数配賦・版を守る。金額訂正操作は手入力の既存契約に従う。 */
 export class GroupExpense {
   private constructor(
     private readonly state: GroupExpenseSnapshot,
-    /** 登録時点の全事実。金額訂正・Bundle配賦変更後も維持する。 */
+    /** 登録時点の全事実。金額訂正・Bundle配賦変更・Item移動後も維持する。 */
     readonly initialSnapshot: GroupExpenseSnapshot = state,
-    /** 初回1、金額訂正・実配賦変更ごと+1。保存CASは別責務。 */
+    /** 初回1、金額訂正・実配賦変更・Item移動反映ごと+1。保存CASは別責務。 */
     readonly version: number = 1,
     /** 金額だけの順序付き訂正履歴。旧値・変更者・時刻・理由を保持する。 */
     readonly corrections: readonly ExpenseAmountCorrection[] = Object.freeze(
@@ -99,6 +115,10 @@ export class GroupExpense {
     ),
     /** Bundleのpayer／割合変更履歴。金額訂正後も維持する。 */
     readonly bundleSplitChanges: readonly ReceiptBundleSplitChange[] = Object.freeze(
+      [],
+    ),
+    /** Item移動の額反映履歴。同額移動も残し、他操作後も維持する。 */
+    readonly bundleItemMovements: readonly ReceiptBundleItemMovement[] = Object.freeze(
       [],
     ),
   ) {
@@ -216,6 +236,7 @@ export class GroupExpense {
       this.version + 1,
       Object.freeze([...this.corrections, record]),
       this.bundleSplitChanges,
+      this.bundleItemMovements,
     );
   }
 
@@ -226,59 +247,18 @@ export class GroupExpense {
    * @throws ExpenseInvariantViolation 版、Source facts、Actor、日時、固定集合または配賦が不正な場合。
    */
   changeBundleSplit(input: ChangeReceiptBundleSplit): GroupExpense {
-    const requireSplit = (
-      condition: boolean,
-      code: ExpenseInvariantViolationCode,
-    ): void => {
-      if (!condition)
-        throw new ExpenseInvariantViolation(
-          code,
-          'Bundle split invariant violated',
-        );
-    };
-    requireSplit(
+    requireBundleChange(
       Number.isSafeInteger(input.expectedExpenseVersion) &&
         input.expectedExpenseVersion === this.version,
       'EXPENSE_VERSION_CONFLICT',
     );
     const fact = input.bundleFact;
-    requireSplit(
-      typeof fact === 'object' &&
-        fact !== null &&
-        [
-          fact.receiptId,
-          fact.bundleId,
-          fact.expenseId,
-          fact.groupId,
-          fact.uploaderSubject,
-        ].every(
-          (value) => typeof value === 'string' && value.trim().length > 0,
-        ) &&
-        Number.isSafeInteger(fact.adjustedAmount) &&
-        fact.adjustedAmount >= 0,
-      'BUNDLE_FACT_INVALID',
+    this.requireCurrentBundleFact(
+      fact,
+      input.expectedReceiptVersion,
+      input.actorSubject,
     );
-    requireSplit(
-      Number.isSafeInteger(fact.receiptVersion) &&
-        fact.receiptVersion > 0 &&
-        Number.isSafeInteger(input.expectedReceiptVersion) &&
-        input.expectedReceiptVersion === fact.receiptVersion,
-      'RECEIPT_VERSION_CONFLICT',
-    );
-    requireSplit(
-      fact.expenseId === this.id.value &&
-        fact.groupId === this.state.groupId &&
-        fact.uploaderSubject === this.state.sourceOwnerSubject &&
-        fact.occurredOn === this.state.occurredOn.value &&
-        fact.adjustedAmount === this.state.total.amount,
-      'BUNDLE_FACT_MISMATCH',
-    );
-    requireReference(input.actorSubject);
-    requireSplit(
-      input.actorSubject === fact.uploaderSubject,
-      'ACTOR_NOT_UPLOADER',
-    );
-    requireSplit(
+    requireBundleChange(
       input.changedAt instanceof Date &&
         Number.isFinite(input.changedAt.getTime()),
       'UTC_INSTANT_INVALID',
@@ -287,7 +267,7 @@ export class GroupExpense {
     const percentages = new Map(
       input.percentages.map((p) => [p.participantId, p.percentage]),
     );
-    requireSplit(
+    requireBundleChange(
       input.percentages.length === this.state.allocations.length &&
         percentages.size === this.state.allocations.length &&
         this.state.allocations.every((a) => percentages.has(a.participantId)),
@@ -314,7 +294,10 @@ export class GroupExpense {
       )
     )
       return this;
-    requireSplit(Number.isSafeInteger(this.version + 1), 'VERSION_OVERFLOW');
+    requireBundleChange(
+      Number.isSafeInteger(this.version + 1),
+      'VERSION_OVERFLOW',
+    );
     const after = Object.freeze({
       ...this.state,
       payerParticipantId: calculated.payerParticipantId,
@@ -325,16 +308,7 @@ export class GroupExpense {
       at: input.changedAt.toISOString(),
       previousVersion: this.version,
       version: this.version + 1,
-      bundleFact: Object.freeze({
-        receiptId: fact.receiptId,
-        bundleId: fact.bundleId,
-        expenseId: fact.expenseId,
-        groupId: fact.groupId,
-        receiptVersion: fact.receiptVersion,
-        uploaderSubject: fact.uploaderSubject,
-        occurredOn: fact.occurredOn,
-        adjustedAmount: fact.adjustedAmount,
-      }),
+      bundleFact: this.copyBundleFact(fact),
       before: this.state,
       after,
     });
@@ -344,7 +318,153 @@ export class GroupExpense {
       this.version + 1,
       this.corrections,
       Object.freeze([...this.bundleSplitChanges, record]),
+      this.bundleItemMovements,
     );
+  }
+
+  /**
+   * 同Item移動のReceipt前後factsに束縛し、現在payer／割合で新額を再配賦する。
+   * @param input 実移動Sourceの前後束縛・本人性・3Root共通commitはCaller PREとなる内部入力。
+   * @returns 同ID・登録集合・payer／割合を維持する新版と履歴。同額移動でも履歴を進める。
+   * @throws ExpenseInvariantViolation 版、前後Pair参照・額、Actor、時刻または新版上限が不正な場合。
+   */
+  reflectBundleItemMovement(
+    input: ReflectReceiptBundleItemMovement,
+  ): GroupExpense {
+    requireBundleChange(
+      Number.isSafeInteger(input.expectedExpenseVersion) &&
+        input.expectedExpenseVersion === this.version,
+      'EXPENSE_VERSION_CONFLICT',
+    );
+    const beforeFact = input.beforeBundleFact,
+      afterFact = input.afterBundleFact;
+    this.requireCurrentBundleFact(
+      beforeFact,
+      input.expectedReceiptVersion,
+      input.actorSubject,
+    );
+    this.requireBundleFactShape(afterFact);
+    requireBundleChange(
+      Number.isSafeInteger(afterFact.receiptVersion) &&
+        afterFact.receiptVersion === beforeFact.receiptVersion + 1,
+      'RECEIPT_VERSION_CONFLICT',
+    );
+    requireBundleChange(
+      afterFact.receiptId === beforeFact.receiptId &&
+        afterFact.bundleId === beforeFact.bundleId &&
+        afterFact.expenseId === beforeFact.expenseId &&
+        afterFact.groupId === beforeFact.groupId &&
+        afterFact.uploaderSubject === beforeFact.uploaderSubject &&
+        afterFact.occurredOn === beforeFact.occurredOn,
+      'BUNDLE_FACT_MISMATCH',
+    );
+    requireBundleChange(
+      input.changedAt instanceof Date &&
+        Number.isFinite(input.changedAt.getTime()),
+      'UTC_INSTANT_INVALID',
+    );
+    requireBundleChange(
+      Number.isSafeInteger(this.version + 1),
+      'VERSION_OVERFLOW',
+    );
+    const calculated = GroupExpense.register({
+      id: this.id.value,
+      groupId: this.state.groupId,
+      sourceOwnerSubject: this.state.sourceOwnerSubject,
+      occurredOn: this.state.occurredOn.value,
+      amount: afterFact.adjustedAmount,
+      payerParticipantId: this.state.payerParticipantId,
+      participants: this.state.allocations.map((a) => ({
+        participantId: a.participantId,
+        joinOrder: a.joinOrder,
+        percentage: a.percentage,
+      })),
+    }).snapshot();
+    const after = Object.freeze({
+      ...this.state,
+      total: calculated.total,
+      allocations: calculated.allocations,
+    });
+    const record: ReceiptBundleItemMovement = Object.freeze({
+      actorSubject: input.actorSubject,
+      at: input.changedAt.toISOString(),
+      previousVersion: this.version,
+      version: this.version + 1,
+      beforeBundleFact: this.copyBundleFact(beforeFact),
+      afterBundleFact: this.copyBundleFact(afterFact),
+      before: this.state,
+      after,
+    });
+    return new GroupExpense(
+      after,
+      this.initialSnapshot,
+      this.version + 1,
+      this.corrections,
+      this.bundleSplitChanges,
+      Object.freeze([...this.bundleItemMovements, record]),
+    );
+  }
+
+  private requireBundleFactShape(fact: ReceiptBundleEditingFacts): void {
+    requireBundleChange(
+      typeof fact === 'object' &&
+        fact !== null &&
+        [
+          fact.receiptId,
+          fact.bundleId,
+          fact.expenseId,
+          fact.groupId,
+          fact.uploaderSubject,
+        ].every(
+          (value) => typeof value === 'string' && value.trim().length > 0,
+        ) &&
+        Number.isSafeInteger(fact.adjustedAmount) &&
+        fact.adjustedAmount >= 0,
+      'BUNDLE_FACT_INVALID',
+    );
+  }
+
+  private requireCurrentBundleFact(
+    fact: ReceiptBundleEditingFacts,
+    expectedReceiptVersion: number,
+    actorSubject: string,
+  ): void {
+    this.requireBundleFactShape(fact);
+    requireBundleChange(
+      Number.isSafeInteger(fact.receiptVersion) &&
+        fact.receiptVersion > 0 &&
+        Number.isSafeInteger(expectedReceiptVersion) &&
+        expectedReceiptVersion === fact.receiptVersion,
+      'RECEIPT_VERSION_CONFLICT',
+    );
+    requireBundleChange(
+      fact.expenseId === this.id.value &&
+        fact.groupId === this.state.groupId &&
+        fact.uploaderSubject === this.state.sourceOwnerSubject &&
+        fact.occurredOn === this.state.occurredOn.value &&
+        fact.adjustedAmount === this.state.total.amount,
+      'BUNDLE_FACT_MISMATCH',
+    );
+    requireReference(actorSubject);
+    requireBundleChange(
+      actorSubject === fact.uploaderSubject,
+      'ACTOR_NOT_UPLOADER',
+    );
+  }
+
+  private copyBundleFact(
+    fact: ReceiptBundleEditingFacts,
+  ): ReceiptBundleEditingFacts {
+    return Object.freeze({
+      receiptId: fact.receiptId,
+      bundleId: fact.bundleId,
+      expenseId: fact.expenseId,
+      groupId: fact.groupId,
+      receiptVersion: fact.receiptVersion,
+      uploaderSubject: fact.uploaderSubject,
+      occurredOn: fact.occurredOn,
+      adjustedAmount: fact.adjustedAmount,
+    });
   }
 
   /**

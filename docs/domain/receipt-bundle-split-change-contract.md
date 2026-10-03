@@ -38,7 +38,7 @@ Uploaderは、初Snapshot選択前の登録済みBundleについて、同じExpe
 
 ## 後続Gate・文書影響
 
-Item所属移動（複数Expense変更）、Rejected後Item額／Adjustment／Category訂正とExpense・月次集計反映は別Task。所属／payer／割合の永久lockをItem訂正全般の禁止へ一般化しない。
+Item所属移動と両Expense額・負担反映の純Domainは[Task #188の契約](receipt-bundle-item-movement-contract.md)へTraceする。新Item移動履歴もSplit・amount訂正と相互に維持する。Rejected後Item額／Adjustment／Category訂正とExpense・月次集計反映は別Task。所属／payer／割合の永久lockをItem訂正全般の禁止へ一般化しない。
 
 実Source currentness／初選択真偽、本人性／Group資格・Closing、Receipt読取版fence＋Expense CAS／共通atomic commit、durable first selection／lock／再送結果、保護保存、Projection／API／UI／OCR／Retentionは未接続。新履歴の金融facts・Actorをplaintext Storage／Logへ保存しない。
 

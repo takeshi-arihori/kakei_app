@@ -126,7 +126,7 @@ export type ConfirmedReceiptSnapshot = {
   readonly adjustments: readonly ReceiptAdjustmentInput[];
   /** Adjustmentごとの符号付きItem配賦額。 */
   readonly allocations: readonly ReceiptAdjustmentAllocationResult[];
-  /** 初回登録済みのItemとExpense対応。実保存の証拠ではない。 */
+  /** 登録済みBundleの現在Item所属とExpense対応。実保存の証拠ではない。 */
   readonly bundles: readonly ReceiptBundleRegistration[];
   /** 各Bundleの初Snapshot選択。Caseの現在状態から解除しない。 */
   readonly bundleSnapshotSelections: readonly ReceiptBundleSnapshotSelection[];
@@ -150,11 +150,11 @@ export type RegisterReceiptBundle = {
   readonly expense: GroupExpense;
 };
 
-/** Receiptが所有する不変の初回Bundle対応facts。別Rootではない。 */
+/** Receiptが所有する不変な現在Bundle対応facts。初回所属は登録履歴に保持する。別Rootではない。 */
 export type ReceiptBundleRegistration = {
   /** 後続編集でも対応を追跡する安定Bundle参照。 */
   readonly id: ReceiptBundleId;
-  /** 初回登録のItem所属。登録操作では既存対応を変えない。 */
+  /** このReceipt版のItem所属。変更前所属はRoot履歴に保持する。 */
   readonly itemIds: readonly string[];
   /** 対応する個別Expense Rootの参照。Expense factsは複製しない。 */
   readonly expenseId: ExpenseId;
@@ -216,11 +216,52 @@ export type ReceiptBundleSnapshotSelectionChange = {
   readonly after: ConfirmedReceiptSnapshot;
 };
 
-/** 同Receiptの確認・Bundle対応・初選択の順序付き履歴。 */
+/** Uploaderが同Receipt内の既存Bundle間でItemを移す内部入力。 */
+export type MoveReceiptBundleItems = {
+  /** 移動前Rootの現在読取版。実保存CASを代替しない。 */
+  readonly expectedVersion: number;
+  /** 本人性を外側で確認するUploader参照。 */
+  readonly actorSubject: string;
+  /** 履歴へコピーするCaller時計の有限日時。 */
+  readonly movedAt: Date;
+  /** 未選択で、移動後も非空に保つ登録済みBundle。 */
+  readonly fromBundleId: string;
+  /** 移動元と異なる未選択の登録済みBundle。 */
+  readonly toBundleId: string;
+  /** 移動元に所属する1件以上の一意Item参照。 */
+  readonly itemIds: readonly string[];
+};
+
+/** Item所属だけを変え、初回Pairと調整済みItem値を維持したReceipt履歴。 */
+export type ReceiptBundleItemsMovedChange = {
+  /** 既存Bundle間でItem所属を移動した事実。 */
+  readonly action: 'BundleItemsMoved';
+  /** Uploaderと値一致した操作Actor。 */
+  readonly actorSubject: string;
+  /** Caller時刻からコピーした操作UTC。 */
+  readonly at: string;
+  /** Item移動前のReceipt版。 */
+  readonly previousVersion: number;
+  /** Item移動後のReceipt版。 */
+  readonly version: number;
+  /** 同Expense対応を保つ移動元Bundle参照。 */
+  readonly fromBundleId: ReceiptBundleId;
+  /** 同Expense対応を保つ移動先Bundle参照。 */
+  readonly toBundleId: ReceiptBundleId;
+  /** Receipt記載順で固定した移動Item参照。 */
+  readonly itemIds: readonly string[];
+  /** 旧所属と既存Pairを保つ変更前事実。 */
+  readonly before: ConfirmedReceiptSnapshot;
+  /** 所属を一意・非空のまま更新した変更後事実。 */
+  readonly after: ConfirmedReceiptSnapshot;
+};
+
+/** 同Receiptの確認・Bundle対応／Item移動・初選択の順序付き履歴。 */
 export type ReceiptChange =
   | ReceiptConfirmationChange
   | ReceiptBundleRegistrationChange
-  | ReceiptBundleSnapshotSelectionChange;
+  | ReceiptBundleSnapshotSelectionChange
+  | ReceiptBundleItemsMovedChange;
 
 /** DraftかConfirmedかを識別するRoot Snapshot。 */
 export type ReceiptSnapshot = ReceiptDraftSnapshot | ConfirmedReceiptSnapshot;
@@ -309,7 +350,7 @@ export class Receipt {
     private readonly current: ReceiptSnapshot,
     /** Root内だけで進める版。永続層の先着・CASを証明しない。 */
     readonly version: number,
-    /** 確認・Bundle登録・初選択の不変履歴。Audit Logや保存Schemaではない。 */
+    /** 確認・Bundle登録／Item移動・初選択の不変履歴。Audit Logや保存Schemaではない。 */
     readonly changes: readonly ReceiptChange[],
   ) {
     Object.freeze(this);
@@ -529,6 +570,81 @@ export class Receipt {
       at,
       previousVersion: this.version,
       version: this.version + 1,
+      before,
+      after,
+    });
+    return new Receipt(
+      after,
+      this.version + 1,
+      Object.freeze([...this.changes, change]),
+    );
+  }
+
+  /**
+   * 双方の永久編集Policyを確認し、Item所属だけを既存Bundle間で移す。
+   * @param input 現在版、Uploader、日時、異なる移動元・移動先と移動Item参照。
+   * @returns 同Receipt ID・Pairを維持した新版。Expense反映と共通commitはCallerの別責務。
+   * @throws ReceiptInvariantViolation 状態、版、Actor、日時、両Bundle Policy、Item所属・非空条件が不正な場合。
+   */
+  moveBundleItems(input: MoveReceiptBundleItems): Receipt {
+    const { bundle: from, current: before } = this.requireEditableBundle({
+      expectedVersion: input.expectedVersion,
+      actorSubject: input.actorSubject,
+      bundleId: input.fromBundleId,
+    });
+    const { bundle: to } = this.requireEditableBundle({
+      expectedVersion: input.expectedVersion,
+      actorSubject: input.actorSubject,
+      bundleId: input.toBundleId,
+    });
+    requireCondition(!from.id.equals(to.id), 'BUNDLE_MOVE_TARGET_INVALID');
+    requireCondition(
+      Number.isSafeInteger(this.version + 1),
+      'VERSION_OVERFLOW',
+    );
+    const at = utcInstant(input.movedAt);
+    requireCondition(
+      Array.isArray(input.itemIds) &&
+        input.itemIds.length > 0 &&
+        input.itemIds.every(
+          (id) => typeof id === 'string' && id.trim().length > 0,
+        ) &&
+        new Set(input.itemIds).size === input.itemIds.length,
+      'BUNDLE_ITEMS_INVALID',
+    );
+    const moved = new Set(input.itemIds);
+    requireCondition(
+      input.itemIds.every((id) => from.itemIds.includes(id)),
+      'BUNDLE_ITEMS_INVALID',
+    );
+    requireCondition(moved.size < from.itemIds.length, 'BUNDLE_WOULD_BE_EMPTY');
+    const fromIds = new Set(from.itemIds.filter((id) => !moved.has(id)));
+    const toIds = new Set([...to.itemIds, ...input.itemIds]);
+    const orderedIds = (ids: ReadonlySet<string>): readonly string[] =>
+      Object.freeze(
+        before.items.filter((item) => ids.has(item.id)).map((item) => item.id),
+      );
+    const after: ConfirmedReceiptSnapshot = Object.freeze({
+      ...before,
+      bundles: Object.freeze(
+        before.bundles.map((bundle) =>
+          bundle === from
+            ? Object.freeze({ ...bundle, itemIds: orderedIds(fromIds) })
+            : bundle === to
+              ? Object.freeze({ ...bundle, itemIds: orderedIds(toIds) })
+              : bundle,
+        ),
+      ),
+    });
+    const change: ReceiptBundleItemsMovedChange = Object.freeze({
+      action: 'BundleItemsMoved',
+      actorSubject: input.actorSubject,
+      at,
+      previousVersion: this.version,
+      version: this.version + 1,
+      fromBundleId: from.id,
+      toBundleId: to.id,
+      itemIds: orderedIds(moved),
       before,
       after,
     });
