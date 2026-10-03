@@ -1,5 +1,9 @@
 import { GroupExpense } from './group-expense.js';
 import { ReceiptBundleId } from './value-objects/receipt-bundle-id.js';
+import {
+  ReceiptBundleSnapshotSelection,
+  type ReceiptBundleSnapshotSelectionInput,
+} from './value-objects/receipt-bundle-snapshot-selection.js';
 import type { ExpenseId } from './value-objects/expense-id.js';
 import { CategoryId } from './value-objects/category-id.js';
 import { OccurredOn } from './value-objects/occurred-on.js';
@@ -123,6 +127,8 @@ export type ConfirmedReceiptSnapshot = {
   readonly allocations: readonly ReceiptAdjustmentAllocationResult[];
   /** 初回登録済みのItemとExpense対応。実保存の証拠ではない。 */
   readonly bundles: readonly ReceiptBundleRegistration[];
+  /** 各Bundleの初Snapshot選択。Caseの現在状態から解除しない。 */
+  readonly bundleSnapshotSelections: readonly ReceiptBundleSnapshotSelection[];
   /** Receiptの現在状態。共有・保存状態の証明ではない。 */
   readonly status: 'Confirmed';
 };
@@ -173,9 +179,47 @@ export type ReceiptBundleRegistrationChange = {
   readonly after: ConfirmedReceiptSnapshot;
 };
 
-/** 同Receiptの確認とBundle登録の順序付き履歴。 */
+/** Source確認後の初選択factsをRootへ記録する内部入力。 */
+export type RecordReceiptBundleSnapshotSelection = {
+  /** 現在Root版。永続CASや操作結果replayの証拠ではない。 */
+  readonly expectedVersion: number;
+  /** Callerが確認したSource初選択facts。Uploader編集操作とは別。 */
+  readonly selection: ReceiptBundleSnapshotSelectionInput;
+};
+
+/** Item所属・payer・割合の共通編集Policyを照会する内部入力。 */
+export type CheckReceiptBundleEditing = {
+  /** 編集を判断するRoot版。実編集と同判断点で利用する。 */
+  readonly expectedVersion: number;
+  /** Uploaderと値比較するActor参照。実認可の証明ではない。 */
+  readonly actorSubject: string;
+  /** 登録済みBundleの参照。未知Bundleを編集可とは扱わない。 */
+  readonly bundleId: string;
+};
+
+/** 初選択を記録して永久編集lockを開始した不変Root履歴。 */
+export type ReceiptBundleSnapshotSelectionChange = {
+  /** 初Snapshot選択を記録した事実。解除・置換のLifecycleは持たない。 */
+  readonly action: 'BundleSnapshotSelected';
+  /** Sourceの選択Actor。取込ActorやUploaderの証明ではない。 */
+  readonly actorSubject: string;
+  /** Sourceの初選択UTC時刻。取込時刻やAudit Logではない。 */
+  readonly at: string;
+  /** 初選択記録を判断した旧Root版。 */
+  readonly previousVersion: number;
+  /** 記録成功後のRoot版。 */
+  readonly version: number;
+  /** 既存Item・初回対応を保持する記録前facts。 */
+  readonly before: ConfirmedReceiptSnapshot;
+  /** 初選択不変値を追加した記録後facts。 */
+  readonly after: ConfirmedReceiptSnapshot;
+};
+
+/** 同Receiptの確認・Bundle対応・初選択の順序付き履歴。 */
 export type ReceiptChange =
-  ReceiptConfirmationChange | ReceiptBundleRegistrationChange;
+  | ReceiptConfirmationChange
+  | ReceiptBundleRegistrationChange
+  | ReceiptBundleSnapshotSelectionChange;
 
 /** DraftかConfirmedかを識別するRoot Snapshot。 */
 export type ReceiptSnapshot = ReceiptDraftSnapshot | ConfirmedReceiptSnapshot;
@@ -258,13 +302,13 @@ const utcInstant = (value: Date): string => {
   return value.toISOString();
 };
 
-/** ERがReceipt確認・Bundle対応・合計Invariant・不変履歴を守る個別Root。 */
+/** ERがReceipt確認・Bundle対応・永久編集lock・合計Invariantを守る個別Root。 */
 export class Receipt {
   private constructor(
     private readonly current: ReceiptSnapshot,
     /** Root内だけで進める版。永続層の先着・CASを証明しない。 */
     readonly version: number,
-    /** 確認とBundle登録の順序付き履歴。Audit Logや保存Schemaではない。 */
+    /** 確認・Bundle登録・初選択の不変履歴。Audit Logや保存Schemaではない。 */
     readonly changes: readonly ReceiptChange[],
   ) {
     Object.freeze(this);
@@ -386,6 +430,7 @@ export class Receipt {
       adjustments: freezeAdjustments(input.adjustments),
       allocations: allocation.allocations,
       bundles: Object.freeze([]),
+      bundleSnapshotSelections: Object.freeze([]),
       status: 'Confirmed',
     });
     const change: ReceiptConfirmationChange = Object.freeze({
@@ -494,6 +539,85 @@ export class Receipt {
   }
 
   /**
+   * 登録済みBundleの初Snapshot選択を記録し、永久編集lockを開始する。
+   * @param input Source確認後の初選択factsと現在期待版。実最初のSource判定は外側の責務。
+   * @returns 新版Root。同一factを現在期待版で再入力した場合は同じRootのpure no-op。
+   * @throws ReceiptInvariantViolation 状態、版、Source Actor・UTC・参照対応が不正、または初選択を置換する場合。
+   */
+  recordBundleSnapshotSelection(
+    input: RecordReceiptBundleSnapshotSelection,
+  ): Receipt {
+    const before = this.current;
+    if (before.status !== 'Confirmed') return reject('RECEIPT_NOT_CONFIRMED');
+    this.requireVersion(input.expectedVersion);
+    const selection = ReceiptBundleSnapshotSelection.from(input.selection);
+    const bundle = before.bundles.find((value) =>
+      value.id.equals(selection.bundleId),
+    );
+    if (!bundle) return reject('BUNDLE_NOT_FOUND');
+    requireCondition(
+      bundle.expenseId.equals(selection.expenseId) &&
+        bundle.groupId === selection.groupId,
+      'BUNDLE_SNAPSHOT_PAIR_MISMATCH',
+    );
+    const first = before.bundleSnapshotSelections.find((value) =>
+      value.bundleId.equals(selection.bundleId),
+    );
+    if (first) {
+      if (first.equals(selection)) return this;
+      return reject('BUNDLE_ALREADY_SELECTED');
+    }
+    requireCondition(
+      Number.isSafeInteger(this.version + 1),
+      'VERSION_OVERFLOW',
+    );
+    const after: ConfirmedReceiptSnapshot = Object.freeze({
+      ...before,
+      bundleSnapshotSelections: Object.freeze([
+        ...before.bundleSnapshotSelections,
+        selection,
+      ]),
+    });
+    const change: ReceiptBundleSnapshotSelectionChange = Object.freeze({
+      action: 'BundleSnapshotSelected',
+      actorSubject: selection.actorSubject,
+      at: selection.selectedAt,
+      previousVersion: this.version,
+      version: this.version + 1,
+      before,
+      after,
+    });
+    return new Receipt(
+      after,
+      this.version + 1,
+      Object.freeze([...this.changes, change]),
+    );
+  }
+
+  /**
+   * Item所属・payer・割合についてUploaderの編集可否を検証する。
+   * @param input 同判断点の現在期待版、Actorと登録済みBundle参照。
+   * @throws ReceiptInvariantViolation 状態、版、Uploader、Bundle参照が不正、または初選択済みの場合。
+   */
+  assertBundleEditingAllowed(input: CheckReceiptBundleEditing): void {
+    const current = this.current;
+    if (current.status !== 'Confirmed') return reject('RECEIPT_NOT_CONFIRMED');
+    this.requireVersion(input.expectedVersion);
+    this.requireUploader(input.actorSubject);
+    const id = ReceiptBundleId.from(input.bundleId);
+    requireCondition(
+      current.bundles.some((bundle) => bundle.id.equals(id)),
+      'BUNDLE_NOT_FOUND',
+    );
+    requireCondition(
+      !current.bundleSnapshotSelections.some((selection) =>
+        selection.bundleId.equals(id),
+      ),
+      'BUNDLE_EDITING_LOCKED',
+    );
+  }
+
+  /**
    * 全Confirmed Itemに初回Expense対応がある純Domain事実を返す。
    * @returns Draftまたは未割当Itemがある場合false。trueも保存・月次包含の証拠ではない。
    */
@@ -507,14 +631,14 @@ export class Receipt {
     return current.items.every((item) => assigned.has(item.id));
   }
 
-  private requireUploaderVersion(
-    expectedVersion: number,
-    actorSubject: string,
-  ): void {
+  private requireVersion(expectedVersion: number): void {
     requireCondition(
       Number.isSafeInteger(expectedVersion) && expectedVersion === this.version,
       'VERSION_CONFLICT',
     );
+  }
+
+  private requireUploader(actorSubject: string): void {
     requireCondition(
       typeof actorSubject === 'string' && actorSubject.trim().length > 0,
       'ACTOR_REFERENCE_INVALID',
@@ -523,6 +647,14 @@ export class Receipt {
       actorSubject === this.current.uploaderSubject,
       'ACTOR_NOT_UPLOADER',
     );
+  }
+
+  private requireUploaderVersion(
+    expectedVersion: number,
+    actorSubject: string,
+  ): void {
+    this.requireVersion(expectedVersion);
+    this.requireUploader(actorSubject);
     requireCondition(
       Number.isSafeInteger(this.version + 1),
       'VERSION_OVERFLOW',
