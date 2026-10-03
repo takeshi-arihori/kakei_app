@@ -196,3 +196,7 @@ Ownerが案A3点へ「はい」と明示承認した。A170をOwner／Root／登
 ## Bundle payer／Split変更の純Domain trace（2026-10-03）
 
 [Task #186](https://github.com/takeshi-arihori/kakei_app/issues/186)の[payer／Split変更契約](../domain/receipt-bundle-split-change-contract.md)は、Receiptの共通編集Policyを通過した内部factsと対応Expenseの値整合を確認し、同ID・同登録Participant集合／joinOrder・額・購入日・Source・初回事実を維持してpayer／割合／整数負担を変更する。不変履歴とamount訂正履歴を相互に保持し、初選択後はfacts取得を永久拒否する。DTOは認可capabilityではなく、実Source currentness・初選択と編集の原子裁定・Receipt読取版fence＋Expense CAS、本人性／Group fence、durable lock／再送、実Item移動／Rejected後Item訂正、保存／Projection／API／画面は後続Gate。Accepted Decisionと公開Ready状態を変更しない。
+
+## Bundle Item移動の純Domain trace（2026-10-03）
+
+[Task #188](https://github.com/takeshi-arihori/kakei_app/issues/188)の[Item移動・Expense額反映契約](../domain/receipt-bundle-item-movement-contract.md)は、両Bundleの共通永久Policy・一意所属・非空を守り、Item調整値と同Pairを維持して所属を移す。Callerが前後Receipt factsを両Expenseへ束縛し、現在payer／割合・登録集合／joinOrder・初回事実・既存履歴を維持して額・整数負担を再計算する。0円移動でも両履歴を追加する。DTOは認可capabilityではなく、実Source／本人性・Group fence、初選択との同時裁定、Receiptと両Expenseの共通atomic commit／CAS／durable再送、Rejected後Item訂正、保護保存／Projection／API／画面は後続Gate。Accepted Decisionと公開Readyを変更しない。

@@ -21,7 +21,7 @@ Sourceの選択事実を取り込む操作はBundle編集とは別であり、So
 | SL-O2 | 複数Bundleは選択対象のみlock。後続の未割当Pair登録と全登録完了判定は従来どおりで、lockを消さない。 | 残Pair登録成功、新BundleはUploader Policy通過、旧Bundleは拒否 |
 | SL-F1 | 不成立は固定messageと機械判定可能codeのReceiptInvariantViolation。部分結果／旧Root変更なし。 | 拒否時非変更・deep immutability・入力mutation |
 
-`assertBundleEditingAllowed`は成功時voidを返す内部Policyで、Root版・履歴を変更しない。[Task #186のpayer／Split変更](receipt-bundle-split-change-contract.md)では、同じprivate guardを通る`bundleEditingFacts`で自Rootの参照・版・調整後合計を不変コピーし、Expenseが財務値だけを更新する。実Item移動は未実装で、同判断点の実Source／保存fenceは後続Gate。Policyを呼ぶだけでは本番認可や実編集との原子性を証明しない。
+`assertBundleEditingAllowed`は成功時voidを返す内部Policyで、Root版・履歴を変更しない。[Task #186のpayer／Split変更](receipt-bundle-split-change-contract.md)では、同じprivate guardを通る`bundleEditingFacts`で自Rootの参照・版・調整後合計を不変コピーし、Expenseが財務値だけを更新する。[Task #188のItem移動](receipt-bundle-item-movement-contract.md)も両Bundleに共通guardを適用する。同判断点の実Source／3Root共通保存は後続Gate。Policyを呼ぶだけでは本番認可や実編集との原子性を証明しない。
 
 ## 履歴と再入力
 
@@ -31,7 +31,7 @@ Sourceの選択事実を取り込む操作はBundle編集とは別であり、So
 
 ## 後続Gateと検証範囲
 
-実Item所属移動、Rejected後Item額／Adjustment／Category訂正は別Task。payer／割合の純Domain変更と既存Expense ID／登録Participant集合／履歴を保つ再計算は[Task #186の契約](receipt-bundle-split-change-contract.md)へTraceする。現在のlockはこれらのうち所属／payer／割合だけの編集Policyで、Rejected後Item訂正を禁止する新Ruleへ一般化しない。
+Item所属移動と両Expense額反映の純Domainは[Task #188の契約](receipt-bundle-item-movement-contract.md)へTrace。Rejected後Item額／Adjustment／Category訂正は別Task。payer／割合の純Domain変更と既存Expense ID／登録Participant集合／履歴を保つ再計算は[Task #186の契約](receipt-bundle-split-change-contract.md)へTraceする。現在のlockはこれらのうち所属／payer／割合だけの編集Policyで、Rejected後Item訂正を禁止する新Ruleへ一般化しない。
 
 ReceiptとCase選択・複数Pair変更の共通commit、CAS、durable初選択・operation再送、Source真偽／本人性／認可／Group fence、Port／保護Schema／Projection／API／UIは未接続のままとする。Context map、公開Schema、Migration、Runbookは変更しない。DB／Browser E2Eは本Sliceの対象外。
 
