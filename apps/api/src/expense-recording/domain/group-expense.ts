@@ -10,6 +10,10 @@ import type {
   CorrectExpenseAmount,
   ExpenseAmountCorrection,
 } from './expense-amount-correction.js';
+import type {
+  ChangeReceiptBundleSplit,
+  ReceiptBundleSplitChange,
+} from './receipt-bundle-split-change.js';
 
 /** Applicationが登録判断時に取得する参加者事実。現在の認可の証拠にはしない。 */
 export type ExpenseParticipantInput = {
@@ -39,19 +43,19 @@ export type RegisterGroupExpenseInput = {
   readonly participants: readonly ExpenseParticipantInput[];
 };
 
-/** 登録時のParticipant参照・割合・負担を一体として固定した値。 */
+/** 登録Participant参照と、その版の割合・負担を一体として固定した値。 */
 export type ExpenseAllocation = {
   /** 過去の支払責務を保持するParticipant参照。 */
   readonly participantId: string;
   /** 最大剰余の同率時に使う、登録時の参加順。 */
   readonly joinOrder: number;
-  /** 登録時の10%刻みの割合。0%は0円のまま保持する。 */
+  /** この版の10%刻みの割合。0%は0円のまま保持する。 */
   readonly percentage: number;
   /** 合計額と整数配賦から導出する、変更できないJPY負担。 */
   readonly burden: Money;
 };
 
-/** 精算へ渡す不変な現在事実。旧値は初回事実と訂正履歴に残す。公開／保存Schemaではない。 */
+/** 精算へ渡す不変な現在事実。旧値は初回事実と変更履歴に残す。公開／保存Schemaではない。 */
 export type GroupExpenseSnapshot = {
   /** 同じ支出を追跡する不変な識別子。 */
   readonly id: ExpenseId;
@@ -63,9 +67,9 @@ export type GroupExpenseSnapshot = {
   readonly occurredOn: OccurredOn;
   /** この版のJPY総額。訂正はRootから新しい値として作る。 */
   readonly total: Money;
-  /** 途中脱退しても書き換えない実支払者のParticipant参照。 */
+  /** 脱退だけでは変更しない実支払者。Bundleは初Snapshot選択前の明示変更を許す。 */
   readonly payerParticipantId: string;
-  /** 参加順で固定する全Participantの割合と負担。 */
+  /** 登録Participant集合・参加順を維持するこの版の割合と負担。 */
   readonly allocations: readonly ExpenseAllocation[];
 };
 
@@ -85,12 +89,16 @@ const immutableMoney = (amount: number): Money =>
 export class GroupExpense {
   private constructor(
     private readonly state: GroupExpenseSnapshot,
-    /** 登録時点の全事実。金額訂正後も維持する。 */
+    /** 登録時点の全事実。金額訂正・Bundle配賦変更後も維持する。 */
     readonly initialSnapshot: GroupExpenseSnapshot = state,
-    /** 初回1、訂正成功ごと+1。保存CASは別責務。 */
+    /** 初回1、金額訂正・実配賦変更ごと+1。保存CASは別責務。 */
     readonly version: number = 1,
-    /** 順序付き全訂正履歴。旧値・変更者・時刻・理由を保持する。 */
+    /** 金額だけの順序付き訂正履歴。旧値・変更者・時刻・理由を保持する。 */
     readonly corrections: readonly ExpenseAmountCorrection[] = Object.freeze(
+      [],
+    ),
+    /** Bundleのpayer／割合変更履歴。金額訂正後も維持する。 */
+    readonly bundleSplitChanges: readonly ReceiptBundleSplitChange[] = Object.freeze(
       [],
     ),
   ) {
@@ -207,6 +215,135 @@ export class GroupExpense {
       this.initialSnapshot,
       this.version + 1,
       Object.freeze([...this.corrections, record]),
+      this.bundleSplitChanges,
+    );
+  }
+
+  /**
+   * 未選択Bundleの編集factsに束縛し、同ID・同登録集合のpayer／割合だけを変更する。
+   * @param input 実Receipt照会・本人性・同時選択の裁定はApplication PREとなる内部入力。
+   * @returns 実変更の新版と不変履歴。同一財務値は全検証後に同じRootを返す。
+   * @throws ExpenseInvariantViolation 版、Source facts、Actor、日時、固定集合または配賦が不正な場合。
+   */
+  changeBundleSplit(input: ChangeReceiptBundleSplit): GroupExpense {
+    const requireSplit = (
+      condition: boolean,
+      code: ExpenseInvariantViolationCode,
+    ): void => {
+      if (!condition)
+        throw new ExpenseInvariantViolation(
+          code,
+          'Bundle split invariant violated',
+        );
+    };
+    requireSplit(
+      Number.isSafeInteger(input.expectedExpenseVersion) &&
+        input.expectedExpenseVersion === this.version,
+      'EXPENSE_VERSION_CONFLICT',
+    );
+    const fact = input.bundleFact;
+    requireSplit(
+      typeof fact === 'object' &&
+        fact !== null &&
+        [
+          fact.receiptId,
+          fact.bundleId,
+          fact.expenseId,
+          fact.groupId,
+          fact.uploaderSubject,
+        ].every(
+          (value) => typeof value === 'string' && value.trim().length > 0,
+        ) &&
+        Number.isSafeInteger(fact.adjustedAmount) &&
+        fact.adjustedAmount >= 0,
+      'BUNDLE_FACT_INVALID',
+    );
+    requireSplit(
+      Number.isSafeInteger(fact.receiptVersion) &&
+        fact.receiptVersion > 0 &&
+        Number.isSafeInteger(input.expectedReceiptVersion) &&
+        input.expectedReceiptVersion === fact.receiptVersion,
+      'RECEIPT_VERSION_CONFLICT',
+    );
+    requireSplit(
+      fact.expenseId === this.id.value &&
+        fact.groupId === this.state.groupId &&
+        fact.uploaderSubject === this.state.sourceOwnerSubject &&
+        fact.occurredOn === this.state.occurredOn.value &&
+        fact.adjustedAmount === this.state.total.amount,
+      'BUNDLE_FACT_MISMATCH',
+    );
+    requireReference(input.actorSubject);
+    requireSplit(
+      input.actorSubject === fact.uploaderSubject,
+      'ACTOR_NOT_UPLOADER',
+    );
+    requireSplit(
+      input.changedAt instanceof Date &&
+        Number.isFinite(input.changedAt.getTime()),
+      'UTC_INSTANT_INVALID',
+    );
+
+    const percentages = new Map(
+      input.percentages.map((p) => [p.participantId, p.percentage]),
+    );
+    requireSplit(
+      input.percentages.length === this.state.allocations.length &&
+        percentages.size === this.state.allocations.length &&
+        this.state.allocations.every((a) => percentages.has(a.participantId)),
+      'PARTICIPANT_SET_MISMATCH',
+    );
+    // 配列順やCaller指定joinOrderを採用せず、登録時集合へ割合だけを写して既存配賦を再利用する。
+    const calculated = GroupExpense.register({
+      id: this.id.value,
+      groupId: this.state.groupId,
+      sourceOwnerSubject: this.state.sourceOwnerSubject,
+      occurredOn: this.state.occurredOn.value,
+      amount: this.state.total.amount,
+      payerParticipantId: input.payerParticipantId,
+      participants: this.state.allocations.map((a) => ({
+        participantId: a.participantId,
+        joinOrder: a.joinOrder,
+        percentage: percentages.get(a.participantId)!,
+      })),
+    }).snapshot();
+    if (
+      calculated.payerParticipantId === this.state.payerParticipantId &&
+      calculated.allocations.every(
+        (a, n) => a.percentage === this.state.allocations[n].percentage,
+      )
+    )
+      return this;
+    requireSplit(Number.isSafeInteger(this.version + 1), 'VERSION_OVERFLOW');
+    const after = Object.freeze({
+      ...this.state,
+      payerParticipantId: calculated.payerParticipantId,
+      allocations: calculated.allocations,
+    });
+    const record: ReceiptBundleSplitChange = Object.freeze({
+      actorSubject: input.actorSubject,
+      at: input.changedAt.toISOString(),
+      previousVersion: this.version,
+      version: this.version + 1,
+      bundleFact: Object.freeze({
+        receiptId: fact.receiptId,
+        bundleId: fact.bundleId,
+        expenseId: fact.expenseId,
+        groupId: fact.groupId,
+        receiptVersion: fact.receiptVersion,
+        uploaderSubject: fact.uploaderSubject,
+        occurredOn: fact.occurredOn,
+        adjustedAmount: fact.adjustedAmount,
+      }),
+      before: this.state,
+      after,
+    });
+    return new GroupExpense(
+      after,
+      this.initialSnapshot,
+      this.version + 1,
+      this.corrections,
+      Object.freeze([...this.bundleSplitChanges, record]),
     );
   }
 

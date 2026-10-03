@@ -62,3 +62,7 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 ## Bundle初Snapshot選択と永久編集Policyの純Domain trace（2026-10-03）
 
 [Task #184](https://github.com/takeshi-arihori/kakei_app/issues/184)の[初選択・永久編集lock契約](../domain/receipt-bundle-snapshot-lock-contract.md)は、Receiptが初回Pairを維持してSource初選択の参照・Actor・UTCを不変値として記録し、以後のItem所属／payer／割合の編集可否を永久に拒否する内部Policyを扱う。Rejected／Withdrawn／Cancelledでも解除しない。Sourceの選択ActorにUploader一致を要求せず、編集PolicyだけをUploader専用とする。実Sourceの初選択確認・選択資格、実編集Command、保存atomicity／CAS／durable lock／再送、本人性／Group fence、Rejected後Item訂正、Projection／API／画面は後続Gateのまま。Accepted Decisionと公開Ready状態を変更しない。
+
+## Bundle payer／Split変更の純Domain trace（2026-10-03）
+
+[Task #186](https://github.com/takeshi-arihori/kakei_app/issues/186)の[payer／Split変更契約](../domain/receipt-bundle-split-change-contract.md)は、Receiptの共通編集Policyを通過した内部factsと対応Expenseの値整合を確認し、同ID・同登録Participant集合／joinOrder・額・購入日・Source・初回事実を維持してpayer／割合／整数負担を変更する。不変履歴とamount訂正履歴を相互に保持し、初選択後はfacts取得を永久拒否する。DTOは認可capabilityではなく、実Source currentness・初選択と編集の原子裁定・Receipt読取版fence＋Expense CAS、本人性／Group fence、durable lock／再送、実Item移動／Rejected後Item訂正、保存／Projection／API／画面は後続Gate。Accepted Decisionと公開Ready状態を変更しない。
