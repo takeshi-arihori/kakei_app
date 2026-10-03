@@ -1,4 +1,5 @@
 import { GroupExpense } from './group-expense.js';
+import type { ReceiptBundleEditingFacts } from './receipt-bundle-editing-facts.js';
 import { ReceiptBundleId } from './value-objects/receipt-bundle-id.js';
 import {
   ReceiptBundleSnapshotSelection,
@@ -600,21 +601,56 @@ export class Receipt {
    * @throws ReceiptInvariantViolation 状態、版、Uploader、Bundle参照が不正、または初選択済みの場合。
    */
   assertBundleEditingAllowed(input: CheckReceiptBundleEditing): void {
+    this.requireEditableBundle(input);
+  }
+
+  /**
+   * 編集Policyを適用し、自RootのBundle参照と調整後合計を内部factsへ写す。
+   * @param input 同判断点の現在期待版、Uploaderと登録済みBundle参照。
+   * @returns Rootを変更しない不変コピー。実認可・Source currentness・保存fenceは証明しない。
+   * @throws ReceiptInvariantViolation 状態、版、Uploader、Bundle参照が不正、または初選択済みの場合。
+   */
+  bundleEditingFacts(
+    input: CheckReceiptBundleEditing,
+  ): ReceiptBundleEditingFacts {
+    const { bundle, current } = this.requireEditableBundle(input);
+    const itemIds = new Set(bundle.itemIds);
+    const amount = current.items.reduce(
+      (sum, item) =>
+        itemIds.has(item.id) ? sum + BigInt(item.adjustedAmount) : sum,
+      0n,
+    );
+    // Confirmed全体合計が非負safe integerなので、非負Item部分和も安全に変換できる。
+    return Object.freeze({
+      receiptId: this.id.value,
+      bundleId: bundle.id.value,
+      expenseId: bundle.expenseId.value,
+      groupId: bundle.groupId,
+      receiptVersion: this.version,
+      uploaderSubject: current.uploaderSubject,
+      occurredOn: current.occurredOn.value,
+      adjustedAmount: Number(amount),
+    });
+  }
+
+  private requireEditableBundle(input: CheckReceiptBundleEditing): {
+    bundle: ReceiptBundleRegistration;
+    current: ConfirmedReceiptSnapshot;
+  } {
     const current = this.current;
     if (current.status !== 'Confirmed') return reject('RECEIPT_NOT_CONFIRMED');
     this.requireVersion(input.expectedVersion);
     this.requireUploader(input.actorSubject);
     const id = ReceiptBundleId.from(input.bundleId);
-    requireCondition(
-      current.bundles.some((bundle) => bundle.id.equals(id)),
-      'BUNDLE_NOT_FOUND',
-    );
+    const bundle = current.bundles.find((candidate) => candidate.id.equals(id));
+    if (!bundle) return reject('BUNDLE_NOT_FOUND');
     requireCondition(
       !current.bundleSnapshotSelections.some((selection) =>
         selection.bundleId.equals(id),
       ),
       'BUNDLE_EDITING_LOCKED',
     );
+    return { bundle, current };
   }
 
   /**

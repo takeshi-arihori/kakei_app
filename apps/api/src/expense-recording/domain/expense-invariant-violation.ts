@@ -1,4 +1,4 @@
-/** 手入力支出の生成を拒否する、公開Errorへ直結しない内部業務コード。 */
+/** 支出生成・金額訂正・Bundle配賦変更を拒否する、公開Errorへ直結しない内部業務コード。 */
 export type ExpenseInvariantViolationCode =
   | 'IDENTIFIER_EMPTY'
   | 'GROUP_ID_INVALID'
@@ -18,6 +18,12 @@ export type ExpenseInvariantViolationCode =
   | 'EXPENSE_NOT_CORRECTABLE'
   | 'ACTOR_NOT_SOURCE_OWNER_OR_OWNER'
   | 'CORRECTION_REASON_EMPTY'
+  | 'BUNDLE_FACT_INVALID'
+  | 'BUNDLE_FACT_MISMATCH'
+  | 'RECEIPT_VERSION_CONFLICT'
+  | 'ACTOR_NOT_UPLOADER'
+  | 'PARTICIPANT_SET_MISMATCH'
+  | 'VERSION_OVERFLOW'
   | 'UTC_INSTANT_INVALID';
 
 /** 無効な入力から支出を生成しないための、機械判定可能なDomain拒否。 */
