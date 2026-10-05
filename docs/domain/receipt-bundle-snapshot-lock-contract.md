@@ -36,3 +36,7 @@ Item所属移動と両Expense額反映の純Domainは[Task #188の契約](receip
 ReceiptとCase選択・複数Pair変更の共通commit、CAS、durable初選択・operation再送、Source真偽／本人性／認可／Group fence、Port／保護Schema／Projection／API／UIは未接続のままとする。Context map、公開Schema、Migration、Runbookは変更しない。DB／Browser E2Eは本Sliceの対象外。
 
 `receipt-bundle-snapshot-lock.spec.ts`はSource参照整合、Uploader Policy、初選択不変性／履歴、各実Case遷移後の永久拒否、段階登録との両立を検証する。Caseを使うのはTestだけで、Production DomainはContext横断依存を持たない。Architecture testと既存Receipt／Settlement回帰、Root QAを実行する。これらは実Source連携・実保存の実証ではない。
+
+## 登録済みItem Category訂正の純Domain trace（2026-10-05）
+
+[Task #190](https://github.com/takeshi-arihori/kakei_app/issues/190)の[Category訂正契約](receipt-item-category-correction-contract.md)は、Uploaderまたは現在Group Ownerが登録済みConfirmed Item一件のCategoryだけを訂正し、同ID・金融値・Bundle対応・初選択・旧Snapshot・全履歴を保持する。対象Itemに対応するExpenseが未選択なら編集可能、初選択後は同判断点の関連CaseがRejectedの場合だけ許可する。他Bundleの状態を対象へ流用せず、所属／payer／割合の永久固定を解除しない。同Categoryでも条件を検証したsameRoot no-op。実Category Active／Group適合・Source現在版／本人性・Closing、訂正と初選択／再申請の保存裁定・CAS／再送、金額／Adjustment訂正、月次Projection／公開API／画面は後続Gate。Accepted Decisionと公開Readyを変更しない。

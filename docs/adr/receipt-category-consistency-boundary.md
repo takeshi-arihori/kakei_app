@@ -82,3 +82,7 @@ Receipt Rootの競合・履歴Cost、Category責務の分離、BundleとExpense�
 ## Bundle Item移動の純Domain trace（2026-10-03）
 
 [Task #188](https://github.com/takeshi-arihori/kakei_app/issues/188)の[Item移動・Expense額反映契約](../domain/receipt-bundle-item-movement-contract.md)は、両Bundleの共通永久Policy・一意所属・非空を守り、Item調整値と同Pairを維持して所属を移す。Callerが前後Receipt factsを両Expenseへ束縛し、現在payer／割合・登録集合／joinOrder・初回事実・既存履歴を維持して額・整数負担を再計算する。0円移動でも両履歴を追加する。DTOは認可capabilityではなく、実Source／本人性・Group fence、初選択との同時裁定、Receiptと両Expenseの共通atomic commit／CAS／durable再送、Rejected後Item訂正、保護保存／Projection／API／画面は後続Gate。Accepted Decisionと公開Readyを変更しない。
+
+## 登録済みItem Category訂正の純Domain trace（2026-10-05）
+
+[Task #190](https://github.com/takeshi-arihori/kakei_app/issues/190)の[Category訂正契約](../domain/receipt-item-category-correction-contract.md)は、Uploaderまたは現在Group Ownerが登録済みConfirmed Item一件のCategoryだけを訂正し、同ID・金融値・Bundle対応・初選択・旧Snapshot・全履歴を保持する。対象Itemに対応するExpenseが未選択なら編集可能、初選択後は同判断点の関連CaseがRejectedの場合だけ許可する。他Bundleの状態を対象へ流用せず、所属／payer／割合の永久固定を解除しない。同Categoryでも条件を検証したsameRoot no-op。実Category Active／Group適合・Source現在版／本人性・Closing、訂正と初選択／再申請の保存裁定・CAS／再送、金額／Adjustment訂正、月次Projection／公開API／画面は後続Gate。Accepted Decisionと公開Readyを変更しない。

@@ -41,3 +41,7 @@ Draft factoryは内部RootとしてCandidate factsをcopy／freezeする。Confi
 ## Test Trace
 
 `apps/api/src/expense-recording/domain/receipt.spec.ts`はDraft→Confirmed同一ID、版・履歴、明示されたItem／Adjustment確認値、Adjustment変更・削除、合計一致／不一致、購入日、Actor／期待版／状態失敗、深い不変性、旧Root非変更を検証する。API architecture testはDomainの依存方向を検証する。Domain成功だけでは実認可・保存・共有を主張しない。
+
+## 登録済みItem Category訂正の純Domain trace（2026-10-05）
+
+[Task #190](https://github.com/takeshi-arihori/kakei_app/issues/190)の[Category訂正契約](receipt-item-category-correction-contract.md)は、Uploaderまたは現在Group Ownerが登録済みConfirmed Item一件のCategoryだけを訂正し、同ID・金融値・Bundle対応・初選択・旧Snapshot・全履歴を保持する。対象Itemに対応するExpenseが未選択なら編集可能、初選択後は同判断点の関連CaseがRejectedの場合だけ許可する。他Bundleの状態を対象へ流用せず、所属／payer／割合の永久固定を解除しない。同Categoryでも条件を検証したsameRoot no-op。実Category Active／Group適合・Source現在版／本人性・Closing、訂正と初選択／再申請の保存裁定・CAS／再送、金額／Adjustment訂正、月次Projection／公開API／画面は後続Gate。Accepted Decisionと公開Readyを変更しない。
