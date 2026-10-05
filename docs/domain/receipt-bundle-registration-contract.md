@@ -43,3 +43,7 @@ JPY合計はBigIntで比較し、0円とsafe integer上限も扱う。safe integ
 ## 検証と文書影響
 
 `apps/api/src/expense-recording/domain/receipt-bundle-registration.spec.ts`が上記契約を検証する。既存Receipt確認・Adjustment・GroupExpense配賦／訂正の回帰とAPI architecture testを実施する。新しいFramework／DB／API／Context間依存を追加せず、3 Context map、Migration、GraphQL Schema、運用Runbookの変更は不要。実DB／Browser E2Eはこの純Domain Sliceの対象外で、後続の保存・接続Taskで必要となる。
+
+## 登録済みItem Category訂正の純Domain trace（2026-10-05）
+
+[Task #190](https://github.com/takeshi-arihori/kakei_app/issues/190)の[Category訂正契約](receipt-item-category-correction-contract.md)は、Uploaderまたは現在Group Ownerが登録済みConfirmed Item一件のCategoryだけを訂正し、同ID・金融値・Bundle対応・初選択・旧Snapshot・全履歴を保持する。対象Itemに対応するExpenseが未選択なら編集可能、初選択後は同判断点の関連CaseがRejectedの場合だけ許可する。他Bundleの状態を対象へ流用せず、所属／payer／割合の永久固定を解除しない。同Categoryでも条件を検証したsameRoot no-op。実Category Active／Group適合・Source現在版／本人性・Closing、訂正と初選択／再申請の保存裁定・CAS／再送、金額／Adjustment訂正、月次Projection／公開API／画面は後続Gate。Accepted Decisionと公開Readyを変更しない。

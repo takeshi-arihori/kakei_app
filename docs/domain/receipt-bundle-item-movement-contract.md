@@ -42,3 +42,7 @@ Rejected後Item金額／Adjustment／Category訂正と月次反映は別契約�
 実Source currentness／最初の選択、本人性／Group fence・Closing、3Rootの保存atomicity／CAS、durable lock／再送、保護保存・Retention、Projection／API／UI／OCRは後続Gate。新履歴の金融facts・Actorをplaintext Storage／Logへ保存しない。
 
 初回登録・永久lock・payerSplit契約、ADR170/179、Inventory、design-gatesへtraceを同期する。Context map／正式図は所有・境界・Entity関係不変で更新不要。公開Schema／Migration／保護Record／Runbook変更なし。Bundle経路のDB／Browser E2Eは未接続のため省略し、既存API／PostgreSQL・Web入口E2EはCIで確認する。RollbackはPR revert、Accepted承認履歴・公開Readyを維持する。
+
+## 登録済みItem Category訂正の純Domain trace（2026-10-05）
+
+[Task #190](https://github.com/takeshi-arihori/kakei_app/issues/190)の[Category訂正契約](receipt-item-category-correction-contract.md)は、Uploaderまたは現在Group Ownerが登録済みConfirmed Item一件のCategoryだけを訂正し、同ID・金融値・Bundle対応・初選択・旧Snapshot・全履歴を保持する。対象Itemに対応するExpenseが未選択なら編集可能、初選択後は同判断点の関連CaseがRejectedの場合だけ許可する。他Bundleの状態を対象へ流用せず、所属／payer／割合の永久固定を解除しない。同Categoryでも条件を検証したsameRoot no-op。実Category Active／Group適合・Source現在版／本人性・Closing、訂正と初選択／再申請の保存裁定・CAS／再送、金額／Adjustment訂正、月次Projection／公開API／画面は後続Gate。Accepted Decisionと公開Readyを変更しない。
