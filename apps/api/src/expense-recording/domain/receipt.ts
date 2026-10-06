@@ -1,4 +1,10 @@
 import type {
+  CorrectReceiptItemAmount,
+  ReceiptItemAmountAffectedCase,
+  ReceiptItemAmountCorrectedChange,
+} from './receipt-item-amount-correction.js';
+import type { ReceiptItemCorrectionCaseFact } from './receipt-item-correction-case-fact.js';
+import type {
   CorrectReceiptItemCategory,
   ReceiptItemCategoryCorrectedChange,
 } from './receipt-item-category-correction.js';
@@ -260,13 +266,14 @@ export type ReceiptBundleItemsMovedChange = {
   readonly after: ConfirmedReceiptSnapshot;
 };
 
-/** 同Receiptの確認・Bundle対応／Item移動・初選択・Item Category訂正の順序付き履歴。 */
+/** 同Receiptの確認・Bundle対応／Item移動・初選択・Item Category／原額訂正の順序付き履歴。 */
 export type ReceiptChange =
   | ReceiptConfirmationChange
   | ReceiptBundleRegistrationChange
   | ReceiptBundleSnapshotSelectionChange
   | ReceiptBundleItemsMovedChange
-  | ReceiptItemCategoryCorrectedChange;
+  | ReceiptItemCategoryCorrectedChange
+  | ReceiptItemAmountCorrectedChange;
 
 /** DraftかConfirmedかを識別するRoot Snapshot。 */
 export type ReceiptSnapshot = ReceiptDraftSnapshot | ConfirmedReceiptSnapshot;
@@ -355,7 +362,7 @@ export class Receipt {
     private readonly current: ReceiptSnapshot,
     /** Root内だけで進める版。永続層の先着・CASを証明しない。 */
     readonly version: number,
-    /** 確認・Bundle登録／Item移動・初選択・Category訂正の不変履歴。Audit Logや保存Schemaではない。 */
+    /** 確認・Bundle登録／Item移動・初選択・Category／原額訂正の不変履歴。Audit Logや保存Schemaではない。 */
     readonly changes: readonly ReceiptChange[],
   ) {
     Object.freeze(this);
@@ -595,18 +602,7 @@ export class Receipt {
     const before = this.current;
     if (before.status !== 'Confirmed') return reject('RECEIPT_NOT_CONFIRMED');
     this.requireVersion(input.expectedVersion);
-    requireCondition(
-      typeof input.actorSubject === 'string' &&
-        input.actorSubject.trim().length > 0 &&
-        typeof input.currentOwnerSubject === 'string' &&
-        input.currentOwnerSubject.trim().length > 0,
-      'ACTOR_REFERENCE_INVALID',
-    );
-    requireCondition(
-      input.actorSubject === before.uploaderSubject ||
-        input.actorSubject === input.currentOwnerSubject,
-      'ACTOR_NOT_UPLOADER_OR_OWNER',
-    );
+    this.requireItemCorrectionActor(before, input);
     const at = utcInstant(input.correctedAt);
     requireCondition(
       typeof input.groupId === 'string' && input.groupId.trim().length > 0,
@@ -632,43 +628,13 @@ export class Receipt {
       return reject('CATEGORY_REFERENCE_INVALID');
     }
 
-    // 所属／payer編集の永久guardとは別に、対象Expenseの明細訂正Policyを守る。
-    const selected = before.bundleSnapshotSelections.some((selection) =>
-      selection.bundleId.equals(bundle.id),
-    );
     const fact = input.caseFact;
-    if (!selected) {
-      requireCondition(
-        fact === null && input.expectedCaseVersion === null,
-        'CASE_FACT_UNEXPECTED',
-      );
-    } else {
-      if (!fact || typeof fact !== 'object')
-        return reject('CASE_FACT_REQUIRED');
-      requireCondition(
-        fact.groupId === bundle.groupId &&
-          fact.expenseId === bundle.expenseId.value,
-        'CASE_FACT_MISMATCH',
-      );
-      requireCondition(
-        typeof fact.caseId === 'string' &&
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
-            fact.caseId,
-          ),
-        'CASE_REFERENCE_INVALID',
-      );
-      requireCondition(
-        Number.isSafeInteger(fact.version) &&
-          fact.version > 0 &&
-          Number.isSafeInteger(input.expectedCaseVersion) &&
-          input.expectedCaseVersion === fact.version,
-        'CASE_VERSION_CONFLICT',
-      );
-      requireCondition(
-        fact.lifecycle === 'Rejected',
-        'ITEM_CATEGORY_NOT_CORRECTABLE',
-      );
-    }
+    this.requireItemCorrectionCase(
+      bundle,
+      input.expectedCaseVersion,
+      fact,
+      'ITEM_CATEGORY_NOT_CORRECTABLE',
+    );
     if (item.categoryId.equals(categoryId)) return this;
     requireCondition(
       Number.isSafeInteger(this.version + 1),
@@ -691,16 +657,7 @@ export class Receipt {
       itemId: item.id,
       previousVersion: this.version,
       version: this.version + 1,
-      caseFact:
-        fact === null
-          ? null
-          : Object.freeze({
-              caseId: fact.caseId,
-              groupId: fact.groupId,
-              expenseId: fact.expenseId,
-              version: fact.version,
-              lifecycle: fact.lifecycle,
-            }),
+      caseFact: this.copyItemCorrectionCase(fact),
       before,
       after,
     });
@@ -709,6 +666,227 @@ export class Receipt {
       this.version + 1,
       Object.freeze([...this.changes, change]),
     );
+  }
+
+  /**
+   * 登録済みItem原額を訂正し、全Adjustmentと影響Bundleの資格を一括検証する。
+   * @param input 実本人性・全Source現在版・共通commitはCaller PREとなる内部訂正入力。
+   * @returns Pair・初選択と旧履歴を保つReceipt新版。同原額は全条件検証後sameRoot。
+   * @throws ReceiptInvariantViolation 版、資格、理由、原額・合計・再配賦、影響集合または各Case条件が不正な場合。
+   */
+  correctItemAmount(input: CorrectReceiptItemAmount): Receipt {
+    const before = this.current;
+    if (before.status !== 'Confirmed') return reject('RECEIPT_NOT_CONFIRMED');
+    this.requireVersion(input.expectedVersion);
+    this.requireItemCorrectionActor(before, input);
+    const at = utcInstant(input.correctedAt);
+    requireCondition(
+      typeof input.reason === 'string' && input.reason.trim().length > 0,
+      'CORRECTION_REASON_EMPTY',
+    );
+    requireCondition(
+      typeof input.groupId === 'string' && input.groupId.trim().length > 0,
+      'GROUP_REFERENCE_INVALID',
+    );
+    requireCondition(
+      typeof input.itemId === 'string' && input.itemId.trim().length > 0,
+      'ITEM_FACT_INVALID',
+    );
+    const item = before.items.find((i) => i.id === input.itemId);
+    if (!item) return reject('ITEM_NOT_FOUND');
+    const target = before.bundles.find((b) => b.itemIds.includes(item.id));
+    if (!target) return reject('ITEM_NOT_BUNDLED');
+    requireCondition(target.groupId === input.groupId, 'BUNDLE_GROUP_MISMATCH');
+    requireCondition(
+      Number.isSafeInteger(input.declaredTotal) && input.declaredTotal >= 0,
+      'TOTAL_INVALID',
+    );
+    let calculation;
+    try {
+      calculation = ReceiptAdjustmentAllocation.calculate(
+        before.items.map((i) => ({
+          id: i.id,
+          amount: i === item ? input.amount : i.originalAmount,
+        })),
+        before.adjustments,
+      );
+    } catch (error) {
+      if (error instanceof ReceiptAdjustmentViolation)
+        return reject('ADJUSTMENT_INVALID');
+      throw error;
+    }
+    const total = calculation.items.reduce(
+      (n, i) => n + BigInt(i.adjustedAmount),
+      0n,
+    );
+    requireCondition(
+      total === BigInt(input.declaredTotal),
+      'RECEIPT_TOTAL_MISMATCH',
+    );
+    // Receipt全体配賦の波及先も含め、各金融事実が変わるBundleをRoot自身が導出する。
+    const affectedItems = new Set(
+      before.items
+        .filter(
+          (i, n) =>
+            i === item ||
+            i.originalAmount !== calculation.items[n].originalAmount ||
+            i.adjustedAmount !== calculation.items[n].adjustedAmount ||
+            before.allocations.some(
+              (a, k) => a.amounts[n] !== calculation.allocations[k].amounts[n],
+            ),
+        )
+        .map((i) => i.id),
+    );
+    const affectedBundles = before.bundles.filter((b) =>
+      b.itemIds.some((id) => affectedItems.has(id)),
+    );
+    requireCondition(
+      Array.isArray(input.affectedCaseFacts) &&
+        input.affectedCaseFacts.length === affectedBundles.length &&
+        input.affectedCaseFacts.every(
+          (f: ReceiptItemAmountAffectedCase) =>
+            f !== null &&
+            typeof f === 'object' &&
+            affectedBundles.some((b) => b.id.value === f.bundleId),
+        ) &&
+        new Set(
+          input.affectedCaseFacts.map(
+            (f: ReceiptItemAmountAffectedCase) => f.bundleId,
+          ),
+        ).size === affectedBundles.length,
+      'AFFECTED_CASE_FACTS_MISMATCH',
+    );
+    const affectedCaseFacts = Object.freeze(
+      affectedBundles.map((b) => {
+        requireCondition(b.groupId === input.groupId, 'BUNDLE_GROUP_MISMATCH');
+        const f = input.affectedCaseFacts.find(
+          (f) => f.bundleId === b.id.value,
+        )!;
+        this.requireItemCorrectionCase(
+          b,
+          f.expectedCaseVersion,
+          f.caseFact,
+          'ITEM_AMOUNT_NOT_CORRECTABLE',
+        );
+        return Object.freeze({
+          bundleId: b.id.value,
+          expectedCaseVersion: f.expectedCaseVersion,
+          caseFact: this.copyItemCorrectionCase(f.caseFact),
+        });
+      }),
+    );
+    if (item.originalAmount === input.amount) return this;
+    requireCondition(
+      Number.isSafeInteger(this.version + 1),
+      'VERSION_OVERFLOW',
+    );
+    const after: ConfirmedReceiptSnapshot = Object.freeze({
+      ...before,
+      declaredTotal: input.declaredTotal,
+      items: Object.freeze(
+        before.items.map((i, n) =>
+          Object.freeze({
+            ...i,
+            originalAmount: calculation.items[n].originalAmount,
+            adjustedAmount: calculation.items[n].adjustedAmount,
+          }),
+        ),
+      ),
+      allocations: calculation.allocations,
+    });
+    const change: ReceiptItemAmountCorrectedChange = Object.freeze({
+      action: 'ItemAmountCorrected',
+      actorSubject: input.actorSubject,
+      currentOwnerSubject: input.currentOwnerSubject,
+      groupId: input.groupId,
+      at,
+      reason: input.reason,
+      itemId: item.id,
+      previousVersion: this.version,
+      version: this.version + 1,
+      affectedCaseFacts,
+      before,
+      after,
+    });
+    return new Receipt(
+      after,
+      this.version + 1,
+      Object.freeze([...this.changes, change]),
+    );
+  }
+
+  private requireItemCorrectionActor(
+    before: ConfirmedReceiptSnapshot,
+    input: { actorSubject: string; currentOwnerSubject: string },
+  ): void {
+    requireCondition(
+      typeof input.actorSubject === 'string' &&
+        input.actorSubject.trim().length > 0 &&
+        typeof input.currentOwnerSubject === 'string' &&
+        input.currentOwnerSubject.trim().length > 0,
+      'ACTOR_REFERENCE_INVALID',
+    );
+    requireCondition(
+      input.actorSubject === before.uploaderSubject ||
+        input.actorSubject === input.currentOwnerSubject,
+      'ACTOR_NOT_UPLOADER_OR_OWNER',
+    );
+  }
+
+  private requireItemCorrectionCase(
+    bundle: ReceiptBundleRegistration,
+    expectedCaseVersion: number | null,
+    fact: ReceiptItemCorrectionCaseFact | null,
+    notCorrectable:
+      'ITEM_AMOUNT_NOT_CORRECTABLE' | 'ITEM_CATEGORY_NOT_CORRECTABLE',
+  ): void {
+    const selected =
+      this.current.status === 'Confirmed' &&
+      this.current.bundleSnapshotSelections.some((s) =>
+        s.bundleId.equals(bundle.id),
+      );
+    if (!selected) {
+      requireCondition(
+        fact === null && expectedCaseVersion === null,
+        'CASE_FACT_UNEXPECTED',
+      );
+      return;
+    }
+    if (!fact || typeof fact !== 'object') return reject('CASE_FACT_REQUIRED');
+    requireCondition(
+      fact.groupId === bundle.groupId &&
+        fact.expenseId === bundle.expenseId.value,
+      'CASE_FACT_MISMATCH',
+    );
+    requireCondition(
+      typeof fact.caseId === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+          fact.caseId,
+        ),
+      'CASE_REFERENCE_INVALID',
+    );
+    requireCondition(
+      Number.isSafeInteger(fact.version) &&
+        fact.version > 0 &&
+        Number.isSafeInteger(expectedCaseVersion) &&
+        expectedCaseVersion === fact.version,
+      'CASE_VERSION_CONFLICT',
+    );
+    requireCondition(fact.lifecycle === 'Rejected', notCorrectable);
+  }
+
+  private copyItemCorrectionCase(
+    fact: ReceiptItemCorrectionCaseFact | null,
+  ): ReceiptItemCorrectionCaseFact | null {
+    return fact === null
+      ? null
+      : Object.freeze({
+          caseId: fact.caseId,
+          groupId: fact.groupId,
+          expenseId: fact.expenseId,
+          version: fact.version,
+          lifecycle: fact.lifecycle,
+        });
   }
 
   /**

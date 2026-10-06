@@ -43,3 +43,8 @@ Item所属移動と両Expense額・負担反映の純Domainは[Task #188の契�
 実Source currentness／初選択真偽、本人性／Group資格・Closing、Receipt読取版fence＋Expense CAS／共通atomic commit、durable first selection／lock／再送結果、保護保存、Projection／API／UI／OCR／Retentionは未接続。新履歴の金融facts・Actorをplaintext Storage／Logへ保存しない。
 
 ADR170/179、Inventory、design-gates、初回登録／lock契約へ実装traceを同期する。Context map／正式図は所有・境界・Entity関係を変えないため更新不要。公開Schema／Migration／保護Record／Runbookの変更はなく、API／DB／Stack／視覚証跡SkillとDB／Browser E2Eは本純Domain Sliceでは省略する。公開Operation／画面Readyを引き上げず、RollbackはPR revertでAccepted承認履歴を維持する。
+
+
+## 登録済みItem原額訂正とExpense反映の純Domain trace（2026-10-06）
+
+[Task #192](https://github.com/takeshi-arihori/kakei_app/issues/192)の[原額訂正・財務反映契約](receipt-item-amount-correction-contract.md)は、Uploaderまたは現在Group Ownerが登録済みItem一件の原額を理由付き訂正し、既存Adjustment再配賦で影響する全Bundleの未選択／Rejected条件を検証する。各既存Expense ID・登録集合／payer／割合・初回事実・全履歴と旧精算Revisionを維持して額・負担へ反映する。Bundle永久lockを解除しない。Adjustment自体の編集、Draft／一般編集、実Source・認可／Group fence、全影響Root共通保存／CAS／再送、保護保存／Projection／API／画面は後続Gate。純Domain成功を実保存や公開Readyの証拠にしない。
