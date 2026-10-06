@@ -47,3 +47,8 @@ Actor／Owner空参照と不正額は既存IDENTIFIER_EMPTY／AMOUNT_INVALIDを�
 未接続Gateは通常編集・他訂正Field・Receipt／Bundle／Category・本番本人性・認可Port・Group fence・予約／実解放／保存CAS・operationキーと再送結果・保護Schema／Key／Audit／Backup・公開GraphQL／Read／UIである。ADR55／73の保護Retentionを維持し、金額・Actor・理由をplaintext Log／DBへ保存しない。
 
 履歴copyと容量は訂正数に応じて増え、公開保存前に実規模・CPU／timeout／容量を評価する。Confirmed RuleとAccepted境界を変えないためcurrent-model／ADR／Contextmapは変更不要。I/O・Schema・Migration・UI・運用変更がなく、対応文書も更新不要。Data変更はなく、未接続CodeのrevertでRollbackする。
+
+
+## 登録済みItem原額訂正とExpense反映の純Domain trace（2026-10-06）
+
+[Task #192](https://github.com/takeshi-arihori/kakei_app/issues/192)の[原額訂正・財務反映契約](receipt-item-amount-correction-contract.md)は、Uploaderまたは現在Group Ownerが登録済みItem一件の原額を理由付き訂正し、既存Adjustment再配賦で影響する全Bundleの未選択／Rejected条件を検証する。各既存Expense ID・登録集合／payer／割合・初回事実・全履歴と旧精算Revisionを維持して額・負担へ反映する。Bundle永久lockを解除しない。Adjustment自体の編集、Draft／一般編集、実Source・認可／Group fence、全影響Root共通保存／CAS／再送、保護保存／Projection／API／画面は後続Gate。純Domain成功を実保存や公開Readyの証拠にしない。

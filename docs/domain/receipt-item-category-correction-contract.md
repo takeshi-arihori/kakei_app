@@ -34,3 +34,8 @@ Category訂正では金額・負担が変わらないため、Expenseの財務�
 手入力Expenseのamount訂正が持つ解放済みWithdrawn／Cancelledの扱いを、このReceipt Category操作へ転用しない。Bundle所属／payer／割合のUploader専用永久guardもCategory訂正へ転用せず、訂正成功後も永久固定を維持する。
 
 関連Category・Receipt・Bundle契約、ADR170／179、Inventory／design-gatesへ実装Traceを同期する。Context map／正式図は境界・所有・関係不変のため更新不要。公開Schema／Migration／保護Record／Runbook変更なし。Category経路のDB／Browser業務E2Eは未接続のため対象外、既存API／PostgreSQL結合・Web入口E2EはCIで回帰する。RollbackはPR revert。Accepted Decision・承認履歴・公開Readyを変更しない。
+
+
+## 登録済みItem原額訂正とExpense反映の純Domain trace（2026-10-06）
+
+[Task #192](https://github.com/takeshi-arihori/kakei_app/issues/192)の[原額訂正・財務反映契約](receipt-item-amount-correction-contract.md)は、Uploaderまたは現在Group Ownerが登録済みItem一件の原額を理由付き訂正し、既存Adjustment再配賦で影響する全Bundleの未選択／Rejected条件を検証する。各既存Expense ID・登録集合／payer／割合・初回事実・全履歴と旧精算Revisionを維持して額・負担へ反映する。Bundle永久lockを解除しない。Adjustment自体の編集、Draft／一般編集、実Source・認可／Group fence、全影響Root共通保存／CAS／再送、保護保存／Projection／API／画面は後続Gate。純Domain成功を実保存や公開Readyの証拠にしない。

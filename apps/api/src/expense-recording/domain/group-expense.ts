@@ -1,3 +1,8 @@
+import type {
+  ReflectReceiptItemAmountCorrection,
+  ReceiptItemAmountCorrection,
+} from './receipt-item-amount-correction.js';
+import type { ConfirmedReceiptSnapshot } from './receipt.js';
 import type { ReceiptBundleEditingFacts } from './receipt-bundle-editing-facts.js';
 import type {
   ReflectReceiptBundleItemMovement,
@@ -121,6 +126,10 @@ export class GroupExpense {
     readonly bundleItemMovements: readonly ReceiptBundleItemMovement[] = Object.freeze(
       [],
     ),
+    /** Receipt Item原額訂正の当Pair財務反映履歴。他種変更でも保持する。 */
+    readonly receiptItemAmountCorrections: readonly ReceiptItemAmountCorrection[] = Object.freeze(
+      [],
+    ),
   ) {
     Object.freeze(this);
   }
@@ -237,6 +246,7 @@ export class GroupExpense {
       Object.freeze([...this.corrections, record]),
       this.bundleSplitChanges,
       this.bundleItemMovements,
+      this.receiptItemAmountCorrections,
     );
   }
 
@@ -319,6 +329,7 @@ export class GroupExpense {
       this.corrections,
       Object.freeze([...this.bundleSplitChanges, record]),
       this.bundleItemMovements,
+      this.receiptItemAmountCorrections,
     );
   }
 
@@ -402,7 +413,216 @@ export class GroupExpense {
       this.corrections,
       this.bundleSplitChanges,
       Object.freeze([...this.bundleItemMovements, record]),
+      this.receiptItemAmountCorrections,
     );
+  }
+
+  /**
+   * 実Receipt原額訂正の前後Pairへ束縛し、現在payer／割合で額と負担を再計算する。
+   * @param input 実Source前後・本人性・全影響Root共通commitはCaller PREとなる内部反映入力。
+   * @returns 同ID・登録集合・全既存履歴を保つExpense新版。同額Pairにも明細訂正履歴を追加する。
+   * @throws ExpenseInvariantViolation 版、前後Pair・旧額・Actor・Case・理由・時刻・新版上限が不正な場合。
+   */
+  reflectReceiptItemAmountCorrection(
+    input: ReflectReceiptItemAmountCorrection,
+  ): GroupExpense {
+    requireBundleChange(
+      Number.isSafeInteger(input.expectedExpenseVersion) &&
+        input.expectedExpenseVersion === this.version,
+      'EXPENSE_VERSION_CONFLICT',
+    );
+    const c = input.change;
+    requireBundleChange(
+      c !== null &&
+        typeof c === 'object' &&
+        c.action === 'ItemAmountCorrected' &&
+        c.before?.status === 'Confirmed' &&
+        c.after?.status === 'Confirmed',
+      'BUNDLE_FACT_INVALID',
+    );
+    requireBundleChange(
+      Number.isSafeInteger(c.previousVersion) &&
+        c.previousVersion > 0 &&
+        input.expectedReceiptVersion === c.previousVersion &&
+        Number.isSafeInteger(c.version) &&
+        c.version === c.previousVersion + 1,
+      'RECEIPT_VERSION_CONFLICT',
+    );
+    const beforePair = c.before.bundles.find(
+        (b) => b.expenseId.value === this.id.value,
+      ),
+      afterPair = c.after.bundles.find(
+        (b) => b.expenseId.value === this.id.value,
+      );
+    if (!beforePair || !afterPair) return this.rejectItemAmountFact();
+    requireBundleChange(
+      c.before.id.equals(c.after.id) &&
+        c.before.uploaderSubject === this.state.sourceOwnerSubject &&
+        c.after.uploaderSubject === this.state.sourceOwnerSubject &&
+        c.groupId === this.state.groupId &&
+        beforePair.groupId === c.groupId &&
+        afterPair.groupId === c.groupId &&
+        beforePair.id.equals(afterPair.id) &&
+        beforePair.itemIds.length === afterPair.itemIds.length &&
+        beforePair.itemIds.every((id, n) => id === afterPair.itemIds[n]) &&
+        c.before.occurredOn.value === this.state.occurredOn.value &&
+        c.after.occurredOn.value === this.state.occurredOn.value,
+      'BUNDLE_FACT_MISMATCH',
+    );
+    const beforeAmount = this.receiptPairAmount(c.before, beforePair.itemIds),
+      afterAmount = this.receiptPairAmount(c.after, afterPair.itemIds);
+    requireBundleChange(
+      beforeAmount === this.state.total.amount,
+      'BUNDLE_FACT_MISMATCH',
+    );
+    requireReference(c.actorSubject);
+    requireReference(c.currentOwnerSubject);
+    requireBundleChange(
+      c.actorSubject === this.state.sourceOwnerSubject ||
+        c.actorSubject === c.currentOwnerSubject,
+      'ACTOR_NOT_SOURCE_OWNER_OR_OWNER',
+    );
+    requireBundleChange(
+      typeof c.reason === 'string' && c.reason.trim().length > 0,
+      'CORRECTION_REASON_EMPTY',
+    );
+    const time = typeof c.at === 'string' ? new Date(c.at) : new Date(NaN);
+    requireBundleChange(
+      Number.isFinite(time.getTime()) && time.toISOString() === c.at,
+      'UTC_INSTANT_INVALID',
+    );
+    const oldItem = c.before.items.find((i) => i.id === c.itemId),
+      newItem = c.after.items.find((i) => i.id === c.itemId);
+    requireBundleChange(
+      oldItem !== undefined &&
+        newItem !== undefined &&
+        oldItem.originalAmount !== newItem.originalAmount,
+      'BUNDLE_FACT_MISMATCH',
+    );
+    const entries = c.affectedCaseFacts.filter(
+      (f) => f.bundleId === beforePair.id.value,
+    );
+    requireBundleChange(entries.length === 1, 'BUNDLE_FACT_MISMATCH');
+    const entry = entries[0],
+      fact = entry.caseFact;
+    const selected = c.before.bundleSnapshotSelections.some((s) =>
+      s.bundleId.equals(beforePair.id),
+    );
+    if (selected) {
+      requireBundleChange(
+        fact !== null &&
+          typeof fact === 'object' &&
+          fact.expenseId === this.id.value &&
+          fact.groupId === this.state.groupId,
+        'CASE_FACT_MISMATCH',
+      );
+      if (!fact) return this.rejectItemAmountFact();
+      requireBundleChange(
+        typeof fact.caseId === 'string' &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+            fact.caseId,
+          ),
+        'CASE_REFERENCE_INVALID',
+      );
+      requireBundleChange(
+        Number.isSafeInteger(fact.version) &&
+          fact.version > 0 &&
+          entry.expectedCaseVersion === fact.version,
+        'CASE_VERSION_CONFLICT',
+      );
+      requireBundleChange(
+        fact.lifecycle === 'Rejected',
+        'EXPENSE_NOT_CORRECTABLE',
+      );
+    } else
+      requireBundleChange(
+        fact === null && entry.expectedCaseVersion === null,
+        'CASE_FACT_MISMATCH',
+      );
+    requireBundleChange(
+      Number.isSafeInteger(this.version + 1),
+      'VERSION_OVERFLOW',
+    );
+    const calculated = GroupExpense.register({
+      id: this.id.value,
+      groupId: this.state.groupId,
+      sourceOwnerSubject: this.state.sourceOwnerSubject,
+      occurredOn: this.state.occurredOn.value,
+      amount: afterAmount,
+      payerParticipantId: this.state.payerParticipantId,
+      participants: this.state.allocations.map((a) => ({
+        participantId: a.participantId,
+        joinOrder: a.joinOrder,
+        percentage: a.percentage,
+      })),
+    }).snapshot();
+    const after = Object.freeze({
+      ...this.state,
+      total: calculated.total,
+      allocations: calculated.allocations,
+    });
+    const record: ReceiptItemAmountCorrection = Object.freeze({
+      actorSubject: c.actorSubject,
+      at: c.at,
+      reason: c.reason,
+      itemId: c.itemId,
+      receiptId: c.before.id.value,
+      bundleId: beforePair.id.value,
+      previousReceiptVersion: c.previousVersion,
+      receiptVersion: c.version,
+      previousVersion: this.version,
+      version: this.version + 1,
+      caseFact:
+        fact === null
+          ? null
+          : Object.freeze({
+              caseId: fact.caseId,
+              groupId: fact.groupId,
+              expenseId: fact.expenseId,
+              version: fact.version,
+              lifecycle: fact.lifecycle,
+            }),
+      before: this.state,
+      after,
+    });
+    return new GroupExpense(
+      after,
+      this.initialSnapshot,
+      this.version + 1,
+      this.corrections,
+      this.bundleSplitChanges,
+      this.bundleItemMovements,
+      Object.freeze([...this.receiptItemAmountCorrections, record]),
+    );
+  }
+
+  private rejectItemAmountFact(): never {
+    throw new ExpenseInvariantViolation(
+      'BUNDLE_FACT_MISMATCH',
+      'Receipt financial correction fact is invalid',
+    );
+  }
+
+  private receiptPairAmount(
+    snapshot: ConfirmedReceiptSnapshot,
+    itemIds: readonly string[],
+  ): number {
+    const items = itemIds.map((id) => snapshot.items.find((i) => i.id === id));
+    requireBundleChange(
+      items.every(
+        (i) =>
+          i !== undefined &&
+          Number.isSafeInteger(i.adjustedAmount) &&
+          i.adjustedAmount >= 0,
+      ),
+      'BUNDLE_FACT_INVALID',
+    );
+    const amount = items.reduce((n, i) => n + BigInt(i!.adjustedAmount), 0n);
+    requireBundleChange(
+      amount <= BigInt(Number.MAX_SAFE_INTEGER),
+      'AMOUNT_INVALID',
+    );
+    return Number(amount);
   }
 
   private requireBundleFactShape(fact: ReceiptBundleEditingFacts): void {
