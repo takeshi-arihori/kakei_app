@@ -1,4 +1,8 @@
 import type {
+  ReflectReceiptAdjustmentAmountCorrection,
+  ReceiptAdjustmentAmountCorrection,
+} from './receipt-adjustment-amount-correction.js';
+import type {
   ReflectReceiptItemAmountCorrection,
   ReceiptItemAmountCorrection,
 } from './receipt-item-amount-correction.js';
@@ -112,7 +116,7 @@ export class GroupExpense {
     private readonly state: GroupExpenseSnapshot,
     /** 登録時点の全事実。金額訂正・Bundle配賦変更・Item移動後も維持する。 */
     readonly initialSnapshot: GroupExpenseSnapshot = state,
-    /** 初回1、金額訂正・実配賦変更・Item移動反映ごと+1。保存CASは別責務。 */
+    /** 初回1、金額／Adjustment訂正・実配賦変更・Item移動反映ごと+1。保存CASは別責務。 */
     readonly version: number = 1,
     /** 金額だけの順序付き訂正履歴。旧値・変更者・時刻・理由を保持する。 */
     readonly corrections: readonly ExpenseAmountCorrection[] = Object.freeze(
@@ -128,6 +132,10 @@ export class GroupExpense {
     ),
     /** Receipt Item原額訂正の当Pair財務反映履歴。他種変更でも保持する。 */
     readonly receiptItemAmountCorrections: readonly ReceiptItemAmountCorrection[] = Object.freeze(
+      [],
+    ),
+    /** Receiptの税・値引き等の額訂正反映履歴。他の訂正・配賦操作でも保持する。 */
+    readonly receiptAdjustmentAmountCorrections: readonly ReceiptAdjustmentAmountCorrection[] = Object.freeze(
       [],
     ),
   ) {
@@ -247,6 +255,7 @@ export class GroupExpense {
       this.bundleSplitChanges,
       this.bundleItemMovements,
       this.receiptItemAmountCorrections,
+      this.receiptAdjustmentAmountCorrections,
     );
   }
 
@@ -330,6 +339,7 @@ export class GroupExpense {
       Object.freeze([...this.bundleSplitChanges, record]),
       this.bundleItemMovements,
       this.receiptItemAmountCorrections,
+      this.receiptAdjustmentAmountCorrections,
     );
   }
 
@@ -414,6 +424,7 @@ export class GroupExpense {
       this.bundleSplitChanges,
       Object.freeze([...this.bundleItemMovements, record]),
       this.receiptItemAmountCorrections,
+      this.receiptAdjustmentAmountCorrections,
     );
   }
 
@@ -427,6 +438,34 @@ export class GroupExpense {
     input: ReflectReceiptItemAmountCorrection,
   ): GroupExpense {
     requireBundleChange(
+      input.change?.action === 'ItemAmountCorrected',
+      'BUNDLE_FACT_INVALID',
+    );
+    return this.reflectReceiptFinancialCorrection(input);
+  }
+
+  /**
+   * 既存Adjustment訂正の前後Pairへ束縛し、額と負担を同じExpense IDへ反映する。
+   * @param input 実Receipt訂正履歴と両Root期待版。本人性・Source現在版・共通commitはCaller PRE。
+   * @returns 現在payer／割合・登録集合・全履歴を保持する新版。同額影響Pairにも履歴を追加する。
+   * @throws ExpenseInvariantViolation 版・Pair・旧額・Adjustment・Actor・理由・UTC・Case・新版上限が不正な場合。
+   */
+  reflectReceiptAdjustmentAmountCorrection(
+    input: ReflectReceiptAdjustmentAmountCorrection,
+  ): GroupExpense {
+    requireBundleChange(
+      input.change?.action === 'AdjustmentAmountCorrected',
+      'BUNDLE_FACT_INVALID',
+    );
+    return this.reflectReceiptFinancialCorrection(input);
+  }
+
+  private reflectReceiptFinancialCorrection(
+    input:
+      | ReflectReceiptItemAmountCorrection
+      | ReflectReceiptAdjustmentAmountCorrection,
+  ): GroupExpense {
+    requireBundleChange(
       Number.isSafeInteger(input.expectedExpenseVersion) &&
         input.expectedExpenseVersion === this.version,
       'EXPENSE_VERSION_CONFLICT',
@@ -435,7 +474,8 @@ export class GroupExpense {
     requireBundleChange(
       c !== null &&
         typeof c === 'object' &&
-        c.action === 'ItemAmountCorrected' &&
+        (c.action === 'ItemAmountCorrected' ||
+          c.action === 'AdjustmentAmountCorrected') &&
         c.before?.status === 'Confirmed' &&
         c.after?.status === 'Confirmed',
       'BUNDLE_FACT_INVALID',
@@ -491,14 +531,50 @@ export class GroupExpense {
       Number.isFinite(time.getTime()) && time.toISOString() === c.at,
       'UTC_INSTANT_INVALID',
     );
-    const oldItem = c.before.items.find((i) => i.id === c.itemId),
-      newItem = c.after.items.find((i) => i.id === c.itemId);
-    requireBundleChange(
-      oldItem !== undefined &&
-        newItem !== undefined &&
-        oldItem.originalAmount !== newItem.originalAmount,
-      'BUNDLE_FACT_MISMATCH',
-    );
+    if (c.action === 'ItemAmountCorrected') {
+      const oldItem = c.before.items.find((i) => i.id === c.itemId),
+        newItem = c.after.items.find((i) => i.id === c.itemId);
+      requireBundleChange(
+        oldItem !== undefined &&
+          newItem !== undefined &&
+          oldItem.originalAmount !== newItem.originalAmount,
+        'BUNDLE_FACT_MISMATCH',
+      );
+    } else {
+      requireBundleChange(
+        Number.isSafeInteger(c.adjustmentIndex) &&
+          c.adjustmentIndex >= 0 &&
+          c.adjustmentIndex < c.before.adjustments.length &&
+          c.before.adjustments.length === c.after.adjustments.length,
+        'BUNDLE_FACT_MISMATCH',
+      );
+      requireBundleChange(
+        c.before.adjustments.every((old, n) => {
+          const current = c.after.adjustments[n];
+          return (
+            old.kind === current.kind &&
+            old.target.scope === current.target.scope &&
+            (old.target.scope !== 'Item' ||
+              (current.target.scope === 'Item' &&
+                old.target.itemId === current.target.itemId)) &&
+            (n === c.adjustmentIndex
+              ? old.amount !== current.amount
+              : old.amount === current.amount)
+          );
+        }) &&
+          c.before.items.length === c.after.items.length &&
+          c.before.items.every((old, n) => {
+            const current = c.after.items[n];
+            return (
+              old.id === current.id &&
+              old.originalAmount === current.originalAmount &&
+              old.name === current.name &&
+              old.categoryId.equals(current.categoryId)
+            );
+          }),
+        'BUNDLE_FACT_MISMATCH',
+      );
+    }
     const entries = c.affectedCaseFacts.filter(
       (f) => f.bundleId === beforePair.id.value,
     );
@@ -561,11 +637,10 @@ export class GroupExpense {
       total: calculated.total,
       allocations: calculated.allocations,
     });
-    const record: ReceiptItemAmountCorrection = Object.freeze({
+    const common = {
       actorSubject: c.actorSubject,
       at: c.at,
       reason: c.reason,
-      itemId: c.itemId,
       receiptId: c.before.id.value,
       bundleId: beforePair.id.value,
       previousReceiptVersion: c.previousVersion,
@@ -584,6 +659,26 @@ export class GroupExpense {
             }),
       before: this.state,
       after,
+    };
+    if (c.action === 'AdjustmentAmountCorrected') {
+      const record: ReceiptAdjustmentAmountCorrection = Object.freeze({
+        ...common,
+        adjustmentIndex: c.adjustmentIndex,
+      });
+      return new GroupExpense(
+        after,
+        this.initialSnapshot,
+        this.version + 1,
+        this.corrections,
+        this.bundleSplitChanges,
+        this.bundleItemMovements,
+        this.receiptItemAmountCorrections,
+        Object.freeze([...this.receiptAdjustmentAmountCorrections, record]),
+      );
+    }
+    const record: ReceiptItemAmountCorrection = Object.freeze({
+      ...common,
+      itemId: c.itemId,
     });
     return new GroupExpense(
       after,
@@ -593,6 +688,7 @@ export class GroupExpense {
       this.bundleSplitChanges,
       this.bundleItemMovements,
       Object.freeze([...this.receiptItemAmountCorrections, record]),
+      this.receiptAdjustmentAmountCorrections,
     );
   }
 

@@ -52,3 +52,7 @@ Actor／Owner空参照と不正額は既存IDENTIFIER_EMPTY／AMOUNT_INVALIDを�
 ## 登録済みItem原額訂正とExpense反映の純Domain trace（2026-10-06）
 
 [Task #192](https://github.com/takeshi-arihori/kakei_app/issues/192)の[原額訂正・財務反映契約](receipt-item-amount-correction-contract.md)は、Uploaderまたは現在Group Ownerが登録済みItem一件の原額を理由付き訂正し、既存Adjustment再配賦で影響する全Bundleの未選択／Rejected条件を検証する。各既存Expense ID・登録集合／payer／割合・初回事実・全履歴と旧精算Revisionを維持して額・負担へ反映する。Bundle永久lockを解除しない。Adjustment自体の編集、Draft／一般編集、実Source・認可／Group fence、全影響Root共通保存／CAS／再送、保護保存／Projection／API／画面は後続Gate。純Domain成功を実保存や公開Readyの証拠にしない。
+
+## Receipt Adjustment訂正との履歴保持
+
+[Task #194](https://github.com/takeshi-arihori/kakei_app/issues/194)の[Adjustment金額訂正契約](receipt-adjustment-amount-correction-contract.md)では、Receiptの既存調整額を訂正し、影響Expenseの額・負担へ反映する。手入力額訂正の資格・Case条件は変更せず、`correctAmount`と新しいReceipt反映は互いの不変履歴を保持する。実Source照会・共通atomic commit・CAS／durable replay／保護保存は後続Gate。

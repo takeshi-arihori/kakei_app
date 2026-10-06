@@ -18,3 +18,7 @@ Receipt対象の各Adjustmentは同じ元Item金額を重みにし、絶対Adjus
 ## 境界
 
 この契約はReceipt Root、Draft確認・履歴、宣言Receipt合計との一致確認、Bundle対応、公開API、認可、永続化を実装しない。特に確定時に調整後Item合計とReceipt合計を照合する処理は後続Draft確認Taskの責務である。DBや外部Serviceへの依存はない。
+
+## 既存Adjustment金額訂正の実装trace（2026-10-06）
+
+[Task #194](https://github.com/takeshi-arihori/kakei_app/issues/194)の[Adjustment金額訂正契約](receipt-adjustment-amount-correction-contract.md)は、既存一件の額訂正と全再配賦、影響する登録Bundleの未選択／Rejected条件、同Expense IDの額・負担・不変履歴を純Domainで扱う。原額・Category・Pair／初選択永久lock・現在payer／割合・旧精算Snapshot・全既存履歴を維持する。既存の原額／割合／Item移動／手入力訂正も新Adjustment履歴を保持する。追加／削除・種別／適用先変更、Draft／一般編集、実Source・認可／Group fence・原子的保存／再送／保護保存、Projection／API／画面は後続Gate。Accepted本文・承認履歴・公開Ready状態を変更しない。
