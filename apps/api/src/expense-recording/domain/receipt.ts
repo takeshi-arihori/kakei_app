@@ -1,4 +1,8 @@
 import type {
+  CorrectReceiptAdjustmentAmount,
+  ReceiptAdjustmentAmountCorrectedChange,
+} from './receipt-adjustment-amount-correction.js';
+import type {
   CorrectReceiptItemAmount,
   ReceiptItemAmountAffectedCase,
   ReceiptItemAmountCorrectedChange,
@@ -23,6 +27,7 @@ import {
   ReceiptAdjustmentAllocation,
   type ReceiptAdjustmentAllocationResult,
   type ReceiptAdjustmentInput,
+  type ReceiptAdjustmentItemInput,
 } from './receipt-adjustment.js';
 import { ReceiptAdjustmentViolation } from './receipt-adjustment-violation.js';
 import {
@@ -273,6 +278,7 @@ export type ReceiptChange =
   | ReceiptBundleSnapshotSelectionChange
   | ReceiptBundleItemsMovedChange
   | ReceiptItemCategoryCorrectedChange
+  | ReceiptAdjustmentAmountCorrectedChange
   | ReceiptItemAmountCorrectedChange;
 
 /** DraftかConfirmedかを識別するRoot Snapshot。 */
@@ -362,7 +368,7 @@ export class Receipt {
     private readonly current: ReceiptSnapshot,
     /** Root内だけで進める版。永続層の先着・CASを証明しない。 */
     readonly version: number,
-    /** 確認・Bundle登録／Item移動・初選択・Category／原額訂正の不変履歴。Audit Logや保存Schemaではない。 */
+    /** 確認・Bundle登録／Item移動・初選択・Category／原額／Adjustment額訂正の不変履歴。Audit Logや保存Schemaではない。 */
     readonly changes: readonly ReceiptChange[],
   ) {
     Object.freeze(this);
@@ -697,19 +703,144 @@ export class Receipt {
     const target = before.bundles.find((b) => b.itemIds.includes(item.id));
     if (!target) return reject('ITEM_NOT_BUNDLED');
     requireCondition(target.groupId === input.groupId, 'BUNDLE_GROUP_MISMATCH');
+    const { after, affectedCaseFacts } = this.financialCorrectionCandidate(
+      before,
+      input,
+      before.items.map((i) => ({
+        id: i.id,
+        amount: i === item ? input.amount : i.originalAmount,
+      })),
+      before.adjustments,
+      new Set([item.id]),
+      'ITEM_AMOUNT_NOT_CORRECTABLE',
+    );
+    if (item.originalAmount === input.amount) return this;
+    requireCondition(
+      Number.isSafeInteger(this.version + 1),
+      'VERSION_OVERFLOW',
+    );
+    const change: ReceiptItemAmountCorrectedChange = Object.freeze({
+      action: 'ItemAmountCorrected',
+      actorSubject: input.actorSubject,
+      currentOwnerSubject: input.currentOwnerSubject,
+      groupId: input.groupId,
+      at,
+      reason: input.reason,
+      itemId: item.id,
+      previousVersion: this.version,
+      version: this.version + 1,
+      affectedCaseFacts,
+      before,
+      after,
+    });
+    return new Receipt(
+      after,
+      this.version + 1,
+      Object.freeze([...this.changes, change]),
+    );
+  }
+
+  /**
+   * 既存Adjustmentの額だけを訂正し、全再配賦と影響する登録Bundleを検証する。
+   * @param input 期待Receipt版に束縛する既存位置・新額・理由・全影響Case facts。
+   * @returns 固定Pair・永久lock・履歴を保つ新版。同額は全条件検証後sameRoot。
+   * @throws ReceiptInvariantViolation 版・Actor・位置・額・合計・影響集合・各Caseまたは新版上限が不正な場合。
+   */
+  correctAdjustmentAmount(input: CorrectReceiptAdjustmentAmount): Receipt {
+    const before = this.current;
+    if (before.status !== 'Confirmed') return reject('RECEIPT_NOT_CONFIRMED');
+    this.requireVersion(input.expectedVersion);
+    this.requireItemCorrectionActor(before, input);
+    const at = utcInstant(input.correctedAt);
+    requireCondition(
+      typeof input.reason === 'string' && input.reason.trim().length > 0,
+      'CORRECTION_REASON_EMPTY',
+    );
+    requireCondition(
+      typeof input.groupId === 'string' && input.groupId.trim().length > 0,
+      'GROUP_REFERENCE_INVALID',
+    );
+    requireCondition(
+      Number.isSafeInteger(input.adjustmentIndex) &&
+        input.adjustmentIndex >= 0 &&
+        input.adjustmentIndex < before.adjustments.length,
+      'ADJUSTMENT_INDEX_INVALID',
+    );
+    const old = before.adjustments[input.adjustmentIndex];
+    // 種別・適用先・順序を保ち、既存の一件だけを期待Receipt版と位置で識別する。
+    const adjustments = Object.freeze(
+      before.adjustments.map((a, n) =>
+        n === input.adjustmentIndex
+          ? copyAdjustment({ ...a, amount: input.amount })
+          : a,
+      ),
+    );
+    const unchanged = old.amount === input.amount;
+    const footprint = new Set(
+      before.items
+        .filter(
+          (_, n) =>
+            unchanged &&
+            before.allocations[input.adjustmentIndex].amounts[n] !== 0,
+        )
+        .map((i) => i.id),
+    );
+    const { after, affectedCaseFacts } = this.financialCorrectionCandidate(
+      before,
+      input,
+      before.items.map((i) => ({ id: i.id, amount: i.originalAmount })),
+      adjustments,
+      footprint,
+      'ADJUSTMENT_AMOUNT_NOT_CORRECTABLE',
+    );
+    if (unchanged) return this;
+    requireCondition(
+      Number.isSafeInteger(this.version + 1),
+      'VERSION_OVERFLOW',
+    );
+    const change: ReceiptAdjustmentAmountCorrectedChange = Object.freeze({
+      action: 'AdjustmentAmountCorrected',
+      actorSubject: input.actorSubject,
+      currentOwnerSubject: input.currentOwnerSubject,
+      groupId: input.groupId,
+      at,
+      reason: input.reason,
+      adjustmentIndex: input.adjustmentIndex,
+      previousVersion: this.version,
+      version: this.version + 1,
+      affectedCaseFacts,
+      before,
+      after,
+    });
+    return new Receipt(
+      after,
+      this.version + 1,
+      Object.freeze([...this.changes, change]),
+    );
+  }
+
+  private financialCorrectionCandidate(
+    before: ConfirmedReceiptSnapshot,
+    input: Pick<
+      CorrectReceiptItemAmount,
+      'declaredTotal' | 'affectedCaseFacts' | 'groupId'
+    >,
+    items: readonly ReceiptAdjustmentItemInput[],
+    adjustments: readonly ReceiptAdjustmentInput[],
+    includedItemIds: ReadonlySet<string>,
+    notCorrectable:
+      'ITEM_AMOUNT_NOT_CORRECTABLE' | 'ADJUSTMENT_AMOUNT_NOT_CORRECTABLE',
+  ): {
+    after: ConfirmedReceiptSnapshot;
+    affectedCaseFacts: readonly ReceiptItemAmountAffectedCase[];
+  } {
     requireCondition(
       Number.isSafeInteger(input.declaredTotal) && input.declaredTotal >= 0,
       'TOTAL_INVALID',
     );
     let calculation;
     try {
-      calculation = ReceiptAdjustmentAllocation.calculate(
-        before.items.map((i) => ({
-          id: i.id,
-          amount: i === item ? input.amount : i.originalAmount,
-        })),
-        before.adjustments,
-      );
+      calculation = ReceiptAdjustmentAllocation.calculate(items, adjustments);
     } catch (error) {
       if (error instanceof ReceiptAdjustmentViolation)
         return reject('ADJUSTMENT_INVALID');
@@ -728,7 +859,7 @@ export class Receipt {
       before.items
         .filter(
           (i, n) =>
-            i === item ||
+            includedItemIds.has(i.id) ||
             i.originalAmount !== calculation.items[n].originalAmount ||
             i.adjustedAmount !== calculation.items[n].adjustedAmount ||
             before.allocations.some(
@@ -740,6 +871,7 @@ export class Receipt {
     const affectedBundles = before.bundles.filter((b) =>
       b.itemIds.some((id) => affectedItems.has(id)),
     );
+    requireCondition(affectedBundles.length > 0, 'ADJUSTMENT_NOT_BUNDLED');
     requireCondition(
       Array.isArray(input.affectedCaseFacts) &&
         input.affectedCaseFacts.length === affectedBundles.length &&
@@ -766,7 +898,7 @@ export class Receipt {
           b,
           f.expectedCaseVersion,
           f.caseFact,
-          'ITEM_AMOUNT_NOT_CORRECTABLE',
+          notCorrectable,
         );
         return Object.freeze({
           bundleId: b.id.value,
@@ -775,14 +907,10 @@ export class Receipt {
         });
       }),
     );
-    if (item.originalAmount === input.amount) return this;
-    requireCondition(
-      Number.isSafeInteger(this.version + 1),
-      'VERSION_OVERFLOW',
-    );
     const after: ConfirmedReceiptSnapshot = Object.freeze({
       ...before,
       declaredTotal: input.declaredTotal,
+      adjustments,
       items: Object.freeze(
         before.items.map((i, n) =>
           Object.freeze({
@@ -794,25 +922,7 @@ export class Receipt {
       ),
       allocations: calculation.allocations,
     });
-    const change: ReceiptItemAmountCorrectedChange = Object.freeze({
-      action: 'ItemAmountCorrected',
-      actorSubject: input.actorSubject,
-      currentOwnerSubject: input.currentOwnerSubject,
-      groupId: input.groupId,
-      at,
-      reason: input.reason,
-      itemId: item.id,
-      previousVersion: this.version,
-      version: this.version + 1,
-      affectedCaseFacts,
-      before,
-      after,
-    });
-    return new Receipt(
-      after,
-      this.version + 1,
-      Object.freeze([...this.changes, change]),
-    );
+    return { after, affectedCaseFacts };
   }
 
   private requireItemCorrectionActor(
@@ -838,7 +948,9 @@ export class Receipt {
     expectedCaseVersion: number | null,
     fact: ReceiptItemCorrectionCaseFact | null,
     notCorrectable:
-      'ITEM_AMOUNT_NOT_CORRECTABLE' | 'ITEM_CATEGORY_NOT_CORRECTABLE',
+      | 'ITEM_AMOUNT_NOT_CORRECTABLE'
+      | 'ITEM_CATEGORY_NOT_CORRECTABLE'
+      | 'ADJUSTMENT_AMOUNT_NOT_CORRECTABLE',
   ): void {
     const selected =
       this.current.status === 'Confirmed' &&

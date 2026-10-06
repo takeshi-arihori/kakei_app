@@ -42,3 +42,7 @@ Callerは実訂正履歴と訂正前Receipt期待版、Expense現在期待版を
 CallerはReceiptとすべての影響Expenseを同判断点で取得し、反映成功した全候補とCase版fence／初選択裁定を共通atomic commitへ束縛する。候補の一部だけを保存しない。共通保存単位・lock順・CAS／durable結果／保護Record／Key／Audit／Retention／月次Projection／公開API／UI／OCRは後続Gate。金融値・Actor・理由をplaintext Storage／Logへ書かない。歴史Snapshotのcopy容量・CPUは公開保存前に評価する。
 
 関連契約、ADR170／179・design-gates・Inventoryへ実装Traceを同期する。Product Rule／所有／Context mapは維持しcurrent-model／正式図は更新不要。SDL／生成型／DB Schema／Migration／Runbook変更なし。対象DB／Browser業務E2Eは未接続で対象外、CI既存PostgreSQL／Web入口回帰と区別する。RollbackはPR revert。Accepted Decision・認証Provider・公開経路Readyを変更しない。
+
+## 既存Adjustment金額訂正の実装trace（2026-10-06）
+
+[Task #194](https://github.com/takeshi-arihori/kakei_app/issues/194)の[Adjustment金額訂正契約](receipt-adjustment-amount-correction-contract.md)は、既存一件の額訂正と全再配賦、影響する登録Bundleの未選択／Rejected条件、同Expense IDの額・負担・不変履歴を純Domainで扱う。原額・Category・Pair／初選択永久lock・現在payer／割合・旧精算Snapshot・全既存履歴を維持する。既存の原額／割合／Item移動／手入力訂正も新Adjustment履歴を保持する。追加／削除・種別／適用先変更、Draft／一般編集、実Source・認可／Group fence・原子的保存／再送／保護保存、Projection／API／画面は後続Gate。Accepted本文・承認履歴・公開Ready状態を変更しない。
