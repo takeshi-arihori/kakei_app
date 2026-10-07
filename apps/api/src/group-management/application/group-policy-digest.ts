@@ -71,8 +71,8 @@ const digestInput = (
   });
 
 /**
- * Purpose values are part of the persisted-index contract. Callers must pass
- * the bytes unchanged to the purpose-separated digest port.
+ * Purpose値は保存Indexの契約の一部。呼出し側はByte列を変更せず、
+ * 用途を分離したDigest Portへ渡す必要がある。
  */
 export const actorAccessIndexDigestInput = (
   groupId: GroupId,
@@ -95,8 +95,8 @@ export const membershipDigestInput = (
   ]);
 
 /**
- * Operation locators deliberately have no Group ID: CreateGroup needs the
- * replay lookup before a Group exists. Their key namespace is context-only.
+ * CreateGroupはGroupが存在する前に再送結果を検索するため、
+ * operation locatorはGroup IDを持たない。鍵の名前空間はContext単位。
  */
 export type GroupOperationLocatorDigestInput = Readonly<{
   purpose: 'group-operation-locator/v2';

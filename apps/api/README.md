@@ -1,4 +1,4 @@
-# Hono GraphQL API
+# 家計アプリ API
 
 Honoを薄いHTTP Adapter、GraphQL YogaをGraphQL実行基盤として使うTypeScript APIです。DomainとApplicationはFramework非依存に保ちます。
 

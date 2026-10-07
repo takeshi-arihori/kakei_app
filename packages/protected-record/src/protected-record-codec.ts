@@ -150,8 +150,8 @@ export const createProtectedRecordCodec = (options: {
     try {
       options.onAlert?.(Object.freeze(signal));
     } catch {
-      // An observability callback cannot expose a protected payload or replace
-      // the generic failure returned by this boundary.
+      // 監視Callbackから保護Payloadを露出させず、この境界が返す
+      // 汎用失敗を置き換えない。
     }
   };
 

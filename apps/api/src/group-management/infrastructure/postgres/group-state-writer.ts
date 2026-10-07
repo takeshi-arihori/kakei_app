@@ -37,9 +37,9 @@ export class PostgresGroupStateWriter {
   }
 
   /**
-   * Writes only through the caller's transaction. The caller owns its
-   * BEGIN/COMMIT/ROLLBACK boundary so a later operation-result write can be
-   * composed atomically without this adapter hiding a commit.
+   * 呼出し側のTransactionだけで保存する。BEGIN／COMMIT／ROLLBACKは呼出し側が所有し、
+   * 後続operation結果の保存も原子的に組み合わせる。
+   * このAdapter内でCommitを隠さない。
    */
   async persist(
     transaction: SqlTransaction,
@@ -129,7 +129,7 @@ export class PostgresGroupStateWriter {
       try {
         this.options.onUnavailable?.();
       } catch {
-        // Reporting failure cannot reveal or replace the generic result.
+        // 報告処理の失敗で機密値を露出させたり、汎用結果を置き換えたりしない。
       }
       return { kind: 'Unavailable' };
     }

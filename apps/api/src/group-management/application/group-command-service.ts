@@ -51,11 +51,11 @@ export class GroupCommandApplicationError extends Error {
 }
 
 export type GroupCommandDependencies = Readonly<{
-  /** The trusted production callback creates a GroupId from crypto.randomUUID(). */
+  /** 信頼済み本番Callbackがcrypto.randomUUID()からGroupIdを生成する。 */
   nextGroupId: () => GroupId;
   nextParticipantId: () => ParticipantId;
   nextInvitationId: () => InvitationId;
-  /** Trusted composition injects CSPRNG UUIDv4 IDs; commands cannot choose an ID. */
+  /** 信頼済みCompositionがCSPRNGによるUUIDv4を注入し、Command自身にはIDを選ばせない。 */
   nextCloseIntentId: () => CloseIntentId;
   now: () => UtcInstant;
 }>;

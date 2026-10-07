@@ -13,9 +13,9 @@ export type OperationReplayLookup<T> =
   | Readonly<{ kind: 'Found'; record: OperationReplayRecord<T> }>;
 
 /**
- * This candidate-based port is separate from GroupRepository.findOperation.
- * Task #94 supplies the latter's PostgreSQL read adapter; wiring this port
- * remains a separate integration concern.
+ * この候補ベースのPortはGroupRepository.findOperationとは別の契約。
+ * Task #94は後者のPostgreSQL読取Adapterを提供する。
+ * このPortへの接続は別の結合Taskで扱う。
  */
 export interface GroupOperationReplayPort<T> {
   findOperation(input: {

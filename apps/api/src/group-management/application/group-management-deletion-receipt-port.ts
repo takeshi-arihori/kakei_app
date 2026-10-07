@@ -1,6 +1,6 @@
 import type { OperationId } from './group-repository.js';
 
-/** Positive version of one prepared Group Management retention intent. */
+/** 1つのPrepared Group Management Retention Intentを識別する正のVersion。 */
 export class RetentionIntentVersion {
   private constructor(readonly value: number) {
     Object.freeze(this);
@@ -21,9 +21,9 @@ export class RetentionIntentVersion {
 }
 
 /**
- * Immutable persistence value for the canonical receipt owned by Group
- * Management. The canonical receipt itself stays opaque to this Application
- * contract; its format and verification remain governed by ADR #55.
+ * Group Managementが所有するCanonical Receiptの不変保存値。
+ * このApplication契約はReceiptの内部を解釈せず、
+ * 形式と検証は引き続きADR #55に従う。
  */
 export class GroupManagementDeletionReceiptRecord {
   private constructor(
@@ -78,9 +78,9 @@ export type GroupManagementDeletionReceiptReadResult =
   | Readonly<{ kind: 'Unavailable' }>;
 
 /**
- * Group Management owns persistence of its post-deletion receipt. An adapter
- * implements both operations at the same transaction boundary as Group and
- * CloseIntent deletion; callers may return a receipt only after commit.
+ * Group Managementは削除後Receiptの保存を所有する。Adapterは両操作を
+ * GroupとCloseIntentの削除と同じTransaction境界で実装する。
+ * 呼出し側がReceiptを返せるのはCommit後だけ。
  */
 export interface GroupManagementDeletionReceiptPort {
   save(

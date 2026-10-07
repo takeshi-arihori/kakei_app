@@ -426,7 +426,7 @@ describe('verified retention deletion evidence contract', () => {
     const result = await verify();
 
     expect(isVerifiedRetentionDeletionEvidence(forged)).toBe(false);
-    // @ts-expect-error the module-private brand prevents structural construction
+    // @ts-expect-error Module非公開のBrandにより、構造だけを合わせた生成はできない
     const forgedAtTypeLevel: VerifiedRetentionDeletionEvidence = Object.freeze({
       binding,
     });

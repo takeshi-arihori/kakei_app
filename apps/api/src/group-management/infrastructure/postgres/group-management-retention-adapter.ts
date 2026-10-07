@@ -347,7 +347,7 @@ export class PostgresGroupManagementRetentionAdapter implements GroupManagementR
     try {
       await client.query('ROLLBACK');
     } catch {
-      // The caller still receives Unavailable; the Pool discards broken clients.
+      // 呼出し側には引き続きUnavailableを返し、Poolは壊れたClientを破棄する。
     }
   }
 }

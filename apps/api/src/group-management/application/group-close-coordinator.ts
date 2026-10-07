@@ -31,8 +31,8 @@ export class GroupCloseCoordinationError extends Error {
 }
 
 /**
- * This Application coordinator is the single ordering boundary for unfence:
- * the Group CAS reservation must commit before any Context Port is invoked.
+ * このApplication CoordinatorはUnfenceの順序を制御する唯一の境界。
+ * いずれのContext Portを呼ぶ前にも、GroupのCAS予約をCommitする必要がある。
  */
 export class GroupCloseCoordinator {
   private readonly ports: ReadonlyMap<GroupCloseContext, GroupCloseContextPort>;
@@ -58,7 +58,7 @@ export class GroupCloseCoordinator {
   ): Promise<CancelGroupClosingFencesResult> {
     const receipts = this.validateFenceReceipts(input);
 
-    // Do not move this CAS below a Port call: Archive-first must unfence zero Contexts.
+    // このCASをPort呼出しより後へ移さない。Archiveが先に確定した場合は、どのContextもUnfenceしない。
     const reservation =
       await this.reservationPort.reserveGroupClosingCancellation(
         input.reservationCommand,

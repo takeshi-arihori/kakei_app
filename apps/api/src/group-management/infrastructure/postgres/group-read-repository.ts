@@ -54,8 +54,8 @@ const safeVersion = (value: string | number): number => {
 };
 
 /**
- * Read-only half of GroupRepository. Task #96 composes this with its public
- * commit boundary; no write or production key provider is hidden here.
+ * GroupRepositoryの読取専用部分。Task #96が公開Commit境界と組み合わせる。
+ * このModuleに保存処理や本番Key Providerを隠さない。
  */
 export class PostgresGroupReadRepository {
   constructor(
@@ -138,7 +138,7 @@ export class PostgresGroupReadRepository {
         values,
       );
       if (found.rows.length === 0) {
-        // A locator miss must never ask for a Group data key or decrypt.
+        // Locatorに一致しない場合は、Group Data Keyの取得も復号も行わない。
         return { kind: 'Missing' };
       }
       if (found.rows.length !== 1) {
@@ -206,7 +206,7 @@ export class PostgresGroupReadRepository {
     try {
       this.options.onUnavailable?.();
     } catch {
-      // Alert failure must not replace the generic read failure.
+      // Alert失敗で汎用読取失敗を置き換えない。
     }
     throw new GroupReadUnavailable();
   }

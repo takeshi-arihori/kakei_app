@@ -215,7 +215,7 @@ class FakeOperationLocatorKeyPort implements GroupOperationLocatorKeyPort {
 
 type Failure = 'Timeout' | 'Deadlock' | 'ConnectionLost' | null;
 
-/** Backend-independent fake used to prove the public port's transaction semantics. */
+/** 公開PortのTransaction契約を検証する、Backendに依存しないFake。 */
 class FakeGroupAccessPolicyPort implements GroupAccessPolicyPort {
   private callbackCallCount = 0;
   private policyDecryptCallCount = 0;

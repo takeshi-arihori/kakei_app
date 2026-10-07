@@ -93,7 +93,7 @@ export const applySqlMigrations = async (
       )
     `);
 
-    // A single writer makes the checksum decision and its DDL commit atomic.
+    // Writerを1つに限定し、Checksum判断とDDLのCommitを原子的に行う。
     await client.query('LOCK TABLE app_schema_migrations IN EXCLUSIVE MODE');
 
     for (const migration of plan) {
