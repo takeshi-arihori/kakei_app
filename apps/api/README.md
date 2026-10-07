@@ -35,3 +35,7 @@ HTTP transportのOpenAPI設計書とローカルSwagger UIの利用方法は[`do
 ## 将来のGo分離
 
 現時点はTypeScript Modular Monolithを維持します。高並行I/OまたはCPU並列処理について計測済みのボトルネックが生じた場合だけ、対象WorkerをGoへ分離するADRを作成します。
+
+## 保存レコードの保護基盤
+
+[共有Infrastructureの保護基盤](src/shared/infrastructure/protected-record/README.md)をGroup ManagementのPostgreSQL Adapterで使用します。用途別Digestの型・Portは`src/shared/application/purpose-separated-digest.ts`に置き、Applicationから暗号Infrastructureへの依存を避けます。暗号基盤はAPI内で管理し、独立Packageにはしません。具体鍵Providerと本番接続は既存のGateに従います。

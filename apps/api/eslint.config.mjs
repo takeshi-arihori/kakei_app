@@ -31,4 +31,12 @@ export default tseslint.config(
       'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
   },
+  {
+    files: ['src/shared/infrastructure/protected-record/*.spec.ts'],
+    rules: {
+      // 移動元の検証設定を維持する。不正Headerの注入とMockの呼出し履歴検証に限る。
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+      '@typescript-eslint/unbound-method': 'off',
+    },
+  },
 );

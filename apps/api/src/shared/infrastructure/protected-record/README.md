@@ -1,6 +1,6 @@
 # 保存レコードの保護基盤
 
-このPackageは、ADR #55で採用した、特定Providerに依存しない保存レコードの保護境界を実装します。Canonical AADの符号化・検証、AES-256-GCMによる暗号化・復号、Contextごとの鍵と一意なNonceを取得するPortを提供します。業務認可、永続化、具体的なKMS／Providerの選定、永続的なAlert配送、Audit保存、本番への接続は担当しません。
+このAPI内Moduleは、ADR #55で採用した、特定Providerに依存しない保存レコードの保護境界を実装します。Canonical AADの符号化・検証、AES-256-GCMによる暗号化・復号、Contextごとの鍵と一意なNonceを取得するPortを提供します。業務認可、永続化、具体的なKMS／Providerの選定、永続的なAlert配送、Audit保存、本番への接続は担当しません。
 
 ## 鍵とNonceの契約
 
@@ -15,3 +15,11 @@ Group Managementの不変履歴は、Membership変更、Invitation変更、Group
 ## 失敗とAlertの境界
 
 不正または非CanonicalなAAD、Metadataの不一致、鍵の利用不能、Nonce／Tag長の不正、認証失敗は、すべて同じ汎用Errorである`ProtectedRecordUnavailable`を返します。任意のAlert Callbackへ渡すのは操作種別と固定Codeだけです。ID、Payload、Ciphertext、Nonce、Tag、鍵は渡しません。永続的なAlert配送は後続の本番Gateです。
+
+## 配置と利用箇所
+
+暗号処理は`apps/api/src/shared/infrastructure/protected-record`へ配置します。Group ManagementのPostgreSQL保存・読取・アクセス判定Adapterと、その結合Testが利用します。WebやWorkerの利用者はなく、複数Applicationで共有する独立Packageは不要なため廃止しました。暗号化・復号と既存Testは維持します。
+
+用途別Digestの型とPortは`../../application/purpose-separated-digest.ts`へ分離します。Group Management Applicationはこの契約だけを直接参照し、Node.js暗号実装へ依存しません。共有Infrastructureは共有Applicationへ依存できますが、各Contextの内部へ依存しません。Domain・Presentationから共有技術基盤への依存も許可しません。
+
+共有Moduleは、ADR #55のCanonical AAD・Envelope・Key／Nonce契約を保持します。Settlementの採用済みAAD形式と固定Vectorも維持しますが、Settlementの保存Adapterや本番Compositionを新たに接続するものではありません。具体Providerと本番接続のGateは引き続き別Taskです。

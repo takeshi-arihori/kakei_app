@@ -1,4 +1,4 @@
-import type { ProtectedRecordCodec } from '@kakei/protected-record';
+import type { ProtectedRecordCodec } from '../../../shared/infrastructure/protected-record/index.js';
 import type { Client, QueryResult, QueryResultRow } from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 

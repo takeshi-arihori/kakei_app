@@ -18,6 +18,9 @@
 - `src/<context>/presentation`: Context固有の認証Guard、Input／Output変換、Command／Query呼出しだけを行う。
 - `src/<context>/infrastructure`: Prisma、PostgreSQL、Firestore、KMS、Email、OAuthなどのAdapterを実装する。
 - `src/shared/domain`: 複数Contextで意味と変更理由が一致するDomain型だけを置く。
+- `src/shared/application`: API内で共有する技術契約の型・Portを置く。用途別Digestの契約を含み、業務Modelや具体暗号実装を置かない。他の共有Applicationだけを参照し、外部ModuleやContext内部へ依存しない。
+- `src/shared/infrastructure/protected-record`: APIの保存Adapterが使うCanonical AADとNode.js標準暗号のWrapperを置く。共有Infrastructure／共有Applicationへ依存でき、外部依存は採用済みの`node:crypto`だけを許可する。Context内部、Domain、Presentationへ依存しない。
+- Context Applicationは共有Applicationを、Context Infrastructureは共有Application／共有Infrastructureを参照できる。Domain・Presentationから共有技術基盤への参照、Applicationから共有Infrastructureへの参照を許可しない。複数Contextでの利用だけを理由に独立Packageを追加しない。
 - `src/presentation/graphql`: GraphQL Schemaの読込、生成型、Context ResolverのCompositionなどTransport全体の共通処理だけを置く。Context固有のResolver、Input／Output変換、GraphQL認証・認可Adapterは`src/<context>/presentation/graphql`へ置く。
 - DomainからHono、GraphQL、Prisma、Cloud SDKをImportしない。
 - ApplicationはPortへ依存し、Infrastructureが内向きにPortを実装する。

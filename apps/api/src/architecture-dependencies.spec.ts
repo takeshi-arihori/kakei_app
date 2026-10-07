@@ -10,7 +10,6 @@ const acceptedContexts = new Set([
   'expense-recording',
   'settlement',
 ]);
-const applicationFoundationDependencies = new Set(['@kakei/protected-record']);
 
 type ContextLayer =
   'domain' | 'application' | 'presentation' | 'infrastructure';
@@ -22,6 +21,8 @@ type ModuleRole =
       layer: ContextLayer;
     }>
   | Readonly<{ kind: 'shared-domain' }>
+  | Readonly<{ kind: 'shared-application' }>
+  | Readonly<{ kind: 'shared-infrastructure' }>
   | Readonly<{ kind: 'shared-presentation'; generated: boolean }>
   | Readonly<{ kind: 'composition' }>
   | Readonly<{ kind: 'test' }>
@@ -59,6 +60,14 @@ const classifyModule = (path: string): ModuleRole => {
 
   if (relativePath.startsWith('shared/domain/')) {
     return { kind: 'shared-domain' };
+  }
+
+  if (relativePath.startsWith('shared/application/')) {
+    return { kind: 'shared-application' };
+  }
+
+  if (relativePath.startsWith('shared/infrastructure/')) {
+    return { kind: 'shared-infrastructure' };
   }
 
   if (relativePath.startsWith('presentation/graphql/')) {
@@ -176,15 +185,14 @@ const validateDependency = (
   }
 
   if (isExternalSpecifier(specifier)) {
-    if (
-      source.kind === 'context' &&
-      source.layer === 'application' &&
-      applicationFoundationDependencies.has(specifier)
-    ) {
-      return null;
+    if (source.kind === 'shared-infrastructure') {
+      return specifier === 'node:crypto'
+        ? null
+        : `shared infrastructure must not depend on unapproved external module ${specifier}`;
     }
     if (
       source.kind === 'shared-domain' ||
+      source.kind === 'shared-application' ||
       (source.kind === 'context' &&
         (source.layer === 'domain' || source.layer === 'application'))
     ) {
@@ -212,6 +220,17 @@ const validateDependency = (
       ? null
       : 'shared domain may depend only on shared domain';
   }
+  if (source.kind === 'shared-application') {
+    return target.kind === 'shared-application'
+      ? null
+      : 'shared application may depend only on shared application';
+  }
+  if (source.kind === 'shared-infrastructure') {
+    return target.kind === 'shared-infrastructure' ||
+      target.kind === 'shared-application'
+      ? null
+      : 'shared infrastructure may depend only on shared infrastructure or shared application';
+  }
   if (source.kind === 'shared-presentation') {
     return target.kind === 'shared-presentation' ||
       (target.kind === 'context' && target.layer === 'presentation')
@@ -231,6 +250,7 @@ const validateDependency = (
   }
   if (source.layer === 'application') {
     return target.kind === 'shared-domain' ||
+      target.kind === 'shared-application' ||
       (target.kind === 'context' &&
         ['application', 'domain'].includes(target.layer))
       ? null
@@ -244,8 +264,10 @@ const validateDependency = (
       : `${source.context} presentation must call its application layer`;
   }
 
-  return target.kind === 'context' &&
-    ['infrastructure', 'application', 'domain'].includes(target.layer)
+  return target.kind === 'shared-infrastructure' ||
+    target.kind === 'shared-application' ||
+    (target.kind === 'context' &&
+      ['infrastructure', 'application', 'domain'].includes(target.layer))
     ? null
     : `${source.context} infrastructure has an inward dependency violation`;
 };
@@ -495,6 +517,127 @@ describe('API architecture dependencies', () => {
         fixturePath(source),
         specifier,
         target === undefined ? undefined : fixturePath(target),
+      ),
+    ).not.toBeNull();
+  });
+
+  it.each([
+    ['group-management/application/a.ts', 'shared/application/digest.ts'],
+    [
+      'group-management/infrastructure/a.ts',
+      'shared/infrastructure/protected-record/index.ts',
+    ],
+    ['group-management/infrastructure/a.ts', 'shared/application/digest.ts'],
+    [
+      'shared/infrastructure/protected-record/codec.ts',
+      'shared/application/digest.ts',
+    ],
+    [
+      'shared/infrastructure/protected-record/codec.ts',
+      'shared/infrastructure/protected-record/aad.ts',
+    ],
+    ['shared/application/digest.ts', 'shared/application/types.ts'],
+    ['app.ts', 'shared/infrastructure/protected-record/index.ts'],
+  ])('%s から共有基盤への許可依存を保つ', (source, target) => {
+    expect(
+      validateDependency(
+        fixturePath(source),
+        './local.js',
+        fixturePath(target),
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['group-management/domain/a.ts', 'shared/application/digest.ts'],
+    [
+      'group-management/domain/a.ts',
+      'shared/infrastructure/protected-record/index.ts',
+    ],
+    ['group-management/presentation/a.ts', 'shared/application/digest.ts'],
+    [
+      'group-management/presentation/a.ts',
+      'shared/infrastructure/protected-record/index.ts',
+    ],
+    [
+      'group-management/application/a.ts',
+      'shared/infrastructure/protected-record/index.ts',
+    ],
+    [
+      'shared/application/a.ts',
+      'shared/infrastructure/protected-record/index.ts',
+    ],
+    ['shared/application/a.ts', 'group-management/domain/b.ts'],
+    ['shared/application/a.ts', 'group-management/application/b.ts'],
+    ['shared/application/a.ts', 'group-management/infrastructure/b.ts'],
+    ['shared/application/a.ts', 'shared/domain/b.ts'],
+    ['shared/application/a.ts', 'presentation/graphql/b.ts'],
+    [
+      'shared/infrastructure/protected-record/a.ts',
+      'group-management/domain/b.ts',
+    ],
+    [
+      'shared/infrastructure/protected-record/a.ts',
+      'group-management/application/b.ts',
+    ],
+    [
+      'shared/infrastructure/protected-record/a.ts',
+      'group-management/infrastructure/b.ts',
+    ],
+    ['shared/infrastructure/protected-record/a.ts', 'shared/domain/b.ts'],
+    [
+      'shared/infrastructure/protected-record/a.ts',
+      'presentation/graphql/b.ts',
+    ],
+    [
+      'shared/infrastructure/protected-record/a.ts',
+      'shared/infrastructure/protected-record/b.spec.ts',
+    ],
+  ])('%s から共有基盤の責務を逆転する依存を拒否する', (source, target) => {
+    expect(
+      validateDependency(
+        fixturePath(source),
+        './local.js',
+        fixturePath(target),
+      ),
+    ).not.toBeNull();
+  });
+
+  it('共有暗号InfrastructureでNode標準暗号を使用できる', () => {
+    expect(
+      validateDependency(
+        fixturePath('shared/infrastructure/protected-record/codec.ts'),
+        'node:crypto',
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['shared/application/digest.ts', 'node:crypto'],
+    ['shared/application/digest.ts', 'hono'],
+    ['shared/infrastructure/protected-record/codec.ts', 'hono'],
+    ['group-management/application/a.ts', '@kakei/protected-record'],
+  ])('%s の未承認外部依存 %s を拒否する', (source, specifier) => {
+    expect(validateDependency(fixturePath(source), specifier)).not.toBeNull();
+  });
+
+  it.each([
+    "import type { Value } from '../../shared/infrastructure/protected-record/index.js';",
+    "export { value } from '../../shared/infrastructure/protected-record/index.js';",
+    "const value = import('../../shared/infrastructure/protected-record/index.js');",
+  ])('Applicationから暗号Infrastructureへの%sを拒否する', (source) => {
+    const sourceFile = ts.createSourceFile(
+      'fixture.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const [reference] = collectModuleReferences(sourceFile);
+    expect(
+      validateDependency(
+        fixturePath('group-management/application/a.ts'),
+        reference?.specifier ?? '',
+        fixturePath('shared/infrastructure/protected-record/index.ts'),
       ),
     ).not.toBeNull();
   });

@@ -1,7 +1,7 @@
 import type {
   ProtectedRecordCodec,
   ProtectedRecordHeader,
-} from '@kakei/protected-record';
+} from '../../../shared/infrastructure/protected-record/index.js';
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 
 import {
