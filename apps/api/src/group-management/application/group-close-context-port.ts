@@ -20,9 +20,9 @@ export type RemoveGroupCloseFenceRequest = Readonly<
 >;
 
 /**
- * Each owning Context implements this port at the same transaction boundary as
- * its business writes. A Receipt is evidence that the fence is durable and all
- * commands admitted before it have committed or rolled back.
+ * 各Data OwnerのContextは、業務保存と同じTransaction境界でこのPortを実装する。
+ * ReceiptはFenceが永続化され、その前に受け付けた全Commandが
+ * CommitまたはRollback済みであることのEvidence。
  */
 export interface GroupCloseContextPort {
   readonly context: GroupCloseContext;

@@ -59,6 +59,14 @@
 - Random TokenやKeyは暗号学的に安全な生成器を使い、平文保存しない。
 - SecretはEnvironment／Secret Managerから受け取り、RepositoryとContainer Imageへ含めない。
 
+## 文書・説明文の言語
+
+- Repositoryで作成・保守するREADME、仕様・設計・運用文書、Comment／JSDocの説明文は日本語で記載する。
+- コード識別子、File Path、Command、API／Schemaの固定値、正式な技術名称、契約の短い分類名は原表記を維持する。これらを含む説明文は日本語にする。
+- 外部文書の引用、Owner承認の原文、過去の監査証跡、生成Codeは原文を保持し、必要な補足を日本語で付ける。
+- Checksumで管理される適用済みMigrationは、Commentだけであっても翻訳のために変更しない。現行の説明は関連READMEへ記載する。
+- Reviewでは変更対象の英語説明の残存と、翻訳による数値・制約・責務・参照の変化を確認する。保持した原表記や対象外の説明には理由を示す。
+
 ## 命名・Comment
 
 - DomainのClass、Method、Event、TestはGitHubのユビキタス言語を使う。

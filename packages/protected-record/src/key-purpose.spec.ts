@@ -14,12 +14,12 @@ it('Protected record keyと用途分離digestを別のbranded typeにする', ()
   const acceptsDigest = (value: PurposeSeparatedDigest): Uint8Array => value;
   expect(acceptsDigest(digest)).toEqual(Uint8Array.from([1]));
 
-  // @ts-expect-error Protected record encryption keys are not digest values.
+  // @ts-expect-error 保存レコードの暗号鍵をDigest値として扱えない。
   acceptsDigest(key);
 });
 
 it('Group依存の旧operation locator purposeを公開型から除外する', () => {
-  // @ts-expect-error The v1 locator requires Group ID and cannot locate CreateGroup replays.
+  // @ts-expect-error v1 LocatorはGroup IDが必須なので、CreateGroupの再送結果を検索できない。
   const oldLocatorPurpose: DigestPurpose = 'group-operation-locator/v1';
   expect(oldLocatorPurpose).toBe('group-operation-locator/v1');
 });

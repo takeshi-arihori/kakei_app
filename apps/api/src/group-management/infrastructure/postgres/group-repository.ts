@@ -324,8 +324,8 @@ export class PostgresGroupRepository implements GroupRepository {
     try {
       await client.query('ROLLBACK');
     } catch {
-      // A lost connection can make rollback impossible; it must not hide the
-      // generic Unavailable result or the caller's idempotent recovery path.
+      // 接続喪失でRollback不能になっても、汎用Unavailable結果や
+      // 呼出し側の冪等な復旧経路を隠さない。
     }
   }
 
@@ -338,7 +338,7 @@ export class PostgresGroupRepository implements GroupRepository {
     try {
       this.options.onUnavailable?.();
     } catch {
-      // Alert failure cannot replace the generic repository outcome.
+      // Alert失敗でRepositoryの汎用結果を置き換えない。
     }
   }
 }

@@ -66,7 +66,7 @@ const toPolicy = (
     ),
   });
 
-/** PostgreSQL locks and persists the Group Management policy in one transaction. */
+/** PostgreSQLでGroup Management PolicyのLockと保存を1つのTransaction内で行う。 */
 export class PostgresGroupAccessPolicy implements GroupAccessPolicyPort {
   constructor(
     private readonly options: Readonly<{
@@ -363,7 +363,7 @@ export class PostgresGroupAccessPolicy implements GroupAccessPolicyPort {
     try {
       this.options.onUnavailable?.();
     } catch {
-      // Reporting failure cannot replace the generic fail-closed result.
+      // 報告処理の失敗で、拒否を示す汎用結果を置き換えない。
     }
   }
 }

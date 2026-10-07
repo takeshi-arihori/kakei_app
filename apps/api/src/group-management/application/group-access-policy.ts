@@ -52,7 +52,7 @@ const hasId = (
   candidates: readonly (ParticipantId | null)[],
 ): boolean => candidates.some((candidate) => candidate?.equals(participantId));
 
-/** Evaluates every membership separately so a rejoined actor cannot inherit an old ID's access. */
+/** Membershipを個別に評価し、再参加Actorが旧IDの参照権限を引き継がないようにする。 */
 export const canReadSnapshot = (
   policy: FixedGroupAccessPolicy,
   actorSubject: ActorSubject,
@@ -120,7 +120,7 @@ export type SnapshotReadResult<T> =
 export type FixedSnapshotReadAccess = Readonly<{
   groupVersion: number;
   accessPolicyVersion: number;
-  /** The port rechecks the callback's declared involvement before releasing a payload. */
+  /** PortはPayloadを返す前に、Callbackが宣言した関与を再検証する。 */
   canReadSnapshot: (involvement: SnapshotInvolvement) => boolean;
 }>;
 
@@ -136,11 +136,10 @@ export type ExpectedGroupAccessPolicyVersion = Readonly<{
 }>;
 
 /**
- * Public Group Management boundary. Implementations keep reads within one
- * fixed policy version and serialize access-affecting mutations in ascending
- * Group ID order. Mutation callbacks are pure calculations over immutable
- * policy snapshots and return readonly Group commit plans; they receive no
- * database handle. PostgreSQL locking and persistence belong to #97.
+ * Group Managementの公開境界。読取は1つの固定Policy Version内で行い、
+ * 参照権限へ影響する変更はGroup ID昇順で直列化する。変更Callbackは
+ * 不変Policy Snapshotに対する純粋計算であり、ReadonlyのGroup Commit計画を返す。
+ * DB Handleは渡さない。PostgreSQLのLockと保存は#97の責務。
  */
 export interface GroupAccessPolicyPort {
   withSnapshotRead<T>(input: {
