@@ -2,7 +2,7 @@ import type {
   DigestPurpose,
   PurposeSeparatedDigest,
   PurposeSeparatedDigestPort,
-} from '@kakei/protected-record';
+} from '../../shared/application/purpose-separated-digest.js';
 
 import type { ActorSubject, GroupId, ParticipantId } from '../domain/group.js';
 import type { OperationId } from './group-repository.js';

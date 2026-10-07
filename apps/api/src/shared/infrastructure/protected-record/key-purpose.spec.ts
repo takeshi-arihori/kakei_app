@@ -5,7 +5,7 @@ import {
   importPurposeSeparatedDigest,
   type DigestPurpose,
   type PurposeSeparatedDigest,
-} from './purpose-separated-digest.js';
+} from '../../application/purpose-separated-digest.js';
 
 it('Protected record keyと用途分離digestを別のbranded typeにする', () => {
   const key = importProtectedRecordKey(new Uint8Array(32));

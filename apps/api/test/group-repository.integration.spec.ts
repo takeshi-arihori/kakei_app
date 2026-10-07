@@ -7,7 +7,7 @@ import {
   encodeCanonicalAad,
   importProtectedRecordKey,
   importPurposeSeparatedDigest,
-} from '@kakei/protected-record';
+} from '../src/shared/infrastructure/protected-record/index.js';
 import { Client, Pool, type PoolClient } from 'pg';
 import {
   afterAll,

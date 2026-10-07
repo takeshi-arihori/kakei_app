@@ -20,7 +20,9 @@ docs/
   api/       HTTP transport設計書とSwagger UI入力
 ```
 
-`apps/worker`と`packages/*`は現時点では存在しません。空のScaffoldは先行作成せず、対応Taskへ着手するときに責務、所有者、Runtime、最初の利用者を決めて追加します。`pnpm-workspace.yaml`のglobは将来追加を受け入れるために先行定義しています。
+`apps/worker`は現時点では存在しません。空のScaffoldは先行作成せず、対応Taskへ着手するときに責務、所有者、Runtime、最初の利用者を決めて追加します。`pnpm-workspace.yaml`は実在するApplicationを管理します。
+
+保存レコードの暗号基盤は[API内の共有Infrastructure](apps/api/src/shared/infrastructure/protected-record/README.md)へ配置しています。現在の利用者はAPIだけです。`packages`は、複数Applicationで共有する必要性がAcceptedされた場合に追加します。
 
 ## 必要な環境
 

@@ -1,7 +1,7 @@
 import type {
   ProtectedRecordCodec,
   ProtectedRecordHeader,
-} from '@kakei/protected-record';
+} from '../../../shared/infrastructure/protected-record/index.js';
 import { randomUUID } from 'node:crypto';
 import type { Client, Pool, PoolClient, QueryResultRow } from 'pg';
 

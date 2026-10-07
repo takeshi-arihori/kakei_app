@@ -2,7 +2,7 @@ import type {
   ProtectedRecordCodec,
   ProtectedRecordEnvelope,
   ProtectedRecordHeader,
-} from '@kakei/protected-record';
+} from '../../../shared/infrastructure/protected-record/index.js';
 import { randomUUID } from 'node:crypto';
 
 import {

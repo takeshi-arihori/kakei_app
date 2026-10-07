@@ -8,7 +8,7 @@ import {
   importProtectedRecordKey,
   importPurposeSeparatedDigest,
   type ProtectedRecordEnvelope,
-} from '@kakei/protected-record';
+} from '../src/shared/infrastructure/protected-record/index.js';
 import { Client } from 'pg';
 import {
   afterAll,
