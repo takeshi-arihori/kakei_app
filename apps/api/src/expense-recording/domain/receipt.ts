@@ -1,4 +1,8 @@
 import type {
+  EditReceiptDraft,
+  ReceiptDraftEditedChange,
+} from './receipt-draft-edit.js';
+import type {
   CorrectReceiptAdjustmentAmount,
   ReceiptAdjustmentAmountCorrectedChange,
 } from './receipt-adjustment-amount-correction.js';
@@ -271,8 +275,9 @@ export type ReceiptBundleItemsMovedChange = {
   readonly after: ConfirmedReceiptSnapshot;
 };
 
-/** 同Receiptの確認・Bundle対応／Item移動・初選択・Item Category／原額訂正の順序付き履歴。 */
+/** 同ReceiptのDraft編集・確認・Bundle対応／Item移動・初選択・Item訂正の順序付き履歴。 */
 export type ReceiptChange =
+  | ReceiptDraftEditedChange
   | ReceiptConfirmationChange
   | ReceiptBundleRegistrationChange
   | ReceiptBundleSnapshotSelectionChange
@@ -362,13 +367,84 @@ const utcInstant = (value: Date): string => {
   return value.toISOString();
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const requireDraftCandidates = (input: EditReceiptDraft): void => {
+  requireCondition(
+    (input.occurredOn === null || typeof input.occurredOn === 'string') &&
+      typeof input.declaredTotal === 'number' &&
+      Array.isArray(input.items) &&
+      Array.isArray(input.adjustments),
+    'RECEIPT_DRAFT_INVALID',
+  );
+  // Array.fromは疎配列の穴も検証し、候補を飛ばして部分コピーすることを防ぐ。
+  requireCondition(
+    Array.from(input.items).every(
+      (item) =>
+        isRecord(item) &&
+        typeof item.id === 'string' &&
+        typeof item.name === 'string' &&
+        typeof item.amount === 'number' &&
+        typeof item.categoryId === 'string',
+    ),
+    'RECEIPT_DRAFT_INVALID',
+  );
+  requireCondition(
+    Array.from(input.adjustments).every((adjustment) => {
+      if (
+        !isRecord(adjustment) ||
+        typeof adjustment.kind !== 'string' ||
+        typeof adjustment.amount !== 'number' ||
+        !isRecord(adjustment.target)
+      )
+        return false;
+      return (
+        adjustment.target.scope === 'Receipt' ||
+        (adjustment.target.scope === 'Item' &&
+          typeof adjustment.target.itemId === 'string')
+      );
+    }),
+    'RECEIPT_DRAFT_INVALID',
+  );
+};
+
+const sameDraftCandidates = (
+  before: ReceiptDraftSnapshot,
+  after: ReceiptDraftSnapshot,
+): boolean =>
+  before.occurredOn === after.occurredOn &&
+  Object.is(before.declaredTotal, after.declaredTotal) &&
+  before.items.length === after.items.length &&
+  before.items.every((item, index) => {
+    const other = after.items[index];
+    return (
+      item.id === other.id &&
+      item.name === other.name &&
+      Object.is(item.amount, other.amount) &&
+      item.categoryId === other.categoryId
+    );
+  }) &&
+  before.adjustments.length === after.adjustments.length &&
+  before.adjustments.every((adjustment, index) => {
+    const other = after.adjustments[index];
+    return (
+      adjustment.kind === other.kind &&
+      Object.is(adjustment.amount, other.amount) &&
+      (adjustment.target.scope === 'Receipt'
+        ? other.target.scope === 'Receipt'
+        : other.target.scope === 'Item' &&
+          adjustment.target.itemId === other.target.itemId)
+    );
+  });
+
 /** ERがReceipt確認・Bundle対応・永久編集lock・合計Invariantを守る個別Root。 */
 export class Receipt {
   private constructor(
     private readonly current: ReceiptSnapshot,
     /** Root内だけで進める版。永続層の先着・CASを証明しない。 */
     readonly version: number,
-    /** 確認・Bundle登録／Item移動・初選択・Category／原額／Adjustment額訂正の不変履歴。Audit Logや保存Schemaではない。 */
+    /** Draft編集・確認・Bundle登録／Item移動・初選択・Item／Adjustment訂正の不変履歴。Audit Logや保存Schemaではない。 */
     readonly changes: readonly ReceiptChange[],
   ) {
     Object.freeze(this);
@@ -409,6 +485,47 @@ export class Receipt {
       status: 'Draft',
     });
     return new Receipt(snapshot, 1, Object.freeze([]));
+  }
+
+  /**
+   * Uploaderの確定前候補を置換し、実変更だけ不変履歴へ残す。
+   * @param input 現在期待版、Uploader、有限操作時刻と全候補facts。
+   * @returns 同ID・Uploaderの新Draft。全条件を満たす同値入力は同じRoot。
+   * @throws ReceiptInvariantViolation Draft以外、Actor・版・時刻・候補構造が不正、または実変更で版上限を超える場合。
+   */
+  editDraft(input: EditReceiptDraft): Receipt {
+    const before = this.current;
+    if (before.status !== 'Draft') return reject('RECEIPT_NOT_DRAFT');
+    this.requireVersion(input.expectedVersion);
+    this.requireUploader(input.actorSubject);
+    const at = utcInstant(input.editedAt);
+    requireDraftCandidates(input);
+    const after: ReceiptDraftSnapshot = Object.freeze({
+      ...before,
+      occurredOn: input.occurredOn,
+      declaredTotal: input.declaredTotal,
+      items: freezeCandidates(input.items),
+      adjustments: freezeAdjustments(input.adjustments),
+    });
+    if (sameDraftCandidates(before, after)) return this;
+    requireCondition(
+      Number.isSafeInteger(this.version + 1),
+      'VERSION_OVERFLOW',
+    );
+    const change: ReceiptDraftEditedChange = Object.freeze({
+      action: 'DraftEdited',
+      actorSubject: input.actorSubject,
+      at,
+      previousVersion: this.version,
+      version: this.version + 1,
+      before,
+      after,
+    });
+    return new Receipt(
+      after,
+      this.version + 1,
+      Object.freeze([...this.changes, change]),
+    );
   }
 
   /**

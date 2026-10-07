@@ -54,3 +54,7 @@ Draft factoryは内部RootとしてCandidate factsをcopy／freezeする。Confi
 ## 既存Adjustment金額訂正の実装trace（2026-10-06）
 
 [Task #194](https://github.com/takeshi-arihori/kakei_app/issues/194)の[Adjustment金額訂正契約](receipt-adjustment-amount-correction-contract.md)は、既存一件の額訂正と全再配賦、影響する登録Bundleの未選択／Rejected条件、同Expense IDの額・負担・不変履歴を純Domainで扱う。原額・Category・Pair／初選択永久lock・現在payer／割合・旧精算Snapshot・全既存履歴を維持する。既存の原額／割合／Item移動／手入力訂正も新Adjustment履歴を保持する。追加／削除・種別／適用先変更、Draft／一般編集、実Source・認可／Group fence・原子的保存／再送／保護保存、Projection／API／画面は後続Gate。Accepted本文・承認履歴・公開Ready状態を変更しない。
+
+## Receipt Draft編集の純Domain trace（2026-10-07）
+
+[Task #200](https://github.com/takeshi-arihori/kakei_app/issues/200)の[Draft編集契約](receipt-draft-edit-contract.md)は、Uploaderだけが確定前の購入日・宣言合計・Item／Adjustment候補を置換し、同Receipt ID・Uploader・Draftと不変前後履歴を維持する。内容・順序が変わる場合だけ版を進め、全条件を満たす同値操作と閲覧で編集時刻を増やさない。未完成候補を自動確定せず、最新期待版の明示確認と既存Validation・全編集履歴を維持する。実本人性・Group／Category Source、保存CAS／再送／保護保存、Draft30日の期限・削除実行、OCR／画像、公開API／画面／Projection、Confirmed／未割当一般編集・Adjustment構造訂正は後続Gate。Accepted本文・承認履歴・公開Ready状態を変更しない。
