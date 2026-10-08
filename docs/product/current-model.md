@@ -76,7 +76,8 @@
 - Owner譲渡後も既存のPending Invitationは有効で、現在Ownerが取消できる。旧Ownerは新規作成・取消を行えない。
 - AcceptInvitationは宛先本人、期限、状態、GroupのActive、空き枠、Active重複、versionを最新状態で検証する。Invitation消費、新Participant、単調なjoinOrder、参加履歴、Group version、operation結果を原子的に成立させる。
 - 脱退済みActorの再参加は、新しいInvitationの受諾により、新ParticipantIdと過去最大より大きいjoinOrderを発行する。旧Participantと過去Expense・Settlement責務は変更しない。
-- 本番本人性・宛先解決・Token・配送・公開Error・Context間認可は別Decisionとする。保存保護とRetentionの条件C1は充足済みだが、Persistence #42はS0〜S3が完了するまでReadyにしない。
+- [ADR #203](../adr/google-login-and-registered-recipient-invitation.md)で、Googleのみのsocial login、招待相手の事前登録、宛先本人が表示・共有する一回限りのコードを現在Ownerが入力し、本人がアプリ内でInvitationを受諾する経路を採用した。アプリからの招待メール配送は行わない。コードはInvitation／Participant／人数枠ではなく、共有・入力だけでは参加は成立しない。
+- Invitationの7日期限はコード自体の期限を定めない。本人性の実接続、Actor対応・Session、コードLifecycle／保護保存・消費、公開Error・Context間認可は後続Gateとする。保存保護とRetentionの条件C1は充足済みであり、PersistenceはS0〜S3とTask固有Gateに従う。
 
 ### 途中参加・脱退の時間境界（2026-08-22 Confirmed）
 
@@ -280,7 +281,7 @@
 
 実装Ready前に残る設計Gate:
 
-1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可は[ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)、Invitation lifecycleと再参加Participant寿命は[ADR #52](../adr/group-invitation-and-rejoin.md)、Snapshot保護・保持の条件C1は[ADR #55](../adr/snapshot-revision-security-and-retention.md)で採用・充足した。[ADR #152](../adr/expense-settlement-consistency-boundary.md)でERの個別Group Expense、Settlement Caseと不変Revision、予約／精算更新の同期原子的commitを採用した。[ADR #170](../adr/receipt-category-consistency-boundary.md)でERのReceipt Root、個別Category Root、1Bundleと対応Expenseの共通原子的commitを採用した。[ADR #179](../adr/receipt-bundle-edit-and-snapshot-lock.md)でBundleのUploader専用編集、Snapshot初選択後の永久固定、Rejected後のItem訂正維持を採用した。具体Context間Port／lock順／冪等契約、Projection、本番本人性・配送は後続設計で解消する。
+1. [ADR #24](../adr/shared-expense-domain-boundaries.md)で3 ContextとState modelの基本方針を条件付き採用した。Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可は[ADR #35](../adr/group-management-consistency-boundary.md)と[ADR #36](../adr/group-management-command-authorization.md)、Invitation lifecycleと再参加Participant寿命は[ADR #52](../adr/group-invitation-and-rejoin.md)、Snapshot保護・保持の条件C1は[ADR #55](../adr/snapshot-revision-security-and-retention.md)で採用・充足した。[ADR #152](../adr/expense-settlement-consistency-boundary.md)でERの個別Group Expense、Settlement Caseと不変Revision、予約／精算更新の同期原子的commitを採用した。[ADR #170](../adr/receipt-category-consistency-boundary.md)でERのReceipt Root、個別Category Root、1Bundleと対応Expenseの共通原子的commitを採用した。[ADR #179](../adr/receipt-bundle-edit-and-snapshot-lock.md)でBundleのUploader専用編集、Snapshot初選択後の永久固定、Rejected後のItem訂正維持を採用した。[ADR #203](../adr/google-login-and-registered-recipient-invitation.md)でGoogle Provider・招待相手の事前登録・コード共有方式を採用した。具体Context間Port／lock順／冪等契約、Projection、本人性の実接続・Session・コードLifecycle／保存は後続設計で解消する。
 2. 旧「Transaction限定Event Sourcing／日付境界Archive」のProposalを現行仕様として扱わない。ADR #24とADR #55の承認範囲を優先する。
 3. 未移行または未確認のDecisionに依存するTaskは、GitHub上に根拠が揃うまでBlockedにする。
 
@@ -290,6 +291,6 @@
 
 - 2人限定・個人用家計・単一Payer／Payeeの旧記述は現行Ruleとして使用しない。
 - RepositoryのREADME、AGENTS、engineering docsは2026-08-23の共有割り勘Scopeへ同期済み。旧語はDeprecatedな前提を説明する場合だけ使用する。
-- 旧Issue #9で確認されたDomain Ruleはこの文書へ統合した。3 Contextと保存の基本方針はADR #24、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36、Invitation lifecycleと再参加Participant寿命はADR #52、保存保護・RetentionとSnapshot保護条件C1はADR #55に従う。ERの個別Group ExpenseとSettlement Caseの境界、予約／精算更新の原子性はADR #152に従う。Receipt Root／個別Category RootとBundle登録原子性は[ADR #170](../adr/receipt-category-consistency-boundary.md)に従う。具体Port、Persistence実装・保護Record種別、本番本人性・配送、Context間認可、Projectionは依存実装前に対象Taskで確定する。
+- 旧Issue #9で確認されたDomain Ruleはこの文書へ統合した。3 Contextと保存の基本方針はADR #24、Group Managementの最初のData Owner、Group Aggregate、Repository Port、内部Command認可はADR #35／#36、Invitation lifecycleと再参加Participant寿命はADR #52、保存保護・RetentionとSnapshot保護条件C1はADR #55に従う。ERの個別Group ExpenseとSettlement Caseの境界、予約／精算更新の原子性はADR #152に従う。Receipt Root／個別Category RootとBundle登録原子性は[ADR #170](../adr/receipt-category-consistency-boundary.md)に従う。Google Provider・登録済み宛先へのコード共有招待は[ADR #203](../adr/google-login-and-registered-recipient-invitation.md)に従う。具体Port、Persistence実装・保護Record種別、本人性の実接続・Session・コードLifecycle／保存、Context間認可、Projectionは依存実装前に対象Taskで確定する。
 - 作業の管理先はPrivate GitHub Project #9とIssue。管理先の切替は未確定の業務設計Gateを解消しない。
 - Conflictを実装で吸収しない。

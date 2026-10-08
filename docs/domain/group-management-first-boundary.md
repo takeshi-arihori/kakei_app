@@ -1,6 +1,6 @@
 # Group Managementの最初の実装境界（設計案）
 
-- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptance、2026-09-13のADR #52 Acceptance、Task #57の内部契約実装、2026-09-20のC1充足、2026-09-21のADR #73 Acceptance、2026-09-22のADR #85 Acceptance、2026-09-23のADR #102 Acceptance、2026-09-26のADR #115 AcceptanceとTask #118／#119の契約を反映。残るOpen QuestionとBlockedを分離する。
+- Knowledge State: 2026-09-08のADR #35／#36条件付きAcceptance、2026-09-13のADR #52 Acceptance、Task #57の内部契約実装、2026-09-20のC1充足、2026-09-21のADR #73 Acceptance、2026-09-22のADR #85 Acceptance、2026-09-23のADR #102 Acceptance、2026-09-26のADR #115 AcceptanceとTask #118／#119の契約を反映。2026-10-08の[ADR #203](../adr/google-login-and-registered-recipient-invitation.md)によるProvider・登録済み宛先・コード共有方式の採用も反映する。残るOpen QuestionとBlockedを分離する。
 - Baseline: [実装開始時のdevelop固定Commit](https://github.com/takeshi-arihori/kakei_app/tree/68d9c469605f554306f773a929250d8b1f642d05)
 - 根拠: [現行業務モデル](../product/current-model.md)、[Accepted ADR #24](../adr/shared-expense-domain-boundaries.md)
 - Decision: [整合性境界](../adr/group-management-consistency-boundary.md)、[本人性・認可・再試行](../adr/group-management-command-authorization.md)、[招待・再参加](../adr/group-invitation-and-rejoin.md)、[Group終了](../adr/group-close-consistency-and-retention-boundary.md)、[CloseIntentId保持](../adr/close-intent-id-retention-boundary.md)、[operation locator／Group ID](../adr/group-operation-locator-and-group-id-contract.md)
@@ -10,7 +10,7 @@
 
 利用者が少人数の割り勘Groupを作り、参加者と管理責任を維持する。人数超過、Owner不在・複数化、古い権限による更新を防ぎ、脱退後も過去の支出・精算責務を壊さないことを観測可能な成果とする。
 
-最初の境界はCreateGroup、TransferGroupOwnership、LeaveGroup、InviteParticipant、CancelInvitation、AcceptInvitationの純粋Domainと、それらを呼ぶApplication・Repository Port契約である。Invitation lifecycleと再参加Participant寿命はADR #52で採用し、#57でDomain／Application内部契約とfake Repository検証を追加した。Group終了のClose Intent、Context fence／Receipt、Archive／取消、保持期限はADR #73で採用し、CloseIntent registryのGroup削除後1年保持と一意性境界はADR #102で限定した。#75はDomain／Application内部契約、#96はregistryの原子的登録、#103はGroup Management内の退役・期限cleanupを担当する。Group削除後の1年が経過してもcleanup commitまではID再利用を拒否し、cleanup後のDB強制一意性は終了してUUIDv4の実用上一意性に依存する。本番本人性・配送・公開Command接続は後続とする。
+最初の境界はCreateGroup、TransferGroupOwnership、LeaveGroup、InviteParticipant、CancelInvitation、AcceptInvitationの純粋Domainと、それらを呼ぶApplication・Repository Port契約である。Invitation lifecycleと再参加Participant寿命はADR #52で採用し、#57でDomain／Application内部契約とfake Repository検証を追加した。Group終了のClose Intent、Context fence／Receipt、Archive／取消、保持期限はADR #73で採用し、CloseIntent registryのGroup削除後1年保持と一意性境界はADR #102で限定した。#75はDomain／Application内部契約、#96はregistryの原子的登録、#103はGroup Management内の退役・期限cleanupを担当する。Group削除後の1年が経過してもcleanup commitまではID再利用を拒否し、cleanup後のDB強制一意性は終了してUUIDv4の実用上一意性に依存する。Googleのみのsocial loginと登録済み宛先本人のコード共有・Owner入力・本人受諾は[ADR #203](../adr/google-login-and-registered-recipient-invitation.md)で選択済みである。本人性の実接続・Actor対応／Session・コードLifecycle／保存・公開Command接続は後続とする。
 
 対象外: CSV実装、Retention Batch、Invitation配送・Token実装、Expense／Settlementの実fence、DB／Migration、本番Persistence、GraphQL／UI、非同期Event／Projection。Group終了は別Contextの未精算・進行中確認を要するため、#75では公開Portとfake contractまでとし、実Context Adapterを本番へwireしない。
 
@@ -22,7 +22,7 @@
 | 現在のGroup Owner              | Actor / Group内Role           | 招待・Owner譲渡、後続の終了・CSV                                                                            | current-model: Group Role・権限        |
 | Participant / 招待された利用者 | Actor                         | 本人の参加・脱退、脱退後は既存支払責務が残る                                                                | current-model: 途中参加・脱退          |
 | 共有割り勘System               | Target System                 | Group内の役割と在籍時点を管理する                                                                           | ADR #24                                |
-| 本人性を確認する仕組み         | External boundary（方式未決） | 操作者を識別する信頼済み結果を渡す                                                                          | 認可ADR Decision。認証製品は選定しない |
+| 本人性を確認する仕組み         | External boundary（Google選択・接続未実装） | 操作者を識別する信頼済み結果を渡す                                                                          | 認可ADR／ADR #203。Session・Actor対応は後続 |
 | Expense Recording / Settlement | System内の別Context           | 登録時のParticipantと過去の責務を所有し、Group終了時は各書込み境界でfenceを設置してversion付きReceiptを返す | ADR #24 / ADR #73 / current-model      |
 
 ## 3. Use Cases / Commands
@@ -31,7 +31,7 @@ CreateGroup、TransferGroupOwnership、LeaveGroupのCommand名・入力・戻り
 
 | Use Case / Command                      | Actor・Goal・Trigger                    | Preconditions                                                                 | Success Outcome                                                                                   | Failure / Boundary                                                                           |
 | --------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Groupを開始 / CreateGroup               | 利用者が新しい割り勘を開始              | 本人性確認済み（方式未決）                                                    | 新Groupと作成者Participant、唯一のOwnerを同時生成。GroupId / ParticipantId / versionを返す        | 認証なし拒否。同じoperationの再送は同一Group。同一人の別operationは別Groupを許す             |
+| Groupを開始 / CreateGroup               | 利用者が新しい割り勘を開始              | 本人性確認済み（Google選択・実接続は後続）                                                    | 新Groupと作成者Participant、唯一のOwnerを同時生成。GroupId / ParticipantId / versionを返す        | 認証なし拒否。同じoperationの再送は同一Group。同一人の別operationは別Groupを許す             |
 | 招待 / InviteParticipant（#57）         | 現在のOwnerが仲間を招く                 | Active Group、現在Owner、Active 3人以下、宛先Actor確定                        | 期限7日のPending Invitationを作る。枠は予約せず、まだParticipantにはしない                        | 非Owner、旧Owner、Archived、4人、Active重複を拒否                                            |
 | 招待取消 / CancelInvitation（#57）      | 現在OwnerがPending Invitationを取り消す | Active Group、現在Owner、Pending                                              | InvitationをCancelledにする。旧Owner発行分も現在Ownerが取消可能                                   | 旧Owner、非Owner、Consumed／Cancelled／Expiredを拒否または変更なしの契約で扱う               |
 | 参加 / AcceptInvitation（#57）          | 招待された本人が参加意思を示す          | 宛先Actor一致、Pending、7日以内、Active Group、空き枠、Active重複なし         | Invitation消費、新Participant、単調joinOrder、履歴、版、operation結果が同時成立                   | 他Actor、取消・期限切れ、人数超過、競合は部分反映なし。Owner代理参加経路は作らない           |
@@ -116,7 +116,7 @@ Group→Participantの所有方向を採用する。削除はRetention全体の�
 | GM-07 | Archived Groupは招待・参加不可                                                                                                       | current-model: Group終了・Archive        | Confirmed                                          | Aggregate / 正常な招待でも参加拒否                                               |
 | GM-08 | 同利用者の同Group内Active参加は最大1。参加順はGroup内で単調・再利用なし                                                              | ADR #35                                  | Accepted                                           | Aggregate / 同時重複参加・同時順序採番                                           |
 | GM-09 | 版、Owner、在籍変更、必要履歴、operation結果が一括成立                                                                               | ADR #35／#36                             | Accepted                                           | Repository Portの原子性 / 保存失敗時に部分反映なし                               |
-| GM-10 | Actorと対象Participantの対応は信頼済み本人性とGroup状態から判定                                                                      | ADR #36                                  | Accepted                                           | Application認可 / なりすまし・他Group ID差替え拒否。本番本人性は未決             |
+| GM-10 | Actorと対象Participantの対応は信頼済み本人性とGroup状態から判定                                                                      | ADR #36                                  | Accepted                                           | Application認可 / なりすまし・他Group ID差替え拒否。本番Actor対応・Sessionは未決             |
 | GM-11 | 現在Ownerだけが7日期限の宛先Actor束縛Invitationを作成・取消でき、Pendingは人数枠を予約しない                                         | ADR #52                                  | Accepted                                           | Aggregate＋Application認可 / 4人、Active重複、Archived、旧Ownerを拒否            |
 | GM-12 | Accept時に宛先・期限・Active・空き枠・重複を再検証し、消費と新Participantを同一版で成立させる。Left Actorの旧Participantは変更しない | ADR #52                                  | Accepted                                           | Aggregate＋Repository Port / 同時受諾の片方だけ成功、再参加は新ID・単調joinOrder |
 | GM-13 | Group終了は現在Ownerが開始し、両Contextの同一Group／Intent／cutoffに束縛した有効Receiptが揃う場合だけ確定する                        | ADR #73                                  | Accepted                                           | Application coordination＋Aggregate / 他Context Tableを直接参照しない            |
@@ -145,7 +145,7 @@ operationIdはActor内で全Group・Command共通の一意な名前空間とし�
 
 競合後に入力・期待版を変える操作は新operationIdを用いる。Conflictを無条件に自動再試行しない。Unavailableでは成功したか不明な場合があるためfindOperationで照合する。失敗結果は永続記録しない。冪等結果の暗号化・保持・削除とlocator契約はAccepted ADR #55/#85で定めた。PostgreSQL read、状態・履歴writer、atomic commit、固定版認可lockの実装証拠は#94〜#97で順に追加する。in-memory fakeの成功はPersistence適合の証拠にならない。
 
-ActorSubject解決、Clock、ID発行はApplication境界で注入可能にする。Group IDはcanonical lowercase UUIDとし、信頼済み`nextGroupId`の本番実装は`crypto.randomUUID()`からUUIDv4を生成する。業務Entityへ認証Tokenを渡さない。Invitationのtrusted Actor内部契約は#57で導入するが、本番宛先解決・配送・公開経路からの接続は別Security Decisionまで行わない。
+ActorSubject解決、Clock、ID発行はApplication境界で注入可能にする。Group IDはcanonical lowercase UUIDとし、信頼済み`nextGroupId`の本番実装は`crypto.randomUUID()`からUUIDv4を生成する。業務Entityへ認証Tokenを渡さない。Invitationのtrusted Actor内部契約は#57で導入するが、Google Provider・登録済み宛先のコード共有経路はADR #203で選択済みである。実Actor対応・Session・コードLifecycle／保存・公開Error等の契約は後続設計で確定し、個別Readyと本番Gateを満たすまで公開経路から接続しない。
 
 Group終了ではApplicationがExpense RecordingとSettlementのClose Fence Portを呼び、各Contextが原子的なfence、進行中Commandのdrain／rollback、判定、Receipt発行、unfenceを所有する。Group Managementは型付きReceiptのgroupId、Intent、cutoff、context、fence versionを検証する。取消は最初のunfence前にGroupRepositoryのCASで`Canceling` phaseを予約し、Archive先勝ちならunfenceを呼ばず、取消予約先勝ちならArchiveを拒否する。実配送、Outbox、Receipt保護、監視、回復Runbookは後続Taskまで本番へ接続しない。
 
@@ -160,14 +160,14 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 | Item                                                            | Type                                      | Reason                                                                                                                                          | Validation Needed                                                             |
 | --------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | テスト内のActorSubjectは架空で、認証済みと仮定                  | Assumption                                | 本番認証なしでも純粋モデルを検証するため                                                                                                        | 本番接続前に別途認証方式のAccepted Decision                                   |
-| 本番のInviteParticipant／CancelInvitation／AcceptInvitation接続 | External gap                              | 内部契約から本番Actor本人性・宛先解決・公開Errorへ接続するDecisionが未Accepted                                                                  | 別Security DecisionまでGraphQL／HTTPへ公開しない                              |
+| 本番のInviteParticipant／CancelInvitation／AcceptInvitation接続 | External gap                              | Provider・事前登録・コード共有方式はADR #203でAccepted。内部契約から本番Actor対応・Session・コード保存／消費・公開Errorへの接続は未決・未実装                                                                  | 後続の個別設計・Ready評価と本番Gate充足までGraphQL／HTTPへ公開しない                              |
 | Invitation／operation結果の保存                                 | Security / Persistence implementation gap | 最小保存、暗号化、Retention、削除のDecisionと独立Security Reviewは完了。ADR #85がlocator keyとGroup IDの保存契約を追補し、#86はPR #91で完了した | #42のMigration後、#94〜#97を依存順に実装。本番wiringはProduction Gateまで禁止 |
 
 ## 10. Open Questions / Conflicts
 
 | ID    | Type                          | Question                                                         | Impact / Required Evidence                                                                                          |
 | ----- | ----------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| OQ-G2 | Open Question                 | 本番本人性の信頼元、宛先解決、Token、配送、公開Errorをどうするか | 別Security Decisionまで参加Commandの公開接続はBlocked                                                               |
+| OQ-G2 | Partially Resolved 2026-10-08 | Google検証・Actor対応・Session、コードLifecycle／保存・消費、公開Errorをどうするか | Provider・事前登録・コード共有方式はADR #203でAccepted。残る設計と本番Gateまで参加Commandの公開接続はBlocked                                                               |
 | OQ-G3 | Partially resolved 2026-09-21 | 脱退・Owner変更と他Context操作の認可判定時点                     | Group終了はADR #73のfenceで解決。通常時のContext間認可は版付き照会だけで解決済みにせず、Task #76と後続契約に従う    |
 | OQ-G4 | Resolved 2026-09-21           | Archivedでの譲渡・脱退・Owner不在とCSV責任                       | ADR #73でArchive後の変更拒否、owner-at-archive固定、保持期限までのread／CSV責任をDecision済み                       |
 | OQ-G5 | Resolved 2026-09-22           | 冪等記録の保存期限・最小化・削除・本人性との関係                 | ADR #55とADR #85でDecision済み。#86の契約証拠は完了し、保存証拠は#42／#94〜#97で追加する                            |
@@ -177,7 +177,7 @@ ADR #24の3 Context、MVP Modular Monolith、State model＋不変業務履歴、
 
 1. ADR #35／#36の条件付きAccepted記録は[PR #44](https://github.com/takeshi-arihori/kakei_app/pull/44)でRepositoryとGitHubへ統合済み。各実装Taskは一括昇格せず、Requirement・DCと実依存を個別にReady評価する。
 2. [#38](https://github.com/takeshi-arihori/kakei_app/issues/38)、[#39](https://github.com/takeshi-arihori/kakei_app/issues/39)、[#40](https://github.com/takeshi-arihori/kakei_app/issues/40)の初回Domain／Application契約は完了。本番Adapterへ接続しない。
-3. #57でInvitation／再参加の内部契約を実装し、C1はADR #55と正式Security Reviewで充足した。S0〜S3と#86はDone。#42はv2 Migration／PostgreSQL CIとしてReady評価を通過し、#94〜#97は依存完了後に個別Ready評価する。本番本人性・配送、実Context fence、Production Gateは別作業とする。
+3. #57でInvitation／再参加の内部契約を実装し、C1はADR #55と正式Security Reviewで充足した。S0〜S3と#86はDone。#42はv2 Migration／PostgreSQL CIとしてReady評価を通過し、#94〜#97は依存完了後に個別Ready評価する。本人性の実接続・Session・コードLifecycle／保存、実Context fence、Production Gateは別作業とする。
 
 ## GitHub delivery map
 

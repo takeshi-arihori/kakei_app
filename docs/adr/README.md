@@ -4,6 +4,7 @@ Decision本文はこのディレクトリで管理する。Owner承認、関連T
 
 | Decision | Status | 関係・証拠 |
 | --- | --- | --- |
+| [Googleログインと登録済み宛先への招待](google-login-and-registered-recipient-invitation.md) | Accepted（Provider・事前登録・コード共有方式のみ） | [Owner会話承認証跡 #203](https://github.com/takeshi-arihori/kakei_app/issues/203)、Amends #36／#52の未決部分、[文書同期 #204](https://github.com/takeshi-arihori/kakei_app/issues/204) |
 | [GitHub正本への切替](github-canonical-cutover.md) | Accepted | [Owner承認・切替実施記録 #17](https://github.com/takeshi-arihori/kakei_app/issues/17) |
 | [Mermaid図をRepository正本とする](mermaid-diagram-source-of-truth.md) | Accepted | [Owner承認 #13](https://github.com/takeshi-arihori/kakei_app/issues/13)、[実装Task #22](https://github.com/takeshi-arihori/kakei_app/issues/22) |
 | [共有割り勘の設計境界と永続化方針](shared-expense-domain-boundaries.md) | Accepted（条件C1充足済み） | [設計入力Task #9](https://github.com/takeshi-arihori/kakei_app/issues/9)、[条件付き承認 #24](https://github.com/takeshi-arihori/kakei_app/issues/24)、[C1証拠 #55](https://github.com/takeshi-arihori/kakei_app/issues/55) |
@@ -32,4 +33,4 @@ ADRにはContext、Decision、Alternatives、Consequences、Implementation、Rev
 - [Retention削除とGroup Management Receiptの順序](retention-deletion-receipt-order.md): Accepted / Active（Owner Decision: 2026-09-26）。GMのpost-deletion receiptが全Context receipt gateと循環する問題を解消するため、Prepared fence → Expense Recording／Settlement receipt → GM deletion transaction（CloseIntent registry退役、GM Group row削除、GM Receipt record）→ post-commit receipt verification → Completeの二段階順序を採用する。#103はGM-owned deletion transactionとregistry purgeを担当し、GM Receipt Port/recordは#118が、3 Contextのkey-destruction確認とER／Settlementのverified Receipt outcomeを同一intentへ束縛するtyped evidence contractは#119が定義する。Coordinator実装／receipt signing・verificationは別Task、Production deletionはADR #55の全Gate完了まで無効。
 - [Group operation locatorとGroup IDの保存契約](group-operation-locator-and-group-id-contract.md): Accepted / Active。Actor内全Group共通の再送locator、locator key rotation、canonical Group IDを採用する。#86が契約を、#42がPostgreSQL Adapterを実装する。
 
-[設計分析](../domain/group-management-first-boundary.md)を参照する。Invitation lifecycleと再参加Participant寿命はAccepted。Snapshot Revisionの保護・保持Decisionは正式Security Review passとdevelop統合が揃い、C1は充足済みである。本番本人性・配送とProduction Gateは未決または未実装であり、PersistenceはS0〜S3とTask固有Gateに従う。
+[設計分析](../domain/group-management-first-boundary.md)を参照する。Invitation lifecycleと再参加Participant寿命はAccepted。Snapshot Revisionの保護・保持Decisionは正式Security Review passとdevelop統合が揃い、C1は充足済みである。[ADR #203](google-login-and-registered-recipient-invitation.md)でGoogleのみのsocial login、招待相手の事前登録、宛先本人の一回限りのコード共有・Owner入力・本人受諾を採用した。本人性の実接続・Session・コードLifecycle／保存とProduction Gateは未決または未実装であり、PersistenceはS0〜S3とTask固有Gateに従う。
