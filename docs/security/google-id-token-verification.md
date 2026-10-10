@@ -22,6 +22,14 @@ SDKはApache-2.0、Node >=22（アプリはNode >=24）、展開サイズ約602K
 
 Testは実行中だけ生成する合成RSA鍵とJWTを実SDKへ通し、公開鍵の通信だけを差し替える。改ざん・別鍵・kid／alg・issuer／audience・期限境界・未来iat・Claim型・sub／nonce・設定配列の変更・公開鍵取得障害・機密情報非伝播を確認する。実Credentialや鍵のFixtureを保存せず、Google通信・実アカウントE2Eはこの内部境界のTestに含めない。
 
+## 環境変数の準備用設定例
+
+- [Web用テンプレート](../../apps/web/.env.example): `.env.local`へコピーし、`NEXT_PUBLIC_GOOGLE_CLIENT_ID`に開発用Client IDを設定する想定。
+- [API用テンプレート](../../apps/api/.env.example): `.env`へコピーし、`GOOGLE_CLIENT_ID`にWebと同じ開発用Client IDを設定する想定。
+- [ルートのテンプレート](../../.env.example)は既存のDB・Docker用。ApplicationのGoogle設定とは配置を分ける。
+
+上記KEYは後続接続Task向けの設定例であり、環境変数からPortへの読込契約を実装済みとはしない。現行WebはKEYを参照せず、APIは`.env`の自動読込・KEYの参照・`allowedAudiences`への接続が未実装。空欄やファイルの存在だけで設定済み／認証有効と扱わない。Client SecretやAPI KeyはこのIDトークン検証に使用しないため設定例に含めない。実値はGit管理外のコピー先へ記載する。
+
 ## 後続Gate
 
 nonce一致だけで再送防止やCSRFの完成を主張しない。Login試行の発行・保存・原子的消費、Actor対応／登録、Session発行・保存・失効、公開API／Error／Rate limit／CSRF／CORS、画面接続を後続Taskで確定・検証する。ここでのToken期限判定をSession TTLへ転用しない。Google APIアクセス用Tokenは取得しない。

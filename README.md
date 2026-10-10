@@ -44,6 +44,19 @@ PostgreSQLの起動状態を確認します。
 pnpm db:ps
 ```
 
+## Googleログインの設定例
+
+GoogleのClient IDを設定するための準備用テンプレートをApplicationごとに置いています。ルートの`.env.example`／`.env`はDB・Docker用です。
+
+```bash
+cp -n apps/web/.env.example apps/web/.env.local
+cp -n apps/api/.env.example apps/api/.env
+```
+
+`cp -n`は既存ファイルを上書きしません。既にファイルがある場合は必要なKEYだけ追記します。Webの`NEXT_PUBLIC_GOOGLE_CLIENT_ID`とAPIの`GOOGLE_CLIENT_ID`へ同じ開発用Client IDを設定する想定です。実値を`.env.example`へ書き込まず、Git管理外のコピー先へ記載します。Client IDは公開識別子ですが、Client SecretやAPI Keyは今回のIDトークン検証方式では使用せず、テンプレートに含めません。
+
+現行実装はGoogle IDトークン検証Port／Adapterまでです。Webはこの変数をまだ参照せず、APIは`.env`の自動読込・変数の参照・Adapterへの接続が未実装です。コピーや値の設定だけではログインできません。読み込み・Session・画面接続は後続Taskで実装します。[Google検証境界と後続Gate](docs/security/google-id-token-verification.md)を参照してください。
+
 ## 開発コマンド
 
 ```bash
