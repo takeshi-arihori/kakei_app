@@ -185,6 +185,16 @@ const validateDependency = (
   }
 
   if (isExternalSpecifier(specifier)) {
+    if (
+      specifier === 'google-auth-library' ||
+      specifier.startsWith('google-auth-library/')
+    ) {
+      return specifier === 'google-auth-library' &&
+        relativeToSource(sourcePath) ===
+          'shared/infrastructure/authentication/google-id-token-verifier.ts'
+        ? null
+        : `${relativeToSource(sourcePath)}はGoogle SDKの許可済みAdapterではない`;
+    }
     if (source.kind === 'shared-infrastructure') {
       return specifier === 'node:crypto'
         ? null
@@ -601,6 +611,46 @@ describe('API architecture dependencies', () => {
         fixturePath(target),
       ),
     ).not.toBeNull();
+  });
+
+  it('Google検証Adapterの正確なPathでSDK本体を使用できる', () => {
+    expect(
+      validateDependency(
+        fixturePath(
+          'shared/infrastructure/authentication/google-id-token-verifier.ts',
+        ),
+        'google-auth-library',
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    'app.ts',
+    'main.ts',
+    'shared/domain/a.ts',
+    'shared/application/a.ts',
+    'shared/infrastructure/protected-record/a.ts',
+    'shared/infrastructure/authentication/other.ts',
+    'presentation/graphql/a.ts',
+    'group-management/domain/a.ts',
+    'group-management/application/a.ts',
+    'group-management/presentation/a.ts',
+    'group-management/infrastructure/a.ts',
+    'expense-recording/infrastructure/a.ts',
+    'settlement/infrastructure/a.ts',
+    'shared/infrastructure/authentication/google-id-token-verifier.ts',
+  ])('%sからGoogle SDKの未許可参照を拒否する', (source) => {
+    for (const specifier of [
+      'google-auth-library',
+      'google-auth-library/build/src/auth/oauth2client',
+    ]) {
+      if (
+        source.endsWith('/google-id-token-verifier.ts') &&
+        specifier === 'google-auth-library'
+      )
+        continue;
+      expect(validateDependency(fixturePath(source), specifier)).not.toBeNull();
+    }
   });
 
   it('共有暗号InfrastructureでNode標準暗号を使用できる', () => {

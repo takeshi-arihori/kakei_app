@@ -43,7 +43,7 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 
 [ADR #203](../adr/google-login-and-registered-recipient-invitation.md)のOwner承認対象はGoogleのみのsocial login、招待相手の事前登録、宛先本人が表示・共有する一回限りのコードを現在Ownerが入力し本人がアプリ内で受諾する経路だけである。アプリの招待メール配送は採用しない。コードは宛先指定のための手段であり、既存Invitationの本人束縛・7日期限・枠予約なし・受諾時再検証・新Participant・共通原子的commit／再送を変更しない。
 
-[Task #204](https://github.com/takeshi-arihori/kakei_app/issues/204)はAccepted記録の文書同期だけを扱う。SDK追加承認、ログイン試行・Actor対応・Session、コードの期限／再発行／取消・保護保存・原子消費、公開API／CSRF／CORS／Error・画面は後続設計・実装Gateである。コード自体の期限をInvitationの7日から推測しない。ADR同期のdevelop統合後に各Taskを個別Ready評価する。ADR #55のKey Provider／Audit／Retention／Backup／Production接続Gateは維持する。
+[Task #204](https://github.com/takeshi-arihori/kakei_app/issues/204)のAccepted記録は[PR #205](https://github.com/takeshi-arihori/kakei_app/pull/205)でdevelopへ統合済み。[Task #207](https://github.com/takeshi-arihori/kakei_app/issues/207)は承認済み固定版SDKでGoogle IDトークン検証Port／Adapterだけを実装する（[技術契約](../security/google-id-token-verification.md)）。署名・issuer・Server設定audience・厳格なUTC期限・Server期待nonceを検証し、最小外部識別子だけを返す。ログイン試行nonceの発行／原子的消費・Actor対応・Session、コードの期限／再発行／取消・保護保存・原子消費、公開API／CSRF／CORS／Error・画面は後続設計・実装Gateである。nonce一致を再送防止やCSRF完成とは解釈しない。コード自体の期限をInvitationの7日から推測しない。各Taskを個別Ready評価し、ADR #55のKey Provider／Audit／Retention／Backup／Production接続Gateを維持する。
 
 ## 支出・精算の純Domain実装境界
 
