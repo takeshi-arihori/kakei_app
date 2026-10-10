@@ -16,6 +16,12 @@ pnpm -C apps/web build
 
 開発Serverは<http://localhost:3000>で起動します。
 
+## Googleログインの準備用設定
+
+[`.env.example`](.env.example)を同Directoryの`.env.local`へコピーし、`NEXT_PUBLIC_GOOGLE_CLIENT_ID`に開発用Google Client IDを記載する想定です。既存ファイルがある場合は上書きせず、必要なKEYだけ追記します。APIの`GOOGLE_CLIENT_ID`と同じ値を使い、Client SecretやAPI Keyは記載しません。
+
+このKEYは後続接続Task向けの設定例で、現行Webはまだ参照していません。設定だけではログインできません。API側の`.env`読込・本人性／Session・画面の接続も後続Taskです。[設定手順](../../README.md#googleログインの設定例)と[技術契約](../../docs/security/google-id-token-verification.md)を参照してください。
+
 ## GraphQL
 
 - API endpoint: Hono＋GraphQL Yogaの`POST /graphql`
