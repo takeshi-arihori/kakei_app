@@ -19,6 +19,7 @@
 - `src/<context>/infrastructure`: Prisma、PostgreSQL、Firestore、KMS、Email、OAuthなどのAdapterを実装する。
 - `src/shared/domain`: 複数Contextで意味と変更理由が一致するDomain型だけを置く。
 - `src/shared/application`: API内で共有する技術契約の型・Portを置く。用途別Digestの契約を含み、業務Modelや具体暗号実装を置かない。他の共有Applicationだけを参照し、外部ModuleやContext内部へ依存しない。
+- `src/shared/application/authentication`: [認証ADR](../adr/google-login-actor-session.md)と[内部Lifecycle契約](../security/google-authentication-lifecycle.md)に従うログイン試行・Actor対応・Sessionの技術Use CaseとPortを置く。Google本人確認は既存Verifier Portへ委譲し、Cookie／Transport、DB／暗号・Audit Adapter、Group Participant／Role／認可を混在させない。Clock／Entropy／原子的StoreをPortとして受け、Test-only StoreをProductionへ配置しない。新業務Contextや独立Packageを追加しない。
 - `src/shared/infrastructure/protected-record`: APIの保存Adapterが使うCanonical AADとNode.js標準暗号のWrapperを置く。共有Infrastructure／共有Applicationへ依存でき、外部依存は採用済みの`node:crypto`だけを許可する。Context内部、Domain、Presentationへ依存しない。
 - `src/shared/infrastructure/authentication/google-id-token-verifier.ts`: Google公式SDKによるIDトークン検証Adapterを置く。この正確なPathからの`google-auth-library`本体参照だけを追加許可し、他Module／Layer・SDK内部subpathを拒否する。新業務Contextや独立Packageは追加しない。入力／結果Portは共有Applicationに置き、SDK、Session、Actor登録、Group認可を混在させない。[技術契約](../security/google-id-token-verification.md)の検証・Error・通信境界を守る。protected-recordの外部依存許可を広げない。
 - Context Applicationは共有Applicationを、Context Infrastructureは共有Application／共有Infrastructureを参照できる。Domain・Presentationから共有技術基盤への参照、Applicationから共有Infrastructureへの参照を許可しない。複数Contextでの利用だけを理由に独立Packageを追加しない。
