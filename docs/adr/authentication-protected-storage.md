@@ -1,9 +1,9 @@
 # 認証Dataの保護保存・原子的確定・復旧
 
-- Status: Proposed（Owner承認待ち。実装／Production有効化の承認ではない）
-- Proposed Date: 2026-10-11（Asia/Tokyo）
+- Status: Accepted（詳細保存設計。実装・個別Ready評価・Production有効化は別Gate）
+- Proposed / Accepted Date: 2026-10-11（Asia/Tokyo）
 - Decision Owner: Project Owner
-- Decision Issue: [ADR #212](https://github.com/takeshi-arihori/kakei_app/issues/212)（Proposed）
+- Decision Issue: [ADR #212](https://github.com/takeshi-arihori/kakei_app/issues/212)（Owner会話承認証跡）
 - Design Task: [A2 #213](https://github.com/takeshi-arihori/kakei_app/issues/213)
 - Related Epic: [#202](https://github.com/takeshi-arihori/kakei_app/issues/202)
 - Supplements: [認証Lifecycle ADR](google-login-actor-session.md)、[ADR #55](snapshot-revision-security-and-retention.md)
@@ -13,7 +13,7 @@
 
 PR #211は認証Applicationと原子的Store Portを実装したが、認証DB、暗号・鍵・検索、一意性、Audit、清掃、Restoreの実証はない。Group用Envelope／Digest PortはGroup IDを要求し、そのままAccountへ使えない。A2はこのGapを設計し、後続を検証可能なTaskへ分割する。今回の差分は文書のみである。
 
-## Decision案
+## Decision
 
 1. 既存PostgreSQL 17・raw pg・番号付きSQL Migrationを使い、`authentication` SchemaがActor、Identity、Attempt、Session、認証Audit、鍵世代の制御行を所有する。GroupとのCascade／直接Table参照は追加しない。
 2. Google issuer＋sub、Server期待nonce、Login／Session CSRFは認証専用AES-256-GCM Envelopeへ入れる。Cookie秘密値は暗号化も平文保存もせず、用途別HMAC-SHA-256検索値だけを保存する。nonce／CSRFは検索Keyにしないため追加Digestを保存せず、束縛Envelopeの復号値を定数時間比較する。
@@ -25,7 +25,7 @@ PR #211は認証Applicationと原子的Store Portを実装したが、認証DB�
 
 ## Alternatives / Consequences
 
-| 代替 | 判断案と理由 |
+| 代替 | 判断と理由 |
 | --- | --- |
 | Group IDを仮造して既存Codecを使う | 不採用。Data Owner／用途境界を偽装する |
 | issuer＋subの平文Unique／非Keyed Hash | 不採用。DB漏出時の外部Identity照合を容易にする |
@@ -38,9 +38,16 @@ PR #211は認証Applicationと原子的Store Portを実装したが、認証DB�
 
 ## Acceptance / Delivery Gate
 
-Owner承認と独立Security Reviewの両方が揃うまで本ADRをAcceptedにせず、依存実装TaskをReadyにしない。設計案の文書化／Review Taskだけは進められる。方式・TTL・保持の既存Accepted ADRは変更しない。独立ReviewのpassはOwner承認やProduction実証の代替ではない。
+2026-10-11にOwnerの明示承認を取得し、既存の独立Security Review passと合わせて詳細保存設計をAcceptedとした。方式・TTL・保持の既存Accepted ADRは変更しない。承認は実DB・Providerの実証やProduction有効化を意味しない。後続実装はPR #220のdevelop統合・先行Task merge・個別Ready評価を満たしてから進める。
 
 通常のdevelop向けDraft PR。A2統合後、Schema → 暗号部品 → 原子的Store → 清掃／復旧境界 → HTTP → Google画面の順に個別Ready評価する。未Merge Codeを使わずStackは不要。具体Cloud／KMS、durable Provider／外部Ledger／Witness／Backup Job、退会と未完了業務、Proxy／Rate limit／開発Compositionは各TaskのGateに残す。
+
+## Owner Decision / History
+
+- 2026-10-11（Asia/Tokyo）: ProposedとしてDraft PR #220とADR #212を提示した。
+- 同日、提示済み詳細設計の承認確認にProject Ownerが「はい。」と回答した。認証専用Envelope／用途別Digest、鍵Scope・更新中一意性、原子的保存・Audit、期限後削除・外部Prepared・Restore時全Session破棄を含む本Decisionへの明示承認として記録する。
+- 親Agentによる会話証跡の転記であり、Owner本人のGitHub Comment・Review承認操作を主張しない。承認証跡はADR #212、同期差分はPR #220。
+- 承認範囲はA2詳細保存設計。PRのReady化／Merge、後続Taskの一括Ready化、Production接続の承認は含まない。具体Provider・公開境界・退会業務の残Gateを維持する。
 
 ## Rollback / Review Trigger
 

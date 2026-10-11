@@ -1,6 +1,6 @@
 # 認証Dataの保護保存契約（A2）
 
-Knowledge State: **Proposed**。[A2 ADR案](../adr/authentication-protected-storage.md)のOwner承認・独立Security Review・develop統合までは実装のAccepted根拠にしない。これは仕様であり、DB／鍵Provider／削除／Restoreが実装済みというEvidenceではない。
+Knowledge State: **Accepted（詳細保存設計）**。[A2 ADR](../adr/authentication-protected-storage.md)は2026-10-11のOwner会話承認「はい。」と独立Security Review passを根拠とする。PR #220のdevelop統合・先行Task merge・個別Ready評価までは依存実装に進まない。これは仕様であり、DB／鍵Provider／削除／Restoreが実装済みというEvidenceではない。
 
 ## 1. 基準・要求・境界
 
@@ -138,7 +138,7 @@ Restore手順は次の順を必須とする。
 
 | ID | 一つのDeliverable／必須検証 | 依存・Ready Gate |
 | --- | --- | --- |
-| [A2 #213](https://github.com/takeshi-arihori/kakei_app/issues/213) | ADR案＋本仕様＋正式Task分割。独立Security／Planning Review、Owner承認、文書の整合 | #210／PR #211統合済み。文書作成のみ着手可。承認までReview |
+| [A2 #213](https://github.com/takeshi-arihori/kakei_app/issues/213) | ADR案＋本仕様＋正式Task分割。独立Security／Planning Review、Owner承認、文書の整合 | #210／PR #211統合済み。詳細設計承認済み、PR #220統合待ちでReview |
 | [A3 #214](https://github.com/takeshi-arihori/kakei_app/issues/214) | 認証Schema／Migration。空DBと既存Group DB、Unique／FK／Check、適用済checksum不変、未初期化鍵State拒否、空DB限定Down | Accepted A2・独立Security pass・A2 merge |
 | [A4a #215](https://github.com/takeshi-arihori/kakei_app/issues/215) | 認証Codec／用途別Digest／Key・Nonce Port。Canonical Golden vector、全Metadata差替え拒否、用途分離、nonce burn／上限／世代・破損、既存Group vector不変 | A3 merge。具体Cloud Provider／wiringなし |
 | [A4b #216](https://github.com/takeshi-arihori/kakei_app/issues/216) | PostgreSQL AuthenticationStore＋同Transaction Audit／TransactionScope。2接続の同Attempt／同Identity／Rotation／disable／Logout競合、全insert故障、Audit／鍵故障、commit応答喪失、idle／期限等値 | A4a merge。単一FakeでSQL原子性を代替しない |
@@ -156,4 +156,4 @@ Restore手順は次の順を必須とする。
 
 2026-10-11確認の外部根拠: [OWASP Cryptographic Storage](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)の保存最小化・認証付き暗号・鍵分離、[OWASP Key Management](https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html)の用途・Lifecycle・復旧管理、[PostgreSQL 17 Lock](https://www.postgresql.org/docs/17/explicit-locking.html)と[Isolation](https://www.postgresql.org/docs/17/transaction-iso.html)のRow Lock／Transactionを参照した。具体のAAD、鍵Scope、期限、Restore時全Session破棄は本Projectの設計案であり、公式指定ではない。
 
-設計Review: 新しい独立Security Reviewer cycle2と保存前work_planning_evaluatorはいずれもpass、Finding／不足Evidenceなし。設計レビューの結果であり、Owner承認・実DB／Provider実証を代替しない。[ADR承認証跡 #212](https://github.com/takeshi-arihori/kakei_app/issues/212)、[設計Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)を参照する。
+設計Review: 新しい独立Security Reviewer cycle2と保存前work_planning_evaluatorはいずれもpass、Finding／不足Evidenceなし。Ownerは2026-10-11に詳細設計へ「はい。」と承認した。設計承認・レビューは実DB／Provider実証を代替しない。[ADR承認証跡 #212](https://github.com/takeshi-arihori/kakei_app/issues/212)、[設計Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)を参照する。

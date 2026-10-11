@@ -4,7 +4,7 @@ Decision本文はこのディレクトリで管理する。Owner承認、関連T
 
 | Decision | Status | 関係・証拠 |
 | --- | --- | --- |
-| [認証Dataの保護保存・原子的確定・復旧](authentication-protected-storage.md) | Proposed（[ADR #212](https://github.com/takeshi-arihori/kakei_app/issues/212)、Owner承認待ち） | 認証専用Envelope／Digest／鍵更新／SQL原子性／削除Restoreの詳細案。方式・TTLのAccepted ADRとは分離し、依存実装をReadyにしない |
+| [認証Dataの保護保存・原子的確定・復旧](authentication-protected-storage.md) | Accepted（詳細保存設計） | 2026-10-11 Owner会話承認「はい。」。[承認証跡 #212](https://github.com/takeshi-arihori/kakei_app/issues/212)、独立Security pass。認証専用Envelope／Digest／鍵更新／原子性／削除Restore。PR #220統合・個別Ready・Production Gateは維持 |
 | [Googleログイン試行・内部Actor・Session](google-login-actor-session.md) | Accepted（方式・TTL・保持方針） | 2026-10-11 Owner会話承認「進めていいです。」。ADR #203の後続Lifecycleを補完し、詳細保存・公開接続・Production Gateは維持する。[承認証跡 #209](https://github.com/takeshi-arihori/kakei_app/issues/209)、[内部実装 #210](https://github.com/takeshi-arihori/kakei_app/issues/210) |
 | [Googleログインと登録済み宛先への招待](google-login-and-registered-recipient-invitation.md) | Accepted（Provider・事前登録・コード共有方式のみ） | [Owner会話承認証跡 #203](https://github.com/takeshi-arihori/kakei_app/issues/203)、Amends #36／#52の未決部分、[文書同期 #204](https://github.com/takeshi-arihori/kakei_app/issues/204) |
 | [GitHub正本への切替](github-canonical-cutover.md) | Accepted | [Owner承認・切替実施記録 #17](https://github.com/takeshi-arihori/kakei_app/issues/17) |

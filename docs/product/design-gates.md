@@ -47,9 +47,9 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 
 ## A2認証保存設計の追補（2026-10-11）
 
-PR #211はdevelopへ統合済みであり、認証Application／Store Portだけが実装済みである。[A2 ADR案](../adr/authentication-protected-storage.md)と[詳細仕様](../security/authentication-protected-storage.md)はProposed。認証専用Schema、Envelope／用途別Digest、鍵更新中のActor一意性、同Transaction Audit、期限後清掃、復旧時全Session破棄・削除Identity復活防止を定める案である。Owner承認・独立Security Review・A2統合後、Schema → 暗号部品 → Store → 清掃／復旧境界 → HTTP → Google画面の順に個別Ready評価する。Production Provider／退会業務／Proxy／Rate limit／外部Checkpoint・Witness等のGateを残し、A2や画面完成から本番利用可能と判断しない。
+PR #211はdevelopへ統合済みであり、認証Application／Store Portだけが実装済みである。[A2 ADR](../adr/authentication-protected-storage.md)と[詳細仕様](../security/authentication-protected-storage.md)は2026-10-11のOwner会話承認「はい。」と独立Security Review passによりAccepted。認証専用Schema、Envelope／用途別Digest、鍵更新中のActor一意性、同Transaction Audit、期限後清掃、復旧時全Session破棄・削除Identity復活防止を定める案である。Owner承認・独立Security Review・A2統合後、Schema → 暗号部品 → Store → 清掃／復旧境界 → HTTP → Google画面の順に個別Ready評価する。Production Provider／退会業務／Proxy／Rate limit／外部Checkpoint・Witness等のGateを残し、A2や画面完成から本番利用可能と判断しない。
 
-A2は[正式Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)、詳細Decision案は[ADR #212](https://github.com/takeshi-arihori/kakei_app/issues/212)。後続は[Schema #214](https://github.com/takeshi-arihori/kakei_app/issues/214) → [暗号部品 #215](https://github.com/takeshi-arihori/kakei_app/issues/215) → [Store #216](https://github.com/takeshi-arihori/kakei_app/issues/216) → [清掃／復旧 #217](https://github.com/takeshi-arihori/kakei_app/issues/217) → [API #218](https://github.com/takeshi-arihori/kakei_app/issues/218) → [画面 #219](https://github.com/takeshi-arihori/kakei_app/issues/219)。Owner承認・Security pass・先行mergeと各Taskの未決設計を解消してから個別Ready評価する。
+A2は[正式Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)、詳細Decisionは[ADR #212](https://github.com/takeshi-arihori/kakei_app/issues/212)。後続は[Schema #214](https://github.com/takeshi-arihori/kakei_app/issues/214) → [暗号部品 #215](https://github.com/takeshi-arihori/kakei_app/issues/215) → [Store #216](https://github.com/takeshi-arihori/kakei_app/issues/216) → [清掃／復旧 #217](https://github.com/takeshi-arihori/kakei_app/issues/217) → [API #218](https://github.com/takeshi-arihori/kakei_app/issues/218) → [画面 #219](https://github.com/takeshi-arihori/kakei_app/issues/219)。Owner承認・Security pass・先行mergeと各Taskの未決設計を解消してから個別Ready評価する。
 
 
 ## Googleログイン・登録済み宛先招待の解決範囲（2026-10-08）
@@ -107,3 +107,5 @@ A2は[正式Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)�
 ## Receipt Draft編集の純Domain trace（2026-10-07）
 
 [Task #200](https://github.com/takeshi-arihori/kakei_app/issues/200)の[Draft編集契約](../domain/receipt-draft-edit-contract.md)は、Uploaderだけが確定前の購入日・宣言合計・Item／Adjustment候補を置換し、同Receipt ID・Uploader・Draftと不変前後履歴を維持する。内容・順序が変わる場合だけ版を進め、全条件を満たす同値操作と閲覧で編集時刻を増やさない。未完成候補を自動確定せず、最新期待版の明示確認と既存Validation・全編集履歴を維持する。実本人性・Group／Category Source、保存CAS／再送／保護保存、Draft30日の期限・削除実行、OCR／画像、公開API／画面／Projection、Confirmed／未割当一般編集・Adjustment構造訂正は後続Gate。Accepted本文・承認履歴・公開Ready状態を変更しない。
+
+2026-10-11 Owner会話承認「はい。」によりA2詳細保存設計をAcceptedへ同期した。独立Security Reviewはpass済み。PR #220のdevelop統合、先行Task mergeと個別Ready評価は引き続き必要で、#214〜#219は一括Readyにしない。PRのReady化／Merge・Production有効化は本承認に含まない。

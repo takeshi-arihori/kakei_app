@@ -52,4 +52,4 @@ Fake Storeでの成功はSQL原子性・平文禁止・Audit永続化・鍵Rotat
 
 ## A2保存設計へのTrace
 
-[認証Data保護保存仕様](authentication-protected-storage.md)と[ADR案](../adr/authentication-protected-storage.md)はProposed。Storeの原子的責務を認証専用Envelope・Digest・Key-state／Row Lock・Auditへ写像し、清掃・削除・Restoreを分割する。Owner承認、独立Security Review、文書統合、個別Task Ready評価までは実DB／本番接続の根拠にしない。Application契約・TTL・commit不明時の保証は本書を維持する。
+[認証Data保護保存仕様](authentication-protected-storage.md)と[ADR](../adr/authentication-protected-storage.md)は2026-10-11のOwner会話承認「はい。」と独立Security Review passによりAccepted。Storeの原子的責務を認証専用Envelope・Digest・Key-state／Row Lock・Auditへ写像し、清掃・削除・Restoreを分割する。文書のdevelop統合・個別Task Ready評価・実Adapter検証・Production Gateは残る。Application契約・TTL・commit不明時の保証は本書を維持する。
