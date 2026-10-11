@@ -30,6 +30,12 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 
 旧管理先の再構築待ちというDC-003/005は、今回のGitHub入口・Field検証で管理先の部分を置き換える。旧Taskの依存や業務上の未決をまとめて解消したことにはしない。
 
+## 認証Lifecycleの追補（2026-10-11）
+
+[認証ADR](../adr/google-login-actor-session.md)はOwner会話承認により、初回Googleログインでの内部Actor登録、Browser／nonce／CSRFへ束縛した5分の一回限り試行、Server保存型Session（最長7日・無操作24時間）、現在SessionのLogout、同一OriginのCookie方式、認証用Dataの保持方針をAcceptedとした。これは上段に記録したADR #203時点の未決事項の部分解消である。
+
+[内部Lifecycle契約](../security/google-authentication-lifecycle.md)は共有Application／Portの最初の実装境界を定める。設計承認・Fake境界のUnit成功はDB・公開認証・Google画面の完成ではない。認証用Envelope／鍵Namespace／Nonce・Rotation、Identity一意性の実保存、durable Audit／Rate limit、認証Dataの清掃・退会と未完了責務・Backup Restore、HTTP Origin／CSRF／Cookie／Proxy、開発CompositionとProduction有効化は、[後続作業](../security/google-login-session-proposal.md)の個別設計・Ready評価・独立Security Reviewを要する。既存ADR #55の業務Data用Production Gateを緩和しない。
+
 ## 公開前Gate
 
 公開対象ごとに機械検査と手動Reviewを行う。Secret、PII、実在金融情報、内部Security情報、未分類・要編集の内容を公開しない。必要な現行非公開情報が新たに見つかった場合はOwnerへPrivate保管先を確認する。新規仕様を一般論から捏造しない。

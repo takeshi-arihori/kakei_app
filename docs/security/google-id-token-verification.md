@@ -32,6 +32,6 @@ Testは実行中だけ生成する合成RSA鍵とJWTを実SDKへ通し、公開�
 
 ## 後続Gate
 
-nonce一致だけで再送防止やCSRFの完成を主張しない。Login試行の発行・保存・原子的消費、Actor対応／登録、Session発行・保存・失効、公開API／Error／Rate limit／CSRF／CORS、画面接続を後続Taskで確定・検証する。ここでのToken期限判定をSession TTLへ転用しない。Google APIアクセス用Tokenは取得しない。
+nonce一致だけで再送防止やCSRFの完成を主張しない。[認証Lifecycle ADR](../adr/google-login-actor-session.md)は2026-10-11に方式・TTL・保持方針のOwner承認を受けた。[内部Lifecycle契約](google-authentication-lifecycle.md)でLogin試行の発行・原子的消費、Actor対応／登録、Session発行・利用・失効をPortへ分離する。保護された実保存、公開API／Error／Rate limit／CSRF／CORS、画面接続は後続Taskで確定・検証する。ここでのToken期限判定をSession TTLへ転用しない。Google APIアクセス用Tokenは取得しない。
 
 招待コードの期限・再発行・取消・保護保存・原子消費も別Gateとする。ADR #36／#52／#55の業務認可・Invitation lifecycle・Protection／Audit／Retention／Backup／Deploymentの条件を維持し、Verifierの存在をProduction接続許可と解釈しない。
