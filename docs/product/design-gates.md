@@ -45,6 +45,13 @@ GitHubへの管理先変更は、業務設計の承認や旧情報の全件移�
 [設計分析](../domain/group-management-first-boundary.md)、[整合性境界Decision](../adr/group-management-consistency-boundary.md)、[認可Decision](../adr/group-management-command-authorization.md)、[招待・再参加Decision](../adr/group-invitation-and-rejoin.md)、[Group終了Decision](../adr/group-close-consistency-and-retention-boundary.md)、[CloseIntentId保持Decision](../adr/close-intent-id-retention-boundary.md)、[operation locator／Group ID Decision](../adr/group-operation-locator-and-group-id-contract.md)へ具体化した。S0〜S3、#86、#42はDone。#94は読取Adapterとして個別Ready評価を通過し、#95〜#97は依存順に個別Ready評価する。#96はADR #102 Repository同期後に個別Ready評価する。Google Provider・登録済み宛先へのコード共有招待は[ADR #203](../adr/google-login-and-registered-recipient-invitation.md)で選択済みである。本人性の実接続・Session・コードLifecycle／保存、実Context fence／Receipt配送は未決または未実装であり、Production Key Provider／Audit Store／Retention Checkpoint／Backup／Deployment Gateも未実装である。
 
 
+## A2認証保存設計の追補（2026-10-11）
+
+PR #211はdevelopへ統合済みであり、認証Application／Store Portだけが実装済みである。[A2 ADR案](../adr/authentication-protected-storage.md)と[詳細仕様](../security/authentication-protected-storage.md)はProposed。認証専用Schema、Envelope／用途別Digest、鍵更新中のActor一意性、同Transaction Audit、期限後清掃、復旧時全Session破棄・削除Identity復活防止を定める案である。Owner承認・独立Security Review・A2統合後、Schema → 暗号部品 → Store → 清掃／復旧境界 → HTTP → Google画面の順に個別Ready評価する。Production Provider／退会業務／Proxy／Rate limit／外部Checkpoint・Witness等のGateを残し、A2や画面完成から本番利用可能と判断しない。
+
+A2は[正式Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)、詳細Decision案は[ADR #212](https://github.com/takeshi-arihori/kakei_app/issues/212)。後続は[Schema #214](https://github.com/takeshi-arihori/kakei_app/issues/214) → [暗号部品 #215](https://github.com/takeshi-arihori/kakei_app/issues/215) → [Store #216](https://github.com/takeshi-arihori/kakei_app/issues/216) → [清掃／復旧 #217](https://github.com/takeshi-arihori/kakei_app/issues/217) → [API #218](https://github.com/takeshi-arihori/kakei_app/issues/218) → [画面 #219](https://github.com/takeshi-arihori/kakei_app/issues/219)。Owner承認・Security pass・先行mergeと各Taskの未決設計を解消してから個別Ready評価する。
+
+
 ## Googleログイン・登録済み宛先招待の解決範囲（2026-10-08）
 
 [ADR #203](../adr/google-login-and-registered-recipient-invitation.md)のOwner承認対象はGoogleのみのsocial login、招待相手の事前登録、宛先本人が表示・共有する一回限りのコードを現在Ownerが入力し本人がアプリ内で受諾する経路だけである。アプリの招待メール配送は採用しない。コードは宛先指定のための手段であり、既存Invitationの本人束縛・7日期限・枠予約なし・受諾時再検証・新Participant・共通原子的commit／再送を変更しない。

@@ -49,3 +49,7 @@ begin／withSession／revokeもcompleteと同様に、commit前の確実なrollb
 Application Unit TestはTest-onlyの決定的なStore／Entropy／Clock／Verifierを境界として使い、呼出し回数だけでなく状態・返却値を検査する。期待nonce、期限等値・検証中期限跨ぎ、Actor再利用、試行二重消費、Session絶対／idle、inspect非延長、失効対象限定、Callback拒否／例外、障害非漏出、未知入力・Entropy異常をTDDで検証する。
 
 Fake Storeでの成功はSQL原子性・平文禁止・Audit永続化・鍵Rotation・実Browser認証のEvidenceではない。実Adapter Taskでは同じContractを実PostgreSQLの2接続、故障注入、応答喪失、lease対Logout、暗号／Audit障害で検証する。ProductionにTest Store／固定Actorを追加しない。
+
+## A2保存設計へのTrace
+
+[認証Data保護保存仕様](authentication-protected-storage.md)と[ADR案](../adr/authentication-protected-storage.md)はProposed。Storeの原子的責務を認証専用Envelope・Digest・Key-state／Row Lock・Auditへ写像し、清掃・削除・Restoreを分割する。Owner承認、独立Security Review、文書統合、個別Task Ready評価までは実DB／本番接続の根拠にしない。Application契約・TTL・commit不明時の保証は本書を維持する。

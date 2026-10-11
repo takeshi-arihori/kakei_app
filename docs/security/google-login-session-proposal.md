@@ -125,3 +125,9 @@ A1は承認済みADR・内部契約・ADR一覧・design-gates・backend・Verif
 ## Owner承認
 
 2026-10-11（Asia/Tokyo）、Ownerは提示した設計案に「進めていいです。」と回答した。方式・TTL・保持方針はAccepted、詳細保存・公開接続・Production Gateは後続へ維持する。検証・独立評価の実行EvidenceはTask／PRへ記録し、この文書を進捗の二重正本にしない。
+
+## A2具体化の追補（2026-10-11）
+
+PR #211がdevelop `61ee0f9`へ統合され、A1／Task #210は完了した。上段の基準・候補表はA1 Planning時点の記録として保持する。A2以降の現在案は[認証保護保存仕様](authentication-protected-storage.md)と[ADR案](../adr/authentication-protected-storage.md)へ具体化した。A4は暗号部品／原子的Store／清掃・復旧境界の三つに分割する。Owner承認・独立Security Review・A2統合まで依存実装はBacklog／Blockedであり、一括Readyにしない。正式IssueとProjectの進捗はGitHubを正本とする。
+
+A2は[正式Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)、詳細Decision案は[ADR #212](https://github.com/takeshi-arihori/kakei_app/issues/212)。後続は[Schema #214](https://github.com/takeshi-arihori/kakei_app/issues/214) → [暗号部品 #215](https://github.com/takeshi-arihori/kakei_app/issues/215) → [Store #216](https://github.com/takeshi-arihori/kakei_app/issues/216) → [清掃／復旧 #217](https://github.com/takeshi-arihori/kakei_app/issues/217) → [API #218](https://github.com/takeshi-arihori/kakei_app/issues/218) → [画面 #219](https://github.com/takeshi-arihori/kakei_app/issues/219)。Owner承認・Security pass・先行mergeと各Taskの未決設計を解消してから個別Ready評価する。
