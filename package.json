@@ -17,11 +17,13 @@
     "codegen:check": "graphql-codegen --config codegen.ts --check",
     "api-docs:check": "node --test scripts/qa/api-docs-qa.spec.mjs && node scripts/qa/api-docs-qa.mjs",
     "skill-governance:check": "node scripts/qa/skill-governance-qa.mjs",
-    "check": "pnpm skill-governance:check && pnpm api-docs:check && pnpm codegen:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm skill-governance:check && pnpm review:check && pnpm api-docs:check && pnpm codegen:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
-    "db:ps": "docker compose ps postgres"
+    "db:ps": "docker compose ps postgres",
+    "review:check": "node --test scripts/qa/review-gate.spec.mjs",
+    "review:gate": "node scripts/qa/review-gate.mjs"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^7.2.0",

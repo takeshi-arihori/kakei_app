@@ -114,7 +114,7 @@ Fallbackは静的Ruleの代替ではなく、同じRuleを別Toolで実行する
 
 各Layerについて、[Delivery Workflow](../../../docs/engineering/delivery-workflow.md)と[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)の要求項目を、Task／Branch／PR／Diffの実体へ照合する。
 
-Stack操作前後でCommit ancestry、Base、またはPR Diffが変化した場合は、影響するVerificationを再実行する。Taskの評価対象Diffが変わった場合はSelf Reviewをやり直し、新しい`task_evaluator`で再評価する。Base metadataだけが変わりTask Diffが同一なら、Dependency／CI／差分同一性を再確認し、実施不要な検証は理由を記録する。
+Stack操作前後でCommit ancestry、Base、またはPR Diffが変化した場合は、影響するVerificationを再実行する。Taskの評価対象Diffが変わった場合はSelf Reviewをやり直し、4役すべてを新しいThreadで再評価する。Base metadataだけが変わりTask Diffが同一なら、Dependency／CI／差分同一性を再確認し、実施不要な検証は理由を記録する。
 
 ## 停止条件
 

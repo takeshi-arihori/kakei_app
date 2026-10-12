@@ -1,44 +1,15 @@
 # Codex Harnessの実動検証
 
-対象は[Task #130](https://github.com/takeshi-arihori/kakei_app/issues/130)。設定の責務と監査結果は[Codex設定](codex-configuration.md)、工程と合否条件は[Engineering Loop](engineering-loop.md)を正本とする。
+現行I5は[Issue #206](https://github.com/takeshi-arihori/kakei_app/issues/206)の[4専門Review契約](implementation-review.md)に従う。工程は[Engineering Loop](engineering-loop.md)、設定の責務は[Codex設定](codex-configuration.md)を参照する。下部の#130記録は当時の履歴であり、旧Roleの起動手順を現行Gateとして使わない。
 
-## 起動前提
+## 起動と隔離
 
-- 対象Repositoryをtrusted projectとして開く。
-- `.codex/config.toml`と参照先のAgent TOMLを構文・Schema・参照整合で確認する。
-- 使用するClientとVersion、基準Commit、Diff、ReviewInputを記録する。
-- `work_planning_evaluator`と`task_evaluator`が起動Toolで選択できることを確認する。通常Agentへ置き換えて成功扱いにしない。
-- 個人設定、認証情報、セッション履歴の全文をEvidenceへコピーしない。
+1. 最新develop、TaskのReady、Dependency、作業Treeを確認する。使用Client／Versionと、評価するBase／Diff／入力Bundleを記録する。
+2. `.codex/config.toml`の4 ReviewerとPlanning RoleのTOML構文、参照、名前、指示を確認する。新しいCLI SessionでRoleを選択できることを確認する。通常Agentへ置き換えない。
+3. 親はIssue、docs、設計、Diffと変更File本文、Test／QA、Self Review、未実施理由、Riskを内容付きでBundleへ固定する。Path・Byte数・SHA-256・区切りを照合し、容量不足や切詰めは停止する。
+4. 各Reviewerは別Threadで同じ対象を評価する。結論を他Reviewerの入力へ混ぜない。同じCoordinatorの履歴をforkする場合は結果受領前に全員へ同じ入力を渡す。逐次実行で独立性を保てない場合はRoleごとに新しい隔離CLI Sessionを使う。
 
-## 起動方法
-
-親Agentへ対象roleとReviewInputを渡し、独立Subagentとしての起動を明示する。
-
-```text
-work_planning_evaluatorを新しい独立Subagentとして起動し、
-Problem、Requirement、Done Criteria、現状Evidence、設計、
-Task分解案、Dependencies、Decisionをread-onlyで評価してください。
-RepositoryとGitHubは変更せず、role既定のJSONを返してください。
-```
-
-Implementationでは`task_evaluator`を指定し、Requirement、Done Criteria、関連docs、Base Commit、Diff識別子、変更File、Test結果、未実施理由、Self Review、残Riskを渡す。
-
-起動APIはClientで異なる。この実行環境では`collaboration.spawn_agent`の`agent_type`へrole名を指定できる。Tool名の表示だけで成功とせず、子の起動結果、role固有指示、判定JSONを確認する。
-
-## 実効read-onlyの確認
-
-Agent TOMLの`read-only`指定と子の実効権限を照合する。親の実行時Permission overrideが再適用される環境では、子も`workspace-write`になる場合がある。指示に従って編集しなかったことと、Sandboxが編集を禁止したことを区別する。
-
-切り分けには、通常作業セッションとは別の一時的なread-only CLIセッションを使える。通常作業の親設定やProject共通設定は変更しない。下記は検証専用Promptを用意した場合の例である。
-
-```bash
-rtk proxy codex --version
-rtk proxy codex exec --strict-config --sandbox read-only \
-  --json --output-last-message /tmp/harness-result.json \
-  - < /tmp/harness-prompt.txt > /tmp/harness-events.jsonl
-```
-
-上記は初回の起動診断で使った例であり、Shell経由のGitHubアクセスを残すため合格用には使わない。実TaskのEvaluatorは次の隔離条件で起動する。使用するCLIの`--version`と`exec --help`で全Optionが利用可能なことを先に確認する。`PATH`に古いCLIがある場合は、確認済みの実行Fileを例中の`codex`の代わりに指定する。OptionがないVersionでは同等の隔離を確認できるまでGateを止める。
+以下はCLIで隔離を確認する基本形。`PROJECT_CHECKOUT`と入出力Pathは親が指定する。通常の親設定を恒久的に変更しない。
 
 ```bash
 rtk proxy codex exec --strict-config --sandbox read-only \
@@ -46,56 +17,59 @@ rtk proxy codex exec --strict-config --sandbox read-only \
   --disable shell_tool --disable apps --disable plugins \
   --disable browser_use --disable browser_use_external \
   --disable computer_use --disable in_app_browser \
-  --json --output-last-message /tmp/harness-result.json \
-  -C "$PROJECT_CHECKOUT" \
-  - < /tmp/harness-prompt.txt > /tmp/harness-events.jsonl
+  --disable image_generation --disable goals --disable hooks \
+  --disable worktrees --disable remote_plugin --disable workspace_dependencies \
+  --json --output-last-message /tmp/review-result.json \
+  -C "$PROJECT_CHECKOUT" - < /tmp/review-input.txt > /tmp/review-events.jsonl
 ```
 
-`PROJECT_CHECKOUT`はtrustedな対象Checkoutの絶対Pathを親が指定する。実行Fileの場所や個人の設定PathをRepositoryへ固定しない。Promptには対象IssueのRequirement／Done Criteria、関連docs、Project状態、Dependency、基準Commit、最新Diff、Test結果、Self Review、既知Riskを**内容付きで**渡す。Shellを無効にした子はFile PathやURLだけでは正本を取得できない。`--output-last-message`のJSONだけでなく、Eventと子Sessionを見てproject-local role名、子ID、実効Sandbox、使えるToolと実際のTool呼出しを確認する。外部書込みTool、Shell、操作型Browser／Computerが子へ残る場合、または権限を確認できない場合は`blocked`にする。
+起動前に使用CLIの`--version`、`exec --help`、`features list`でOptionを確認する。設定済みMCP等の外部書込み経路は別途無効化する。個人設定を除外する`--ignore-user-config`を使う場合は、検証対象のProject Roleを`-c 'agents.<role>.config_file="<role TOMLの絶対Path>"'`で明示し、Project登録と参照が一致することを別途確認する。Model／ReasoningはRepositoryへ固定せず、起動時の値と選択理由を記録する。対応しないModel／Optionを成功扱いにしない。
 
-安全な一時File作成Probeでread-only Sandboxの拒否とFile不在を確認する。GitHubへの試験書込みは行わない。FilesystemのProbeだけでGitHub書込み不可とは推論せず、外部連携とShellのTool境界も確認する。CLI自体の起動が外側のSandboxで拒否される場合は実行許可を得る。CLI内部の`--sandbox read-only`は維持し、Sandbox無効化で回避しない。`--ephemeral`は今回のCLIでは子Agentの親Thread解決に失敗して`no thread with id`になったため使用しない。これは観測結果であり、全Versionでの原因確定ではない。
+各子の実効Sandbox／承認PolicyとTool一覧を確認する。安全な一時Fileへの作成Probeの拒否と、親が確認したFile不在を記録する。GitHubへの実書込みProbeは行わない。`apply_patch`の存在とSandboxによる拒否を区別する。Shell／command executor、書込み可能なMCP／外部Tool、画像生成等の実効書込み経路が残る、または確認できない場合はblocked。利用可能Toolと実際のTool呼出しは別々に記録する。
 
-子の実効権限情報、実施Tool、親による変更前後のGit状態をEvidenceへ記録する。Git状態だけではGitHubへの書込み禁止を証明できないため、**利用可能Tool一覧と実際のTool呼出しを分けて確認する。** command executor、書込み可能なMCP／外部Toolが利用可能な場合は、未使用であっても書込み不能のEvidenceにはしない。権限情報が得られなければ強制read-onlyは未確認とする。
+`--ephemeral`は旧検証で子の親Thread解決に失敗した。保存ありの新規Sessionを使い、Session全文・認証情報・個人設定を公開しない。外側SandboxがCLI起動を拒否した場合も、CLI内部のread-onlyを外して回避しない。
 
-## 合否と再評価
+## 集計と修正
 
-| 結果 | 親の操作 |
-| --- | --- |
-| `pass`かつfindings／missingEvidenceが空 | 対象Diffの一致を確認して次工程へ進む |
-| `fail` | 指摘を修正し、再検証・Self Review後、新しいEvaluatorで評価 |
-| `blocked` | 依存工程を停止し、未決Decision・権限・正本Conflictを解消 |
-| JSON不正／証拠不足／未実施 | 合格扱いにせず原因を確認 |
+親は[共通結果](implementation-review.md)をRole／子Thread ID／実効権限Evidenceへ結び付けて保存する。原結果を上書きせず、Finding統合後も出典を保持する。
 
-修正後に同じEvaluator Threadを再利用しない。検証用Caseではメモリ上のPlanning／ReviewInputを親が補正し、実Projectへ架空のIssueや判断を保存しない。本番Deliveryの変更は通常の親Agentだけが行う。
+`pnpm review:gate -- /tmp/review-cycles.json`で記録の契約と次工程を確認できる。入力は次の形とし、初回から修正後までの全Cycleを渡す。
 
-## 安全な検証Case
+```json
+{
+  "currentTarget": { "baseCommit": "base", "diffId": "current" },
+  "cycles": [{
+    "baseCommit": "base", "diffId": "current",
+    "reviews": [{
+      "role": "code_reviewer", "threadId": "実際の子UUID",
+      "runtime": {
+        "sandbox": "read-only", "approvalPolicy": "never",
+        "availableTools": ["apply_patch", "clock__curr_time", "view_image", "web__run"],
+        "sandboxEvidence": "親が照合したSession metadataの参照",
+        "probeEvidence": "拒否結果と親によるFile不在確認の参照",
+        "toolInventoryEvidence": "全Tool面と実呼出しの照合記録"
+      },
+      "output": { "role": "code_reviewer", "cycle": 0, "baseCommit": "base", "diffId": "current", "result": "pass", "findings": [], "missingEvidence": [], "reviewedScope": ["確認範囲"], "unverified": [], "residualRisk": [] }
+    }]
+  }]
+}
+```
 
-| Case | 入力 | 観測対象 |
-| --- | --- | --- |
-| P1 | 曖昧なDone Criteriaと検証方法のない文書Planning | 親が修正できる不足を検出 |
-| P2 | P1を観測可能なDone Criteria・検証方法へ修正 | 新しいPlanning Evaluatorで再評価 |
-| B1 | Ownerの重要判断が未承認という架空の前提 | `blocked`と依存工程の停止 |
-| I1 | 文書リンク追加のReviewInputから検証Evidenceを意図的に省略 | 不足Evidenceを検出 |
-| I2 | 親がリンク・リンク先を検証して結果を補完 | 新しいTask Evaluatorで再評価 |
+例では1役だけを示している。実入力には4役すべてが必要。終了Codeはpass=0、fail=1、blocked=2。未知Toolは親が監査して許可するまで停止する。集計Scriptは入力記録を検証する補助であり、実効Sandboxの強制、Evidence参照の真偽、現在のFileとの一致を自動保証しない。親が実物を照合してから使う。
 
-期待と違う結果もそのまま記録する。合成Caseの合格は実Taskの最終Diffの承認を代替しない。最終Diffは別の新しいEvaluatorへ渡す。
+全員pass後にHook等が対象を変更した場合、旧passを履歴に残し、新しい対象のCycleへ`previousTargetInvalidated`（失効した理由と変更Evidenceの参照）を追加する。4役すべてを新Threadで再評価し、修正回数はリセットしない。Resource一覧／読取りの汎用Tool（`list_mcp_resources`、`list_mcp_resource_templates`、`read_mcp_resource`）は読取り機能として集計の許可一覧へ含める。接続先が公開する別のToolやShell等は別途監査し、書込み経路を残さない。
 
-## Troubleshooting
+failでは親だけがScope内を修正し、Test／QA・Self Review後に4役すべてを新Threadで再評価する。修正回数と停止は共通契約に従う。blocked後に外部条件が解消して同じ修正回数で再開する場合も、新Threadの結果を使う。入力の任意の`blockedHistory`へ`{ "cycle": 0, "review": "停止時の通常Cycleと同形式のObject", "resolutionEvidence": "親が確認した解消根拠の参照" }`を保存する。`review`は例の文字列ではなく4役の原結果を含むObject。再開する`cycles[cycle]`と同じBase／Diffで、停止結果はblocked、解消根拠があり、全履歴と再開時でThread IDが重複しない場合だけ受け入れる。停止記録を捨てず、修正回数をリセットして上限を回避しない。対象変更は通常の修正Cycleとして扱う。
 
-- roleが見つからない、Configが読まれない、未知Key: [設定のTroubleshooting](codex-configuration.md#troubleshooting)を確認する。
-- CLI起動が`Operation not permitted`: 外側の実行制限とCLI内部のSandboxを切り分ける。
-- 子の実効権限が期待と異なる: 親の実行時Permission指定を確認し、専用セッションで再検証する。
-- `pass`でもFindingが残る: Gateを開けず、不足を補って新しいEvaluatorへ渡す。
-- Evaluatorが変更を行う: そのCycleを合格にせず、変更範囲を確認して原因を解消する。
-- CLI版とApp版で結果が異なる: Versionと起動方法を別々に記録する。片方の結果をもう片方の成功証拠にしない。
-- `--ephemeral`で`no thread with id`: 保存ありの新規CLI Sessionで再試行し、親と子のThread識別子・結果を確認する。
-- Filesystemはread-onlyでもGitHub書込みToolが子へ公開される: Tool一覧と実効権限を別途確認し、書込みを禁止できない環境ではHarness前提未達としてGateを止める。Apps／Pluginsの無効化だけでMCP、command executor、その他の外部書込み経路まで消えるとは仮定しない。
+## 受入検証
 
-## Evidenceの記録項目
+- `pnpm review:check`: 全員pass、fail、blocked、対象／Role／Thread不一致、3回の修正上限等の決定的な契約検証。
+- 安全な合成入力: Code・Test・仕様・Securityの各Findingを担当Roleが検出することを確認する。実GitHubやProduct Dataを使わない。
+- 親が合成File／入力を修正してTestを実行し、新規4役が同じ修正後対象へpassするE2Eを最低1回行う。
+- 実Taskの最終Diffは別の新規4役で評価する。全員passと対象一致の後だけDraft PRへ進む。
+- `pnpm check`、TOML構文／参照、Skill frontmatter／文書Link、Self Reviewを行う。静的Checkを実動起動・権限制御の代替にしない。
 
-Client／Version、Base／評価Diff、読み込んだConfig、role名、子識別子、ReviewInput概要、実際のJSON結果、親の修正、再検証、新しい子、実効権限、**利用可能Tool一覧、実際のTool呼出し**、Gate判断、Draft PRまたは検証終了結果を記録する。
-
-`pnpm check`はRepository QAであり、Subagent起動と権限制御を自動検証するものではない。文書・Configのみの場合は構文・Schema・リンク確認をTDDの代替とし、実動検証と区別して報告する。
+公開Evidenceは[Issue #206実動記録](reviewer-harness-evidence.md)へ必要最小限で記録する。未実施・失敗・未確認を成功へ読み替えない。起動不可、権限不明、JSON不正、正本Conflictでは依存Deliveryを停止する。
 
 ## 実行記録（2026-09-27）
 

@@ -1,5 +1,42 @@
 # Codex設定の管理と監査
 
+現行のProject設定は[Issue #206](https://github.com/takeshi-arihori/kakei_app/issues/206)の4専門ReviewとPlanning用Roleを登録する。共通契約は[4専門Review](implementation-review.md)、実効権限の確認は[Harness](codex-harness.md)を正本とする。
+
+## 現行の責務
+
+| Layer | 責務 |
+| --- | --- |
+| User-level | Project trust、Model／Reasoning、Machine／Provider／Credential、個人のPermission。Repositoryへコピーしない |
+| `.codex/config.toml` | 下記5 Roleの参照。親のSandboxやModelは固定しない |
+| `.codex/agents/*.toml` | Role名・説明・担当観点・共通契約への参照・read-only既定値 |
+| 実行時 | 実効Sandbox／Policy、全Tool面、利用可能Toolと実呼出し、子Thread・対象の照合 |
+
+| Role | 参照先 |
+| --- | --- |
+| `code_reviewer` | `agents/code-reviewer.toml` |
+| `test_reviewer` | `agents/test-reviewer.toml` |
+| `spec_reviewer` | `agents/spec-reviewer.toml` |
+| `security_reviewer` | `agents/security-reviewer.toml` |
+| `work_planning_evaluator` | `agents/work-planning-evaluator.toml` |
+
+旧`task_evaluator`はI5の4役へ置換して登録・Fileを削除する。第5の実装Reviewや互換Aliasを常設しない。Planning Gateと既存Roleの指示は維持する。Model／Reasoning、並列数、個人のtrust／認証はProjectで固定しない。
+
+Agent Fileの`name`／`description`／`developer_instructions`は必須の非空文字列とし、`sandbox_mode = "read-only"`を指定する。TOML構文、参照Path、名前の一致、公式Schemaと使用CLIの`--strict-config`を確認する。技術固有Ruleは対象docsから読み、Roleへ固定しない。
+
+根拠は公式[Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents)、[Config Reference](https://developers.openai.com/codex/config-reference)、[Schema](https://developers.openai.com/codex/config-schema.json)。Project設定はtrusted projectで読み込まれる。子へ親の実行時Overrideが再適用される場合があるため、Fileのread-only指定と指示の遵守だけでは実効境界を証明できない。
+
+## 起動・変更時の確認
+
+新しいSessionで5 Roleを選択できることを確認する。4 Reviewerはそれぞれ別Threadとし、共通入力・結果・修正上限はdocsへ委譲する。実効read-onlyと外部Tool隔離を確認できなければblocked。Machine全体の診断全文、User-level設定、Session全文はPublic Issue／PRへ保存しない。
+
+未知Key、Role未検出、古いCLI、親Override、並列枠不足、外部書込み経路の残存は[Harness](codex-harness.md)で切り分ける。通常Roleで代替したり、Sandboxを外して成功扱いにしない。静的QAの成功とRoleの実動成功を分ける。
+
+## 過去の監査（2026-09-27）
+
+以下は#131当時の全設定・判断の履歴である。「2 role」「保持」等は監査時点を表す。現行の登録・呼出しは上の5 Roleと4専門Review契約を使う。
+
+### #131の監査記録
+
 [Task #131](https://github.com/takeshi-arihori/kakei_app/issues/131)として2026-09-27に最新`develop`（`bbf6adc1e41c6ca5d79d303842f0f42d765d634d`）と公式資料を照合した。実動確認は後続の[Task #130](https://github.com/takeshi-arihori/kakei_app/issues/130)で行う。
 
 ## Layerの責務

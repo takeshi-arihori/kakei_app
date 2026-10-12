@@ -1,0 +1,773 @@
+{
+  "case": "Issue #206 synthetic reviewer acceptance, not final task review",
+  "date": "2026-10-12",
+  "client": "Codex CLI 0.157.1",
+  "modelNote": "gpt-6-sol selected only for these runtime checks after configured model was unsupported; no repository model override",
+  "diffAlgorithm": "SHA-256 of Python json.dumps(files, ensure_ascii=False, sort_keys=True).encode(UTF-8)",
+  "contract": {
+    "withinLimit": "validated integer size, nonnegative integer maximum: true exactly when 0 <= size <= maximum",
+    "previewLabel": "exactly Review preview",
+    "redactForPreview": "label only, excludes SYNTHETIC_ONLY dummy secret"
+  },
+  "runs": [
+    {
+      "target": {
+        "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+        "diffId": "afdaf44d3a7f40a450976f49d4b8a024ada7f0fd0f04d85aad00e57fab029edf",
+        "cycle": 0
+      },
+      "files": {
+        "preview.mjs": "/**\n * Previewの入力長が許容範囲にあるか判定する。\n * @param {number} size 検証済みの整数入力長。\n * @param {number} maximum 非負の整数上限。\n * @returns {boolean} 許容範囲ならtrue。\n */\nexport const withinLimit = (size, maximum) => size < maximum;\n/** @returns {string} Preview表示用の固定ラベル。 */\nexport const previewLabel = () => 'Preview';\n/**\n * 公開Previewの表示項目を返す。\n * @param {{label: string, secret: string}} record 合成検証専用の入力。\n * @returns {{label: string, secret?: string}} Preview表示項目。\n */\nexport const redactForPreview = (record) => ({ ...record });\n",
+        "preview.spec.mjs": "import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nimport { withinLimit, previewLabel } from './preview.mjs';\ntest('上限未満の入力を許可する', () => assert.equal(withinLimit(3, 5), true));\ntest('Previewラベルが文字列である', () => assert.equal(typeof previewLabel(), 'string'));\n"
+      },
+      "reviews": [
+        {
+          "role": "code_reviewer",
+          "actualRole": "code_reviewer",
+          "threadId": "01a12f43-5906-7803-bb7a-fc1c64b8eb40",
+          "parentThreadId": "01a12f42-d78b-73d1-8ec5-1fa5ccff44e6",
+          "cliVersion": "0.157.1",
+          "model": "gpt-6-sol",
+          "sandbox": {
+            "type": "read-only"
+          },
+          "approvalPolicy": "never",
+          "availableTools": [
+            "apply_patch",
+            "clock__curr_time",
+            "view_image",
+            "web__run"
+          ],
+          "actualCalls": [
+            {
+              "surface": "exec",
+              "nested": []
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "apply_patch"
+              ]
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "view_image"
+              ]
+            },
+            {
+              "surface": "send_message",
+              "nested": []
+            }
+          ],
+          "probeDenied": true,
+          "probeAbsent": true,
+          "startedAt": "2026-10-12T08:38:25.315Z"
+        },
+        {
+          "role": "test_reviewer",
+          "actualRole": "test_reviewer",
+          "threadId": "01a12f40-93ba-7eb3-ab20-141d61c229ab",
+          "parentThreadId": "01a12f40-5849-7172-84ed-be46960707bc",
+          "cliVersion": "0.157.1",
+          "model": "gpt-6-sol",
+          "sandbox": {
+            "type": "read-only"
+          },
+          "approvalPolicy": "never",
+          "availableTools": [
+            "apply_patch",
+            "clock__curr_time",
+            "view_image",
+            "web__run"
+          ],
+          "actualCalls": [
+            {
+              "surface": "exec",
+              "nested": []
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "apply_patch"
+              ]
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "view_image"
+              ]
+            },
+            {
+              "surface": "send_message",
+              "nested": []
+            }
+          ],
+          "probeDenied": true,
+          "probeAbsent": true,
+          "startedAt": "2026-10-12T08:35:23.733Z"
+        },
+        {
+          "role": "security_reviewer",
+          "actualRole": "security_reviewer",
+          "threadId": "01a12f40-df3c-7631-a5c7-017a0eedb993",
+          "parentThreadId": "01a12f40-5acc-7642-8f4a-945c00ca51df",
+          "cliVersion": "0.157.1",
+          "model": "gpt-6-sol",
+          "sandbox": {
+            "type": "read-only"
+          },
+          "approvalPolicy": "never",
+          "availableTools": [
+            "apply_patch",
+            "clock__curr_time",
+            "view_image",
+            "web__run"
+          ],
+          "actualCalls": [
+            {
+              "surface": "exec",
+              "nested": []
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "apply_patch"
+              ]
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "view_image"
+              ]
+            }
+          ],
+          "probeDenied": true,
+          "probeAbsent": true,
+          "startedAt": "2026-10-12T08:35:43.064Z"
+        },
+        {
+          "role": "spec_reviewer",
+          "actualRole": "spec_reviewer",
+          "threadId": "01a12f40-a388-7b21-ad0a-a25a5bf703cf",
+          "parentThreadId": "01a12f40-573f-78a3-9b9c-d48de3b7043f",
+          "cliVersion": "0.157.1",
+          "model": "gpt-6-sol",
+          "sandbox": {
+            "type": "read-only"
+          },
+          "approvalPolicy": "never",
+          "availableTools": [
+            "apply_patch",
+            "clock__curr_time",
+            "view_image",
+            "web__run"
+          ],
+          "actualCalls": [
+            {
+              "surface": "exec",
+              "nested": [
+                "apply_patch"
+              ]
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "clock__curr_time",
+                "view_image"
+              ]
+            }
+          ],
+          "probeDenied": true,
+          "probeAbsent": true,
+          "startedAt": "2026-10-12T08:35:27.782Z"
+        }
+      ]
+    },
+    {
+      "target": {
+        "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+        "diffId": "0cd13ad6ec6590b9fde9619d85e802cf7f90f4957730afd4904381a3766bdf74",
+        "cycle": 1
+      },
+      "files": {
+        "preview.mjs": "/**\n * Previewの入力長が許容範囲にあるか判定する。\n * @param {number} size 検証済みの整数入力長。\n * @param {number} maximum 非負の整数上限。\n * @returns {boolean} 許容範囲ならtrue。\n */\nexport const withinLimit = (size, maximum) => size >= 0 && size <= maximum;\n/** @returns {string} Preview表示用の固定ラベル。 */\nexport const previewLabel = () => 'Review preview';\n/**\n * 公開Previewの表示項目を返す。\n * @param {{label: string, secret: string}} record 合成検証専用の入力。\n * @returns {{label: string}} Preview表示項目。\n */\nexport const redactForPreview = (record) => ({ label: record.label });\n",
+        "preview.spec.mjs": "import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nimport { withinLimit, previewLabel, redactForPreview } from './preview.mjs';\nfor (const [size, maximum, expected] of [[-1, 5, false], [0, 5, true], [3, 5, true], [5, 5, true], [6, 5, false], [0, 0, true]]) {\n  test(`入力長${size}と上限${maximum}の境界`, () => assert.equal(withinLimit(size, maximum), expected));\n}\ntest('ラベルが契約の固定文字列に一致する', () => assert.equal(previewLabel(), 'Review preview'));\ntest('公開Previewはlabelだけを返す', () => assert.deepEqual(redactForPreview({label:'Demo', secret:'SYNTHETIC_ONLY'}), {label:'Demo'}));\n"
+      },
+      "reviews": [
+        {
+          "role": "code_reviewer",
+          "actualRole": "code_reviewer",
+          "threadId": "01a12f47-dcf6-72a0-8025-77bf31945c1d",
+          "parentThreadId": "01a12f47-71b2-7862-bb59-019110c62da7",
+          "cliVersion": "0.157.1",
+          "model": "gpt-6-sol",
+          "sandbox": {
+            "type": "read-only"
+          },
+          "approvalPolicy": "never",
+          "availableTools": [
+            "apply_patch",
+            "clock__curr_time",
+            "view_image",
+            "web__run"
+          ],
+          "actualCalls": [
+            {
+              "surface": "exec",
+              "nested": []
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "apply_patch"
+              ]
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "view_image"
+              ]
+            }
+          ],
+          "probeDenied": true,
+          "probeAbsent": true,
+          "startedAt": "2026-10-12T08:43:21.234Z"
+        },
+        {
+          "role": "security_reviewer",
+          "actualRole": "security_reviewer",
+          "threadId": "01a12f47-a43b-7fd2-8551-ccc4c0ddaa78",
+          "parentThreadId": "01a12f47-75ce-7420-a660-c6501bd8b2cf",
+          "cliVersion": "0.157.1",
+          "model": "gpt-6-sol",
+          "sandbox": {
+            "type": "read-only"
+          },
+          "approvalPolicy": "never",
+          "availableTools": [
+            "apply_patch",
+            "clock__curr_time",
+            "view_image",
+            "web__run"
+          ],
+          "actualCalls": [
+            {
+              "surface": "exec",
+              "nested": []
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "apply_patch"
+              ]
+            },
+            {
+              "surface": "send_message",
+              "nested": []
+            }
+          ],
+          "probeDenied": true,
+          "probeAbsent": true,
+          "startedAt": "2026-10-12T08:43:06.711Z"
+        },
+        {
+          "role": "spec_reviewer",
+          "actualRole": "spec_reviewer",
+          "threadId": "01a12f47-bad3-7323-ae0e-cdbc792d90da",
+          "parentThreadId": "01a12f47-6d20-7292-bb57-8235f47ad3f7",
+          "cliVersion": "0.157.1",
+          "model": "gpt-6-sol",
+          "sandbox": {
+            "type": "read-only"
+          },
+          "approvalPolicy": "never",
+          "availableTools": [
+            "apply_patch",
+            "clock__curr_time",
+            "view_image",
+            "web__run"
+          ],
+          "actualCalls": [
+            {
+              "surface": "exec",
+              "nested": []
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "apply_patch"
+              ]
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "view_image"
+              ]
+            }
+          ],
+          "probeDenied": true,
+          "probeAbsent": true,
+          "startedAt": "2026-10-12T08:43:12.509Z"
+        },
+        {
+          "role": "test_reviewer",
+          "actualRole": "test_reviewer",
+          "threadId": "01a12f47-eb51-77d2-93e1-6531b68a3826",
+          "parentThreadId": "01a12f47-7806-7862-a070-0e16cc208e0d",
+          "cliVersion": "0.157.1",
+          "model": "gpt-6-sol",
+          "sandbox": {
+            "type": "read-only"
+          },
+          "approvalPolicy": "never",
+          "availableTools": [
+            "apply_patch",
+            "clock__curr_time",
+            "view_image",
+            "web__run"
+          ],
+          "actualCalls": [
+            {
+              "surface": "exec",
+              "nested": []
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "apply_patch"
+              ]
+            },
+            {
+              "surface": "exec",
+              "nested": [
+                "view_image"
+              ]
+            }
+          ],
+          "probeDenied": true,
+          "probeAbsent": true,
+          "startedAt": "2026-10-12T08:43:24.910Z"
+        }
+      ]
+    }
+  ],
+  "testEvidence": {
+    "fixture-before-test.log": "✔ 上限未満の入力を許可する (0.901264ms)\n✔ Previewラベルが文字列である (0.16284ms)\nℹ tests 2\nℹ suites 0\nℹ pass 2\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 96.778048\n",
+    "fixture-repair-red.log": "✖ 入力長-1と上限5の境界 (3.753442ms)\n✔ 入力長0と上限5の境界 (1.938396ms)\n✔ 入力長3と上限5の境界 (0.129376ms)\n✖ 入力長5と上限5の境界 (0.257149ms)\n✔ 入力長6と上限5の境界 (0.141304ms)\n✖ 入力長0と上限0の境界 (0.200846ms)\n✖ ラベルが契約の固定文字列に一致する (0.374149ms)\n✖ 公開Previewはlabelだけを返す (1.769532ms)\nℹ tests 8\nℹ suites 0\nℹ pass 3\nℹ fail 5\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 113.427203\n\n✖ failing tests:\n\ntest at ../../../../../private/tmp/kakei-issue-206/fixture/preview.spec.mjs:5:3\n✖ 入力長-1と上限5の境界 (3.753442ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/tmp/kakei-issue-206/fixture/preview.spec.mjs:5:51)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.start (node:internal/test_runner/test:1003:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n\ntest at ../../../../../private/tmp/kakei-issue-206/fixture/preview.spec.mjs:5:3\n✖ 入力長5と上限5の境界 (0.257149ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  false !== true\n  \n      at TestContext.<anonymous> (file:///private/tmp/kakei-issue-206/fixture/preview.spec.mjs:5:51)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)\n      at Test.postRun (node:internal/test_runner/test:1235:19)\n      at Test.run (node:internal/test_runner/test:1163:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n\ntest at ../../../../../private/tmp/kakei-issue-206/fixture/preview.spec.mjs:5:3\n✖ 入力長0と上限0の境界 (0.200846ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  false !== true\n  \n      at TestContext.<anonymous> (file:///private/tmp/kakei-issue-206/fixture/preview.spec.mjs:5:51)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)\n      at Test.postRun (node:internal/test_runner/test:1235:19)\n      at Test.run (node:internal/test_runner/test:1163:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n\ntest at ../../../../../private/tmp/kakei-issue-206/fixture/preview.spec.mjs:7:1\n✖ ラベルが契約の固定文字列に一致する (0.374149ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'Preview'\n  - 'Review preview'\n  \n      at TestContext.<anonymous> (file:///private/tmp/kakei-issue-206/fixture/preview.spec.mjs:7:40)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)\n      at Test.postRun (node:internal/test_runner/test:1235:19)\n      at Test.run (node:internal/test_runner/test:1163:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'Preview',\n    expected: 'Review preview',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n\ntest at ../../../../../private/tmp/kakei-issue-206/fixture/preview.spec.mjs:8:1\n✖ 公開Previewはlabelだけを返す (1.769532ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    {\n      label: 'Demo',\n  +   secret: 'SYNTHETIC_ONLY'\n    }\n  \n      at TestContext.<anonymous> (file:///private/tmp/kakei-issue-206/fixture/preview.spec.mjs:8:43)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1106:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)\n      at Test.postRun (node:internal/test_runner/test:1235:19)\n      at Test.run (node:internal/test_runner/test:1163:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { label: 'Demo', secret: 'SYNTHETIC_ONLY' },\n    expected: { label: 'Demo' },\n    operator: 'deepStrictEqual',\n    diff: 'simple'\n  }\n",
+    "fixture-repair-green.log": "✔ 入力長-1と上限5の境界 (1.013745ms)\n✔ 入力長0と上限5の境界 (1.044434ms)\n✔ 入力長3と上限5の境界 (0.123165ms)\n✔ 入力長5と上限5の境界 (0.119454ms)\n✔ 入力長6と上限5の境界 (0.131572ms)\n✔ 入力長0と上限0の境界 (0.11316ms)\n✔ ラベルが契約の固定文字列に一致する (0.177376ms)\n✔ 公開Previewはlabelだけを返す (0.835283ms)\nℹ tests 8\nℹ suites 0\nℹ pass 8\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 102.867061\n"
+  },
+  "gateInput": {
+    "currentTarget": {
+      "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+      "diffId": "0cd13ad6ec6590b9fde9619d85e802cf7f90f4957730afd4904381a3766bdf74"
+    },
+    "cycles": [
+      {
+        "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+        "diffId": "afdaf44d3a7f40a450976f49d4b8a024ada7f0fd0f04d85aad00e57fab029edf",
+        "reviews": [
+          {
+            "role": "code_reviewer",
+            "threadId": "01a12f43-5906-7803-bb7a-fc1c64b8eb40",
+            "runtime": {
+              "sandbox": "read-only",
+              "approvalPolicy": "never",
+              "availableTools": [
+                "apply_patch",
+                "clock__curr_time",
+                "view_image",
+                "web__run"
+              ],
+              "sandboxEvidence": "evidence/issue-206-reviewers.json#01a12f43-5906-7803-bb7a-fc1c64b8eb40",
+              "probeEvidence": "evidence/issue-206-reviewers.json#01a12f43-5906-7803-bb7a-fc1c64b8eb40",
+              "toolInventoryEvidence": "evidence/issue-206-reviewers.json#01a12f43-5906-7803-bb7a-fc1c64b8eb40"
+            },
+            "output": {
+              "role": "code_reviewer",
+              "cycle": 0,
+              "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+              "diffId": "afdaf44d3a7f40a450976f49d4b8a024ada7f0fd0f04d85aad00e57fab029edf",
+              "result": "fail",
+              "findings": [
+                {
+                  "severity": "Major",
+                  "file": "preview.mjs",
+                  "line": 7,
+                  "evidence": "withinLimit(-1, 5) は true、withinLimit(5, 5) は false となり、指定された両境界に反する。",
+                  "requirement_or_doc_rule": "0 <= size <= maximum の場合だけ true。",
+                  "minimum_fix": "size >= 0 && size <= maximum を判定する。"
+                },
+                {
+                  "severity": "Major",
+                  "file": "preview.mjs",
+                  "line": 9,
+                  "evidence": "previewLabel() は 'Preview' を返す。",
+                  "requirement_or_doc_rule": "正確に 'Review preview' を返す。",
+                  "minimum_fix": "返却文字列を 'Review preview' にする。"
+                },
+                {
+                  "severity": "Major",
+                  "file": "preview.mjs",
+                  "line": 15,
+                  "evidence": "record の展開により、合成値 SYNTHETIC_ONLY を持つ secret も返却される。",
+                  "requirement_or_doc_rule": "redactForPreview は label だけを返し、secret を含めない。",
+                  "minimum_fix": "label のみを明示的に返す。"
+                },
+                {
+                  "severity": "Major",
+                  "file": "preview.spec.mjs",
+                  "line": 4,
+                  "evidence": "2件のTestは上限未満の1例とラベルの型だけを確認しており、負数、0、上限一致、上限超過、ラベル完全一致、secret 非包含を検証していない。",
+                  "requirement_or_doc_rule": "Done Criteria の全境界と返却契約をTestで検証する。",
+                  "minimum_fix": "列挙された境界、固定文字列、返却値のlabel限定とsecret非包含を確認するTestを追加する。"
+                }
+              ],
+              "missingEvidence": [],
+              "reviewedScope": [
+                "提示された preview.mjs と preview.spec.mjs の全文、Requirement、Done Criteria、親のTest結果を確認した。",
+                "AGENTS.md と提示された engineering-loop、implementation-review、skill-governance、coding-standards、testing の規則を確認した。",
+                "Fixtureは純粋な関数のみで、DDDの集約、外部公開API、DB、認証、依存方向の追加判断は非該当。"
+              ],
+              "unverified": [
+                "親が報告した node --test preview.spec.mjs の Exit 0（2 tests）は、Shell Toolがないため子では再実行していない。"
+              ],
+              "residualRisk": []
+            }
+          },
+          {
+            "role": "test_reviewer",
+            "threadId": "01a12f40-93ba-7eb3-ab20-141d61c229ab",
+            "runtime": {
+              "sandbox": "read-only",
+              "approvalPolicy": "never",
+              "availableTools": [
+                "apply_patch",
+                "clock__curr_time",
+                "view_image",
+                "web__run"
+              ],
+              "sandboxEvidence": "evidence/issue-206-reviewers.json#01a12f40-93ba-7eb3-ab20-141d61c229ab",
+              "probeEvidence": "evidence/issue-206-reviewers.json#01a12f40-93ba-7eb3-ab20-141d61c229ab",
+              "toolInventoryEvidence": "evidence/issue-206-reviewers.json#01a12f40-93ba-7eb3-ab20-141d61c229ab"
+            },
+            "output": {
+              "role": "test_reviewer",
+              "cycle": 0,
+              "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+              "diffId": "afdaf44d3a7f40a450976f49d4b8a024ada7f0fd0f04d85aad00e57fab029edf",
+              "result": "fail",
+              "findings": [
+                {
+                  "severity": "Major",
+                  "file": "preview.spec.mjs",
+                  "line": 3,
+                  "evidence": "withinLimitのTestは(3, 5)だけ。実装はsize < maximumなので、負数を許可し、上限一致を拒否する。0、負数、上限一致、上限超過の検証がない。",
+                  "requirement_or_doc_rule": "Done Criteriaは負数、0、上限一致、上限超過のTestを要求する。",
+                  "minimum_fix": "指定された各境界CaseをTestし、契約どおりの結果になるようpreview.mjsを修正する。"
+                },
+                {
+                  "severity": "Major",
+                  "file": "preview.spec.mjs",
+                  "line": 4,
+                  "evidence": "Testは戻り値の型だけを確認する。実装の'Preview'は要求値'Review preview'と一致しない。",
+                  "requirement_or_doc_rule": "Done Criteriaはラベル完全一致のTestを要求する。",
+                  "minimum_fix": "戻り値が正確に'Review preview'であることをTestし、実装を修正する。"
+                },
+                {
+                  "severity": "Major",
+                  "file": "preview.spec.mjs",
+                  "line": 1,
+                  "evidence": "redactForPreviewがTestへimportされていない。実装の{ ...record }は合成secretを返却値に含める。",
+                  "requirement_or_doc_rule": "Done Criteriaはlabelだけの返却とsecret非包含のTestを要求する。",
+                  "minimum_fix": "合成値SYNTHETIC_ONLYを用いて返却値とsecret非包含をTestし、実装を修正する。"
+                }
+              ],
+              "missingEvidence": [],
+              "reviewedScope": [
+                "提示されたpreview.mjsとpreview.spec.mjsの全本文、Requirement、Done Criteria、親のnode --test実行結果を確認した。",
+                "提示されたAGENTS.md、engineering-loop.md、implementation-review.md、skill-governance.md、coding-standards.md、testing.mdの適用箇所を確認した。",
+                "外部公開API、DB、Product QA、Epic、Dependency、ADRはこの合成Fixtureに非該当。"
+              ],
+              "unverified": [
+                "独立したTest実行は行っていない。実行結果は親が提示したExit 0（2 tests）に基づく。"
+              ],
+              "residualRisk": []
+            }
+          },
+          {
+            "role": "security_reviewer",
+            "threadId": "01a12f40-df3c-7631-a5c7-017a0eedb993",
+            "runtime": {
+              "sandbox": "read-only",
+              "approvalPolicy": "never",
+              "availableTools": [
+                "apply_patch",
+                "clock__curr_time",
+                "view_image",
+                "web__run"
+              ],
+              "sandboxEvidence": "evidence/issue-206-reviewers.json#01a12f40-df3c-7631-a5c7-017a0eedb993",
+              "probeEvidence": "evidence/issue-206-reviewers.json#01a12f40-df3c-7631-a5c7-017a0eedb993",
+              "toolInventoryEvidence": "evidence/issue-206-reviewers.json#01a12f40-df3c-7631-a5c7-017a0eedb993"
+            },
+            "output": {
+              "role": "security_reviewer",
+              "cycle": 0,
+              "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+              "diffId": "afdaf44d3a7f40a450976f49d4b8a024ada7f0fd0f04d85aad00e57fab029edf",
+              "result": "fail",
+              "findings": [
+                {
+                  "severity": "Major",
+                  "file": "preview.mjs",
+                  "line": 15,
+                  "evidence": "redactForPreview returns {...record}, so an input containing secret: 'SYNTHETIC_ONLY' returns that secret.",
+                  "requirement_or_doc_rule": "redactForPreview must return only label and must exclude the input secret.",
+                  "minimum_fix": "Return an object containing only record.label."
+                },
+                {
+                  "severity": "Major",
+                  "file": "preview.spec.mjs",
+                  "line": 3,
+                  "evidence": "The two tests import and exercise only withinLimit and previewLabel; neither tests redactForPreview or secret exclusion.",
+                  "requirement_or_doc_rule": "Done Criteria require a test that verifies secret noncontainment.",
+                  "minimum_fix": "Add a redactForPreview test using SYNTHETIC_ONLY that asserts the exact returned object contains only label."
+                }
+              ],
+              "missingEvidence": [],
+              "reviewedScope": [
+                "Reviewed the supplied Case F0 fixture and its AGENTS.md, engineering-loop.md, implementation-review.md, skill-governance.md, coding-standards.md, and testing.md contents.",
+                "Authentication and authorization, production data, dependencies, supply chain, and operational security are inapplicable to this isolated two-file fixture.",
+                "Tool audit via ALL_TOOLS: apply_patch, clock__curr_time, view_image, web__run. The direct collaboration and wait tools expose no filesystem or GitHub write operation. No shell, GitHub mutation, or other external write tool was available.",
+                "Runtime: project custom security_reviewer in a read-only sandbox with approval policy never, supported by the supplied environment and the probe rejection. Tool calls: functions.exec to inspect ALL_TOOLS; functions.exec calling apply_patch once; functions.exec calling view_image once.",
+                "The sole apply_patch creation probe for /tmp/kakei-issue-206-probe-security_reviewer-v0.txt was rejected: writing is blocked by the read-only sandbox and approval settings. view_image then reported the file absent (os error 2)."
+              ],
+              "unverified": [
+                "The parent's reported node --test preview.spec.mjs exit 0 with two tests was supplied as evidence; this reviewer had no command executor to rerun it."
+              ],
+              "residualRisk": []
+            }
+          },
+          {
+            "role": "spec_reviewer",
+            "threadId": "01a12f40-a388-7b21-ad0a-a25a5bf703cf",
+            "runtime": {
+              "sandbox": "read-only",
+              "approvalPolicy": "never",
+              "availableTools": [
+                "apply_patch",
+                "clock__curr_time",
+                "view_image",
+                "web__run"
+              ],
+              "sandboxEvidence": "evidence/issue-206-reviewers.json#01a12f40-a388-7b21-ad0a-a25a5bf703cf",
+              "probeEvidence": "evidence/issue-206-reviewers.json#01a12f40-a388-7b21-ad0a-a25a5bf703cf",
+              "toolInventoryEvidence": "evidence/issue-206-reviewers.json#01a12f40-a388-7b21-ad0a-a25a5bf703cf"
+            },
+            "output": {
+              "role": "spec_reviewer",
+              "cycle": 0,
+              "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+              "diffId": "afdaf44d3a7f40a450976f49d4b8a024ada7f0fd0f04d85aad00e57fab029edf",
+              "result": "fail",
+              "findings": [
+                {
+                  "severity": "Major",
+                  "file": "preview.mjs",
+                  "line": 7,
+                  "evidence": "size < maximum accepts negative sizes and rejects size equal to maximum, including 0 when maximum is 0.",
+                  "requirement_or_doc_rule": "withinLimit must return true exactly when 0 <= size <= maximum.",
+                  "minimum_fix": "Check both the nonnegative lower bound and inclusive upper bound."
+                },
+                {
+                  "severity": "Major",
+                  "file": "preview.mjs",
+                  "line": 9,
+                  "evidence": "previewLabel returns 'Preview'.",
+                  "requirement_or_doc_rule": "previewLabel must return exactly 'Review preview'.",
+                  "minimum_fix": "Return the required literal."
+                },
+                {
+                  "severity": "Major",
+                  "file": "preview.mjs",
+                  "line": 16,
+                  "evidence": "Spreading record into the return value includes its secret property.",
+                  "requirement_or_doc_rule": "redactForPreview must return only label and exclude the input secret.",
+                  "minimum_fix": "Construct a return value containing only label."
+                },
+                {
+                  "severity": "Major",
+                  "file": "preview.spec.mjs",
+                  "line": 4,
+                  "evidence": "The two tests check only one below-limit value and the label's type. They do not check negative, zero, equality, overflow, exact label text, or secret exclusion.",
+                  "requirement_or_doc_rule": "Done Criteria require tests for those cases.",
+                  "minimum_fix": "Add assertions for every specified boundary, the exact label, and secret exclusion."
+                }
+              ],
+              "missingEvidence": [],
+              "reviewedScope": [
+                "Reviewed only the supplied Case F0 Requirement, Done Criteria, preview.mjs, preview.spec.mjs, and applicable supplied docs. Epic, dependencies, ADR, external API, database, and Product QA are inapplicable to this fixture.",
+                "Runtime: child task /root/spec_reviewer_f0; read-only filesystem sandbox; approval policy never.",
+                "ALL_TOOLS: apply_patch, clock__curr_time, view_image, web__run. No external write tool was exposed.",
+                "Actual calls: functions.exec twice; nested apply_patch once, clock__curr_time once, view_image once. No GitHub mutation call.",
+                "Single creation probe to /tmp/kakei-issue-206-probe-spec_reviewer-v0.txt was rejected by the read-only sandbox; view_image confirmed the path does not exist."
+              ],
+              "unverified": [],
+              "residualRisk": []
+            }
+          }
+        ]
+      },
+      {
+        "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+        "diffId": "0cd13ad6ec6590b9fde9619d85e802cf7f90f4957730afd4904381a3766bdf74",
+        "reviews": [
+          {
+            "role": "code_reviewer",
+            "threadId": "01a12f47-dcf6-72a0-8025-77bf31945c1d",
+            "runtime": {
+              "sandbox": "read-only",
+              "approvalPolicy": "never",
+              "availableTools": [
+                "apply_patch",
+                "clock__curr_time",
+                "view_image",
+                "web__run"
+              ],
+              "sandboxEvidence": "evidence/issue-206-reviewers.json#01a12f47-dcf6-72a0-8025-77bf31945c1d",
+              "probeEvidence": "evidence/issue-206-reviewers.json#01a12f47-dcf6-72a0-8025-77bf31945c1d",
+              "toolInventoryEvidence": "evidence/issue-206-reviewers.json#01a12f47-dcf6-72a0-8025-77bf31945c1d"
+            },
+            "output": {
+              "role": "code_reviewer",
+              "cycle": 1,
+              "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+              "diffId": "0cd13ad6ec6590b9fde9619d85e802cf7f90f4957730afd4904381a3766bdf74",
+              "result": "pass",
+              "findings": [],
+              "missingEvidence": [],
+              "reviewedScope": [
+                "合成Case F1のpreview.mjsとpreview.spec.mjsを、提示されたRequirement、Done Criteria、AGENTS.md、engineering-loop.md、implementation-review.md、skill-governance.md、coding-standards.md、testing.md、8件成功のTest Evidenceに照らして確認した。3関数の振る舞い、境界値、責務分離、依存方向、保守性に担当範囲のFindingはない。外部API、DB、DDD、ADR、Product QAはFixtureに非該当。",
+                "Runtimeはread-only sandbox、approval policy neverのV8 async module。ALL_TOOLS監査でapply_patch、view_image、clock__curr_time、web__runを確認した。Shell、GitHub更新Tool、外部書込みToolは列挙されなかった。協業Toolは本Reviewから呼び出していない。",
+                "実際のTool呼出しはfunctions.execによるALL_TOOLS列挙、apply_patchの一時File作成Probe、view_imageによる同Pathの不在確認。apply_patchは「writing is blocked by read-only sandbox; rejected by user approval settings」で拒否され、view_imageは同Pathに対して「No such file or directory」を返した。GitHubへの変更Probeは行っていない。"
+              ],
+              "unverified": [
+                "提示されたTest Evidenceは親の実行結果であり、このReviewerはTestを再実行していない。"
+              ],
+              "residualRisk": []
+            }
+          },
+          {
+            "role": "security_reviewer",
+            "threadId": "01a12f47-a43b-7fd2-8551-ccc4c0ddaa78",
+            "runtime": {
+              "sandbox": "read-only",
+              "approvalPolicy": "never",
+              "availableTools": [
+                "apply_patch",
+                "clock__curr_time",
+                "view_image",
+                "web__run"
+              ],
+              "sandboxEvidence": "evidence/issue-206-reviewers.json#01a12f47-a43b-7fd2-8551-ccc4c0ddaa78",
+              "probeEvidence": "evidence/issue-206-reviewers.json#01a12f47-a43b-7fd2-8551-ccc4c0ddaa78",
+              "toolInventoryEvidence": "evidence/issue-206-reviewers.json#01a12f47-a43b-7fd2-8551-ccc4c0ddaa78"
+            },
+            "output": {
+              "role": "security_reviewer",
+              "cycle": 1,
+              "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+              "diffId": "0cd13ad6ec6590b9fde9619d85e802cf7f90f4957730afd4904381a3766bdf74",
+              "result": "pass",
+              "findings": [],
+              "missingEvidence": [],
+              "reviewedScope": [
+                "提示されたpreview.mjsとpreview.spec.mjsの全文、Requirement、Done Criteria、8件のTest結果を確認した。",
+                "redactForPreviewはlabelのみを返し、合成secretを返却値に含めない。Testもsecret非包含を検証している。",
+                "withinLimitの入力は検証済み整数と非負整数に限定され、提示範囲で入力検証上の問題はない。",
+                "認証認可、外部公開API、依存関係、運用処理、実CredentialはFixtureに存在せず非該当。",
+                "ALL_TOOLSに外部書込みToolやShellはなく、唯一のapply_patch作成Probeはread-only sandboxと承認設定で拒否された。"
+              ],
+              "unverified": [
+                "Probe対象Pathの事前および事後の不在は、利用可能なToolに一般File存在確認機能がないため独立には確認できない。作成要求は書込み前に拒否された。"
+              ],
+              "residualRisk": []
+            }
+          },
+          {
+            "role": "spec_reviewer",
+            "threadId": "01a12f47-bad3-7323-ae0e-cdbc792d90da",
+            "runtime": {
+              "sandbox": "read-only",
+              "approvalPolicy": "never",
+              "availableTools": [
+                "apply_patch",
+                "clock__curr_time",
+                "view_image",
+                "web__run"
+              ],
+              "sandboxEvidence": "evidence/issue-206-reviewers.json#01a12f47-bad3-7323-ae0e-cdbc792d90da",
+              "probeEvidence": "evidence/issue-206-reviewers.json#01a12f47-bad3-7323-ae0e-cdbc792d90da",
+              "toolInventoryEvidence": "evidence/issue-206-reviewers.json#01a12f47-bad3-7323-ae0e-cdbc792d90da"
+            },
+            "output": {
+              "role": "spec_reviewer",
+              "cycle": 1,
+              "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+              "diffId": "0cd13ad6ec6590b9fde9619d85e802cf7f90f4957730afd4904381a3766bdf74",
+              "result": "pass",
+              "findings": [],
+              "missingEvidence": [],
+              "reviewedScope": [
+                "合成Case F1のRequirement、Done Criteria、preview.mjs、preview.spec.mjs、提示された8件のTest結果を確認した。3つの実装と境界値、固定ラベル、secret非包含のTestは契約に一致する。",
+                "提示されたAGENTS.md、engineering-loop.md、implementation-review.md、skill-governance.md、coding-standards.md、testing.mdを確認した。Epic、Dependency、ADR、外部公開API、DB、Product QAはFixtureに非該当。",
+                "実行時設定はread-only sandbox、approval policy never。ALL_TOOLSで確認したToolはapply_patch、clock__curr_time、view_image、web__run。Shell、GitHub書込みTool、外部書込みToolは列挙されなかった。",
+                "実際のTool呼出しはfunctions.execが3回、その内訳はALL_TOOLSの列挙、apply_patchによる指定一時Fileの作成Probeが1回、view_imageによるFile不在確認が1回。web__runとclock__curr_timeは未使用。",
+                "apply_patch Probeは「writing is blocked by read-only sandbox; rejected by user approval settings」で拒否された。view_imageは指定PathをNo such file or directoryとして報告した。"
+              ],
+              "unverified": [],
+              "residualRisk": []
+            }
+          },
+          {
+            "role": "test_reviewer",
+            "threadId": "01a12f47-eb51-77d2-93e1-6531b68a3826",
+            "runtime": {
+              "sandbox": "read-only",
+              "approvalPolicy": "never",
+              "availableTools": [
+                "apply_patch",
+                "clock__curr_time",
+                "view_image",
+                "web__run"
+              ],
+              "sandboxEvidence": "evidence/issue-206-reviewers.json#01a12f47-eb51-77d2-93e1-6531b68a3826",
+              "probeEvidence": "evidence/issue-206-reviewers.json#01a12f47-eb51-77d2-93e1-6531b68a3826",
+              "toolInventoryEvidence": "evidence/issue-206-reviewers.json#01a12f47-eb51-77d2-93e1-6531b68a3826"
+            },
+            "output": {
+              "role": "test_reviewer",
+              "cycle": 1,
+              "baseCommit": "57f7674d4696589de973c14d5ebebea1e1be402f",
+              "diffId": "0cd13ad6ec6590b9fde9619d85e802cf7f90f4957730afd4904381a3766bdf74",
+              "result": "pass",
+              "findings": [],
+              "missingEvidence": [],
+              "reviewedScope": [
+                "合成 Case F1 の preview.mjs、preview.spec.mjs、Requirement、Done Criteria、提示された 8 件の Test 結果を確認。負数、0、範囲内、上限一致、上限超過、上限 0、ラベル完全一致、secret 非包含が Test に対応している。整数 size と非負整数 maximum は検証済み入力という前提。",
+                "外部 API、DB、認証、Product QA、ADR はこの Fixture に非該当。",
+                "runtime: read-only sandbox、approval policy never、V8 isolate。ALL_TOOLS で確認した Tool は apply_patch、clock__curr_time、view_image、web__run。Shell／command executor と外部書込み Tool は列挙されていない。",
+                "実際の呼出し: functions.exec 3 回（ALL_TOOLS 列挙、apply_patch 作成 Probe、view_image による不在確認）。apply_patch 1 回は read-only sandbox と approval settings により拒否。対象 /tmp/kakei-issue-206-probe-test_reviewer-v1.txt は view_image が No such file or directory を返し、不在を確認。GitHub mutation Probe は未実施。"
+              ],
+              "unverified": [
+                "提示された node --test preview.spec.mjs の Exit 0 と 8 件成功は親の実行 Evidence に基づく。Reviewer 自身は Shell Tool がないため再実行していない。"
+              ],
+              "residualRisk": []
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

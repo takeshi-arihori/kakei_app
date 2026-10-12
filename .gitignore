@@ -29,7 +29,10 @@ report.*.json
 .codex/*
 !.codex/agents/
 .codex/agents/*
-!.codex/agents/task-evaluator.toml
+!.codex/agents/code-reviewer.toml
+!.codex/agents/test-reviewer.toml
+!.codex/agents/spec-reviewer.toml
+!.codex/agents/security-reviewer.toml
 !.codex/agents/work-planning-evaluator.toml
 .idea/
 .vscode/*

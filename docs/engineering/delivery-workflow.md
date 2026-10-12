@@ -166,7 +166,7 @@ Project FieldがないRequirement、Done Criteria、Dependencies、Related ADR�
 - TaskがReadyでなければ実装せず、不足条件とReady化手順を示す。
 - 利用者が対象を指定した文書・Skill整理は、その範囲で進める。
 - 採用済み方針を暗黙変更せず、Confirmed／Proposal／Open Questionを区別する。
-- Planningは`work_planning_evaluator`、実装後は`task_evaluator`のread-only独立評価を[Engineering Loop](engineering-loop.md)に従って行う。
+- Planningは`work_planning_evaluator`、実装後は[4専門Review](implementation-review.md)のread-only独立評価を[Engineering Loop](engineering-loop.md)に従って行う。
 
 ## 参照
 

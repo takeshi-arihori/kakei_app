@@ -99,9 +99,9 @@ Ready TaskのDelivery
 Project-local custom agentは`.codex/config.toml`で宣言する。
 
 - `work_planning_evaluator`: 要求・設計・Epic／Task／Dependencies／Ready判定をread-onlyで独立評価
-- `task_evaluator`: 実装後の最新Diff、Test、docs、Requirement整合をread-onlyで独立評価
+- `code_reviewer`／`test_reviewer`／`spec_reviewer`／`security_reviewer`: 実装後の最新対象をそれぞれ独立にread-onlyで評価。共通契約と上限・停止条件は[4専門Review](docs/engineering/implementation-review.md)に従う。
 
-親AgentだけがCode、文書、GitHub状態を変更する。Evaluatorの`fail`は親Agentが修正・再検証し、**新しいEvaluator**で再評価する。`blocked`は阻害要因を解消するまで依存作業を止める。`pass`かつFinding／不足Evidenceなしの場合だけ次のDelivery段階へ進む。
+親AgentだけがCode、文書、GitHub状態を変更する。Planning Evaluatorの`fail`は親Agentが修正し、新しいEvaluatorで再評価する。実装Reviewの`fail`は親AgentがScope内で修正・再検証し、4役すべてを**新しいThread**で再評価する。`blocked`は阻害要因を解消するまで依存作業を止める。PlanningはEvaluatorの`pass`、実装は同じ最新対象の4役すべての`pass`かつFinding／不足Evidenceなしの場合だけ次のDelivery段階へ進む。
 
 ## Git・Pull Request
 
@@ -119,7 +119,7 @@ Root Gateとして次だけを守る。
 - `develop`を統合Branchとし、直接Pushしない。
 - 1 Task／1 Branch／1 PRを基本とする。
 - Commitはレビュー可能な論理単位にする。
-- PR作成前にSelf Reviewと独立`task_evaluator`を完了する。
+- PR作成前にSelf Reviewと4役の独立Reviewを完了する。
 - PR Ready化・Mergeは利用者の明示依頼がある場合だけ行う。
 
 ## 完了条件
@@ -129,7 +129,7 @@ Root Gateとして次だけを守る。
 - 関連docs、Issue、Schema、ADR、Runbook等の更新要否を説明できる。
 - 実行しなかった検証と残Riskを明示する。
 - Self Reviewで重大Findingが残っていない。
-- 最新評価対象に対して独立`task_evaluator`が`pass`している。
+- 同じ最新評価対象に対して4役すべてが`pass`し、実効read-onlyのEvidenceがある。
 
 ## 詳細ルール
 
