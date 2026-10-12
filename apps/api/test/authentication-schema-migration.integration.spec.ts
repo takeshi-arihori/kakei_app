@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -23,7 +24,7 @@ const TEST_DATABASE_URL =
   'postgresql://kakei:kakei_local_password@localhost:5432/kakei_test';
 
 const loadMigration = async (
-  version: 1 | 2 | 3 | 4 | 5,
+  version: 1 | 2 | 3 | 4 | 5 | 6,
 ): Promise<SqlMigration> => {
   const names: Record<typeof version, string> = {
     1: '0001_group_management_storage',
@@ -31,12 +32,13 @@ const loadMigration = async (
     3: '0003_close_intent_registry',
     4: '0004_group_management_retention',
     5: '0005_authentication_schema',
+    6: '0006_authentication_inventory',
   };
   const name = names[version];
-  const directory = version === 5 ? 'authentication' : 'group-management';
+  const directory = version >= 5 ? 'authentication' : 'group-management';
   return {
     version,
-    name: version === 5 ? 'authentication-schema' : name.slice(5),
+    name: version >= 5 ? name.slice(5).replaceAll('_', '-') : name.slice(5),
     sql: await readFile(
       resolve(import.meta.dirname, `../migrations/${directory}/${name}.sql`),
       'utf8',
@@ -44,14 +46,28 @@ const loadMigration = async (
   };
 };
 
-const loadDownMigration = async (): Promise<string> =>
+const loadAuthenticationMigrations = (): Promise<SqlMigration[]> =>
+  Promise.all(([5, 6] as const).map(loadMigration));
+
+const loadDownMigration = async (version: 5 | 6 = 5): Promise<string> =>
   readFile(
     resolve(
       import.meta.dirname,
-      '../migrations/authentication/0005_authentication_schema.down.sql',
+      `../migrations/authentication/${version === 5 ? '0005_authentication_schema' : '0006_authentication_inventory'}.down.sql`,
     ),
     'utf8',
   );
+
+const assertAuthenticationSchemaAbsent = async (
+  client: Client,
+): Promise<void> => {
+  const result = await client.query<{ schema_oid: number | null }>(
+    "SELECT to_regnamespace('authentication')::oid AS schema_oid",
+  );
+  if (result.rows[0]?.schema_oid !== null) {
+    throw new Error('既存の認証SchemaがあるDBでは検証を実行できません');
+  }
+};
 
 const insertActor = async (
   client: Client,
@@ -76,11 +92,10 @@ const insertIdentity = async (
   await client.query(
     `INSERT INTO authentication.google_identity (
       identity_id, actor_id, version, envelope_version, algorithm_id,
-      schema_version, key_version, ciphertext, nonce, authentication_tag,
-      created_at_ms
+      schema_version, key_version, ciphertext, nonce, authentication_tag
     ) VALUES (
       $1, $2, 1, 1, 'AES-256-GCM', 1, 'identity-v1',
-      $3, $4, $5, 1000
+      $3, $4, $5
     )`,
     [identityId, actorId, Buffer.from([1]), Buffer.alloc(12), Buffer.alloc(16)],
   );
@@ -163,9 +178,9 @@ const insertSession = async (
   );
 };
 
-describe('Authentication schema migration', () => {
+describe('認証Schema Migration', () => {
   const client = new Client({ connectionString: TEST_DATABASE_URL });
-  let schemaSequence = 0;
+  let ownsAuthenticationSchema = false;
   let schemaName = '';
 
   beforeAll(async () => {
@@ -174,35 +189,43 @@ describe('Authentication schema migration', () => {
       'SELECT current_database() AS database_name',
     );
     if (!result.rows[0]?.database_name.endsWith('_test')) {
-      throw new Error('Authentication migrations require a *_test database');
+      throw new Error('認証Migrationの検証には末尾が_testのDBが必要です');
     }
+    // 同じ固定Schemaを使う検証を直列化し、存在確認と後処理の間の競合を防ぐ。
+    await client.query('SELECT pg_advisory_lock(1801546597, 1635087464)');
   });
 
   beforeEach(async () => {
-    schemaName = `test_issue_214_${process.pid}_${schemaSequence++}`;
+    await assertAuthenticationSchemaAbsent(client);
+    ownsAuthenticationSchema = true;
+    schemaName = `test_issue_222_${randomUUID().replaceAll('-', '')}`;
     await client.query(`CREATE SCHEMA ${schemaName}`);
     await client.query(`SET search_path TO ${schemaName}`);
   });
 
   afterEach(async () => {
+    if (!ownsAuthenticationSchema) return;
     await client.query('SET search_path TO public');
     await client.query('DROP SCHEMA IF EXISTS authentication CASCADE');
     await client.query(`DROP SCHEMA IF EXISTS ${schemaName} CASCADE`);
+    schemaName = '';
+    ownsAuthenticationSchema = false;
   });
 
   afterAll(async () => {
+    // 接続を閉じると、Suite全体で保持したSession Advisory Lockも解放される。
     await client.end();
   });
 
   it('空DBへ追加専用Schemaを作り、番号付きchecksumで再実行をskipする', async () => {
-    const migration = await loadMigration(5);
-    expect(await applySqlMigrations(client, [migration])).toEqual({
-      appliedVersions: [5],
+    const migrations = await loadAuthenticationMigrations();
+    expect(await applySqlMigrations(client, migrations)).toEqual({
+      appliedVersions: [5, 6],
       skippedVersions: [],
     });
-    expect(await applySqlMigrations(client, [migration])).toEqual({
+    expect(await applySqlMigrations(client, migrations)).toEqual({
       appliedVersions: [],
-      skippedVersions: [5],
+      skippedVersions: [5, 6],
     });
 
     const tables = await client.query<{ table_name: string }>(`
@@ -238,16 +261,17 @@ describe('Authentication schema migration', () => {
         .rowCount,
     ).toBe(0);
 
+    const inventoryMigration = await loadMigration(6);
     await expect(
       applySqlMigrations(client, [
-        { ...migration, sql: `${migration.sql}\nSELECT 1;` },
+        { ...inventoryMigration, sql: `${inventoryMigration.sql}\nSELECT 1;` },
       ]),
     ).rejects.toBeInstanceOf(MigrationChecksumMismatch);
   });
 
-  it('既存Group DBへ適用してGroup行を保ち、GroupへのCascade FKを作らない', async () => {
+  it('version 5の認証・Group行とChecksumを保ち、未承認日時だけを除去する', async () => {
     const existing = await Promise.all(
-      ([1, 2, 3, 4] as const).map(loadMigration),
+      ([1, 2, 3, 4, 5] as const).map(loadMigration),
     );
     await applySqlMigrations(client, existing);
     await client.query(
@@ -264,19 +288,74 @@ describe('Authentication schema migration', () => {
         to_timestamp(1), to_timestamp(1)
       )`,
     );
+    const actorId = '00000000-0000-4000-8000-000000000214';
+    const identityId = '00000000-0000-4000-8000-000000000414';
+    await insertActor(client, actorId);
+    await client.query(
+      `INSERT INTO authentication.google_identity (
+        identity_id, actor_id, version, envelope_version, algorithm_id,
+        schema_version, key_version, ciphertext, nonce, authentication_tag,
+        created_at_ms
+      ) VALUES ($1, $2, 1, 1, 'AES-256-GCM', 1, 'identity-v1', $3, $4, $5, 1000)`,
+      [
+        identityId,
+        actorId,
+        Buffer.from([1, 2, 3]),
+        Buffer.alloc(12),
+        Buffer.alloc(16),
+      ],
+    );
+    await client.query(
+      `INSERT INTO authentication.identity_alias (
+        purpose, digest_key_version, digest, identity_id, created_at_ms
+      ) VALUES ('auth-google-identity/v1', 'search-v1', $1, $2, 1000)`,
+      [Buffer.alloc(32, 7), identityId],
+    );
+    await insertAttempt(client, {
+      attemptId: '00000000-0000-4000-8000-000000000614',
+      digest: Buffer.alloc(32, 1),
+    });
+    await insertSession(client, {
+      sessionId: '00000000-0000-4000-8000-000000001114',
+      actorId,
+      digest: Buffer.alloc(32, 5),
+    });
+    const readPreservedState = async () => ({
+      group: (await client.query('SELECT * FROM group_aggregate_record')).rows,
+      actor: (await client.query('SELECT * FROM authentication.actor')).rows,
+      identity: (
+        await client.query(
+          "SELECT to_jsonb(row) - 'created_at_ms' AS record FROM authentication.google_identity AS row",
+        )
+      ).rows,
+      alias: (
+        await client.query(
+          "SELECT to_jsonb(row) - 'created_at_ms' AS record FROM authentication.identity_alias AS row",
+        )
+      ).rows,
+      attempt: (
+        await client.query('SELECT * FROM authentication.login_attempt')
+      ).rows,
+      session: (
+        await client.query('SELECT * FROM authentication.session_record')
+      ).rows,
+      ledger: (
+        await client.query(
+          'SELECT * FROM app_schema_migrations WHERE version <= 5 ORDER BY version',
+        )
+      ).rows,
+    });
+    const before = await readPreservedState();
 
-    expect(await applySqlMigrations(client, [await loadMigration(5)])).toEqual({
-      appliedVersions: [5],
+    expect(await applySqlMigrations(client, [await loadMigration(6)])).toEqual({
+      appliedVersions: [6],
       skippedVersions: [],
     });
-    const groupRow = await client.query<{ count: string }>(
-      'SELECT count(*)::text AS count FROM group_aggregate_record',
-    );
-    expect(groupRow.rows).toEqual([{ count: '1' }]);
+    expect(await readPreservedState()).toEqual(before);
     const ledger = await client.query<{ versions: string[] }>(
       'SELECT array_agg(version::text ORDER BY version) AS versions FROM app_schema_migrations',
     );
-    expect(ledger.rows[0]?.versions).toEqual(['1', '2', '3', '4', '5']);
+    expect(ledger.rows[0]?.versions).toEqual(['1', '2', '3', '4', '5', '6']);
 
     const externalForeignKeys = await client.query<{
       constraint_name: string;
@@ -295,7 +374,7 @@ describe('Authentication schema migration', () => {
   });
 
   it('Actor・Identity・Aliasの所有、一意性、EnvelopeとDigest制約を守る', async () => {
-    await applySqlMigrations(client, [await loadMigration(5)]);
+    await applySqlMigrations(client, await loadAuthenticationMigrations());
     const actorId = '00000000-0000-4000-8000-000000000214';
     const otherActorId = '00000000-0000-4000-8000-000000000314';
     const identityId = '00000000-0000-4000-8000-000000000414';
@@ -334,8 +413,8 @@ describe('Authentication schema migration', () => {
     }): Promise<unknown> =>
       client.query(
         `INSERT INTO authentication.identity_alias (
-          purpose, digest_key_version, digest, identity_id, created_at_ms
-        ) VALUES ($1, $2, $3, $4, 1000)`,
+          purpose, digest_key_version, digest, identity_id
+        ) VALUES ($1, $2, $3, $4)`,
         [
           input.purpose ?? 'auth-google-identity/v1',
           input.version,
@@ -379,8 +458,127 @@ describe('Authentication schema migration', () => {
     ).rejects.toMatchObject({ code: '23514' });
   });
 
-  it('Attempt／Sessionの状態、TTL、Cookie Digest一意性、Envelope長を守る', async () => {
+  it('IdentityとAliasには承認済みInventoryだけを保存する', async () => {
+    await applySqlMigrations(client, await loadAuthenticationMigrations());
+    const columns = await client.query<{
+      table_name: string;
+      column_name: string;
+    }>(`
+      SELECT table_name, column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'authentication'
+        AND table_name IN ('google_identity', 'identity_alias')
+      ORDER BY table_name, ordinal_position
+    `);
+    expect(
+      columns.rows
+        .filter(({ table_name }) => table_name === 'google_identity')
+        .map(({ column_name }) => column_name),
+    ).toEqual([
+      'identity_id',
+      'actor_id',
+      'version',
+      'envelope_version',
+      'algorithm_id',
+      'schema_version',
+      'key_version',
+      'ciphertext',
+      'nonce',
+      'authentication_tag',
+    ]);
+    expect(
+      columns.rows
+        .filter(({ table_name }) => table_name === 'identity_alias')
+        .map(({ column_name }) => column_name),
+    ).toEqual(['purpose', 'digest_key_version', 'digest', 'identity_id']);
+  });
+
+  it('既存の認証Schemaを検出したら拒否し、保存済み行を保つ', async () => {
+    await applySqlMigrations(client, await loadAuthenticationMigrations());
+    await insertActor(client, '00000000-0000-4000-8000-000000000214');
+    await expect(assertAuthenticationSchemaAbsent(client)).rejects.toThrow(
+      '既存の認証SchemaがあるDBでは検証を実行できません',
+    );
+    expect(
+      (await client.query('SELECT 1 FROM authentication.actor')).rowCount,
+    ).toBe(1);
+  });
+
+  it('同じ認証Schemaを使う別接続はSuiteの排他Lockを取得できない', async () => {
+    const other = new Client({ connectionString: TEST_DATABASE_URL });
+    await other.connect();
+    try {
+      const lock = await other.query<{ acquired: boolean }>(
+        'SELECT pg_try_advisory_lock(1801546597, 1635087464) AS acquired',
+      );
+      expect(lock.rows).toEqual([{ acquired: false }]);
+    } finally {
+      await other.end();
+    }
+  });
+
+  it('列削除後のMigration故障では列と台帳を全てrollbackする', async () => {
     await applySqlMigrations(client, [await loadMigration(5)]);
+    const readColumns = async () =>
+      (
+        await client.query<{ table_name: string; column_name: string }>(`
+          SELECT table_name, column_name
+          FROM information_schema.columns
+          WHERE table_schema = 'authentication'
+            AND table_name IN ('google_identity', 'identity_alias')
+          ORDER BY table_name, ordinal_position
+        `)
+      ).rows;
+    const before = await readColumns();
+    const migration = await loadMigration(6);
+    await expect(
+      applySqlMigrations(client, [
+        { ...migration, sql: `${migration.sql}\nSELECT 1 / 0;` },
+      ]),
+    ).rejects.toMatchObject({ code: '22012' });
+    expect(await readColumns()).toEqual(before);
+    expect(
+      (
+        await client.query(
+          'SELECT version::text FROM app_schema_migrations ORDER BY version',
+        )
+      ).rows,
+    ).toEqual([{ version: '5' }]);
+    expect(await applySqlMigrations(client, [migration])).toEqual({
+      appliedVersions: [6],
+      skippedVersions: [],
+    });
+  });
+
+  it('version 6のDownは空Schemaでも拒否し、台帳とSchemaを保持する', async () => {
+    await applySqlMigrations(client, await loadAuthenticationMigrations());
+    const before = await client.query(
+      'SELECT * FROM app_schema_migrations ORDER BY version',
+    );
+    await expect(client.query(await loadDownMigration(6))).rejects.toThrow(
+      'authentication inventory migration is forward-only',
+    );
+    expect(
+      (
+        await client.query(
+          'SELECT * FROM app_schema_migrations ORDER BY version',
+        )
+      ).rows,
+    ).toEqual(before.rows);
+    expect(
+      (await client.query('SELECT status FROM authentication.key_state')).rows,
+    ).toEqual([{ status: 'uninitialized' }]);
+    expect(
+      (
+        await client.query(
+          "SELECT column_name FROM information_schema.columns WHERE table_schema = 'authentication' AND table_name IN ('google_identity', 'identity_alias') AND column_name = 'created_at_ms'",
+        )
+      ).rows,
+    ).toEqual([]);
+  });
+
+  it('Attempt／Sessionの状態、TTL、Cookie Digest一意性、Envelope長を守る', async () => {
+    await applySqlMigrations(client, await loadAuthenticationMigrations());
     const actorId = '00000000-0000-4000-8000-000000000214';
     await insertActor(client, actorId);
     await insertAttempt(client, {
@@ -449,8 +647,8 @@ describe('Authentication schema migration', () => {
     ).rejects.toMatchObject({ code: '23503' });
   });
 
-  it('固定Audit Enumと一Attempt一成功を強制する', async () => {
-    await applySqlMigrations(client, [await loadMigration(5)]);
+  it('固定Audit Enumと同じ世代のAttempt仮名の成功重複を拒否する', async () => {
+    await applySqlMigrations(client, await loadAuthenticationMigrations());
     const insertSuccess = (eventId: string): Promise<unknown> =>
       client.query(
         `INSERT INTO authentication.audit_event (
@@ -490,6 +688,86 @@ describe('Authentication schema migration', () => {
         )`,
       ),
     ).rejects.toMatchObject({ code: '22P02' });
+  });
+
+  it('版は正、時刻は非負でsafe integer上限までを受け入れる', async () => {
+    await applySqlMigrations(client, await loadAuthenticationMigrations());
+    await insertActor(client, '00000000-0000-4000-8000-000000000214');
+    for (const version of ['0', '-1', '9007199254740992']) {
+      await expect(
+        client.query('UPDATE authentication.actor SET version = $1', [version]),
+      ).rejects.toMatchObject({ code: '23514' });
+    }
+    for (const createdAt of ['-1', '9007199254740992']) {
+      await expect(
+        client.query('UPDATE authentication.actor SET created_at_ms = $1', [
+          createdAt,
+        ]),
+      ).rejects.toMatchObject({ code: '23514' });
+    }
+    await client.query(
+      'UPDATE authentication.actor SET version = 9007199254740991, created_at_ms = 0',
+    );
+    await client.query(
+      'UPDATE authentication.actor SET created_at_ms = 9007199254740991',
+    );
+  });
+
+  it('鍵世代の用途別epoch、一意性とretired状態を強制する', async () => {
+    await applySqlMigrations(client, await loadAuthenticationMigrations());
+    const insertGeneration = (
+      purpose: string,
+      epoch: string | null,
+      retiredAt: number | null = null,
+    ): Promise<unknown> =>
+      client.query(
+        `INSERT INTO authentication.key_generation (
+          generation_id, purpose, key_version, epoch, searchable,
+          write_required, retired_at_ms
+        ) VALUES ($1, $2, 'test-v1', $3, true, true, $4)`,
+        [randomUUID(), purpose, epoch, retiredAt],
+      );
+    const epoch = '00000000-0000-4000-8000-000000000214';
+    await expect(
+      insertGeneration('login-attempt-cookie', null),
+    ).rejects.toMatchObject({ code: '23514' });
+    await expect(
+      insertGeneration('google-identity-search', epoch),
+    ).rejects.toMatchObject({ code: '23514' });
+    await expect(
+      insertGeneration('google-identity-search', null, 1000),
+    ).rejects.toMatchObject({ code: '23514' });
+    await insertGeneration('google-identity-search', null);
+    await expect(
+      insertGeneration('google-identity-search', null),
+    ).rejects.toMatchObject({ code: '23505' });
+    await insertGeneration('login-attempt-cookie', epoch);
+    await client.query(
+      `UPDATE authentication.key_generation
+       SET searchable = false, write_required = false, retired_at_ms = 1000`,
+    );
+  });
+
+  it('初期化済み鍵Stateでは空SchemaでもDownを拒否して状態を保つ', async () => {
+    await applySqlMigrations(client, [await loadMigration(5)]);
+    await client.query(
+      `UPDATE authentication.key_state
+       SET status = 'active', generation_version = 2,
+           epoch = '00000000-0000-4000-8000-000000000214'`,
+    );
+    await expect(client.query(await loadDownMigration())).rejects.toThrow(
+      'authentication schema down migration requires an unused schema',
+    );
+    expect(
+      (await client.query('SELECT status FROM authentication.key_state')).rows,
+    ).toEqual([{ status: 'active' }]);
+    expect(
+      (
+        await client.query(
+          'SELECT 1 FROM app_schema_migrations WHERE version = 5',
+        )
+      ).rowCount,
+    ).toBe(1);
   });
 
   it('初期Key Stateは鍵なしでdown可能、データがあればdownを拒否する', async () => {
