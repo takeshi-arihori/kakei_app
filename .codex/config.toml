@@ -1,9 +1,19 @@
 #:schema https://developers.openai.com/codex/config-schema.json
 
-# 共通値はCodexの既定値を使用する。監査理由: docs/engineering/codex-configuration.md
-# roleの説明・指示・read-only設定は参照先を正本とする。
-[agents.task_evaluator]
-config_file = "agents/task-evaluator.toml"
+# 共通値・ModelはCodexの既定値。実効権限は専用Sessionで検証する。
+# Roleの説明・指示は参照先、共通契約はdocs/engineering/implementation-review.md。
+
+[agents.code_reviewer]
+config_file = "agents/code-reviewer.toml"
+
+[agents.test_reviewer]
+config_file = "agents/test-reviewer.toml"
+
+[agents.spec_reviewer]
+config_file = "agents/spec-reviewer.toml"
+
+[agents.security_reviewer]
+config_file = "agents/security-reviewer.toml"
 
 [agents.work_planning_evaluator]
 config_file = "agents/work-planning-evaluator.toml"

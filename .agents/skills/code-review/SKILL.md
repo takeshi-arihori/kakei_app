@@ -7,7 +7,7 @@ description: 最終DiffをRequirement、Accepted Design、Repository docs、Test
 
 PR前のSelf Reviewとして、対象Taskの最終DiffをRequirement、Accepted Decision、Repository docs、Test結果へ照合する。個人的な好みや変更と無関係な既存Debtを理由にBlockしない。
 
-このSkillは独立`task_evaluator`の代替ではない。Self Reviewで重大Findingを解消した後、`implement-github-task`が独立Evaluatorへ渡す。
+このSkillは4役の独立Reviewの代替ではない。Self Reviewで重大Findingを解消した後、`implement-github-task`が独立Evaluatorへ渡す。
 
 ## 最初に読む
 
@@ -61,4 +61,4 @@ MinorはTask Scope内で安全に修正できる場合は修正対象とし、Sc
 - Blocker／Majorが残っていない。
 - 変更に適用されるRepository docsを確認した。
 - Finding修正後の影響範囲を再検証した。
-- 独立`task_evaluator`へ渡せるEvidenceが揃っている。
+- 4役の独立Reviewへ渡せるEvidenceが揃っている。

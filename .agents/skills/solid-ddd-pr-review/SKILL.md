@@ -62,4 +62,4 @@ description: Code Reviewの専門観点として、Repository docsが定めるDD
 
 ## 責務境界
 
-本Skillは専門Reviewだけを行う。再設計の統括、独立`task_evaluator`、GitHub Delivery、PR Ready化、Mergeは担当しない。総合`code-review`から呼ばれた場合は結果を返す。
+本Skillは専門Reviewだけを行う。再設計の統括、4役の独立Review、GitHub Delivery、PR Ready化、Mergeは担当しない。総合`code-review`から呼ばれた場合は結果を返す。

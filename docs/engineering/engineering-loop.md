@@ -57,13 +57,13 @@ I1 Red Test ──▶ I2 Implementation ──▶ I3 Green / Refactor
                          Finding ──────┘
                                       │ Pass
                                       ▼
-                          I5 Independent Evaluator
+                          I5 Four Independent Reviewers
                              │                │
-                         fail│                │pass
+                         fail│                │全員pass
                              ▼                ▼
                        修正・再検証       I6 Draft PR
                              │
-                             └────▶ 新しいEvaluator
+                             └────▶ 4役すべてを新Threadで再評価
 ```
 
 未決Decisionや正本Conflictが結果を左右する場合は、その判断に依存する経路だけを停止する。依存しない調査・整理・検証は継続する。
@@ -211,41 +211,23 @@ Done Criteriaが残る場合はI1へ戻り、次の最小Caseを進める。
 
 必要な専門観点がある場合だけ専門Skillを呼ぶ。Blocker／Major相当のFindingがあれば、原因に応じてD2、I1、I2、I3へ戻す。
 
-セルフレビューはI5の独立Evaluatorの代替ではない。
+セルフレビューはI5の4役の独立Reviewの代替ではない。
 
-## I5. 独立Subagent Review
+## I5. 4専門Subagent Review
 
-セルフレビューと最終検証後、**毎Cycle新しい`task_evaluator`**を起動する。
+Self Reviewと最終検証後、`implement-github-task`が最新評価対象を固定し、`code_reviewer`、`test_reviewer`、`spec_reviewer`、`security_reviewer`をそれぞれ新しい独立Threadで起動する。
 
-Reviewerへ渡すEvidence:
-- Task URL、Requirement、Done Criteria
-- 基準Commitと評価対象Diffの識別情報
-- 変更File一覧
-- Accepted Decisionと関連docs
-- 実行した検証と結果
-- 未実施検証と理由
-- Self Review結果
-- 既知Risk、例外、残事項
+入力／結果契約、実効read-only、修正上限、停止条件、Evidenceは[4専門Review](implementation-review.md)を正本とする。従来の`task_evaluator`はこの4役で置換し、二重実行しない。D3の`work_planning_evaluator`は維持する。
 
-結果:
+- 全員pass: 同じ最新対象でFinding／不足Evidenceがないことを確認しI6へ進む。
+- fail: 親がFindingを元Evidence付きで統合し、Scope内の最小修正、Test／QA、Self Reviewを行う。4役すべてを新Threadで再実行する。
+- blockedまたは上限到達: 依存Deliveryを停止し、原因・未解決Finding・再現／検証結果・残Riskを報告する。未承認DecisionやScope外要求はPlanningへ戻す。
 
-```text
-pass ───────▶ I6 Draft PR
-
-fail ───────▶ 親Agentが修正
-                 │
-                 ├─ 再検証
-                 ├─ Self Review
-                 └─ 新しいtask_evaluator
-
-blocked ────▶ 依存する作業を停止
-```
-
-Evaluatorはread-onlyとし、修正を行わせない。同じEvaluator Threadへ修正版を再投入せず、独立性を保つため毎Cycle新しいEvaluatorを使用する。
+Reviewerはread-onlyであり、親だけがCode／文書／GitHubを変更する。並列非対応時も4つの別Threadで逐次実行し、他のReviewerの結論を入力へ混ぜない。
 
 ## I6. Draft PR
 
-Evaluatorが`pass`し、Findingと不足Evidenceが残っていない場合だけ、`implement-github-task`がCommit／Push／Draft PR／Issue追跡を完了する。
+4役すべてが同じ最新対象へ`pass`し、Findingと不足Evidenceが残っていない場合だけ、`implement-github-task`がCommit／Push／Draft PR／Issue追跡を完了する。修正後は4役すべてを新Threadで評価した結果を使う。
 
 PR Ready化・Mergeは別の明示依頼として扱う。
 
@@ -258,6 +240,6 @@ Engineering Loopを完了扱いにできるのは次を満たす場合だけで�
 - 関連docsが最終差分と同期している。
 - 未承認Decisionを実装で確定していない。
 - PR前セルフレビューの重大Findingが残っていない。
-- 独立`task_evaluator`が最新評価対象に対して`pass`している。
+- 4役すべてが同じ最新評価対象に対して`pass`している。
 - 未実施検証と残Riskが明示されている。
 - Draft PRがTaskへTraceできる。
