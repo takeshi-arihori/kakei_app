@@ -662,6 +662,50 @@ describe('API architecture dependencies', () => {
     ).toBeNull();
   });
 
+  it.each(['authentication-record-codec.ts', 'authentication-digests.ts'])(
+    '認証暗号Adapter %s はNode標準暗号だけを参照できる',
+    (name) => {
+      const source = fixturePath(
+        `shared/infrastructure/authentication/${name}`,
+      );
+      expect(validateDependency(source, 'node:crypto')).toBeNull();
+      expect(validateDependency(source, 'hono')).not.toBeNull();
+      expect(validateDependency(source, 'google-auth-library')).not.toBeNull();
+    },
+  );
+
+  it.each([
+    'authentication-record-protection.ts',
+    'authentication-crypto-keys.ts',
+    'authentication-digest-ports.ts',
+  ])('認証Application Port %s を暗号実装から分離する', (name) => {
+    const source = fixturePath(`shared/application/authentication/${name}`);
+    expect(validateDependency(source, 'node:crypto')).not.toBeNull();
+    expect(
+      validateDependency(
+        source,
+        '../../infrastructure/authentication/authentication-record-codec.js',
+        fixturePath(
+          'shared/infrastructure/authentication/authentication-record-codec.ts',
+        ),
+      ),
+    ).not.toBeNull();
+  });
+
+  it('認証Production Adapterから合成Providerへの依存を拒否する', () => {
+    expect(
+      validateDependency(
+        fixturePath(
+          'shared/infrastructure/authentication/authentication-record-codec.ts',
+        ),
+        './test/authentication-crypto-fixtures.js',
+        fixturePath(
+          'shared/infrastructure/authentication/test/authentication-crypto-fixtures.ts',
+        ),
+      ),
+    ).not.toBeNull();
+  });
+
   it.each([
     ['shared/application/digest.ts', 'node:crypto'],
     ['shared/application/digest.ts', 'hono'],
