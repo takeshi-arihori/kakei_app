@@ -157,3 +157,11 @@ Restore手順は次の順を必須とする。
 2026-10-11確認の外部根拠: [OWASP Cryptographic Storage](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)の保存最小化・認証付き暗号・鍵分離、[OWASP Key Management](https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html)の用途・Lifecycle・復旧管理、[PostgreSQL 17 Lock](https://www.postgresql.org/docs/17/explicit-locking.html)と[Isolation](https://www.postgresql.org/docs/17/transaction-iso.html)のRow Lock／Transactionを参照した。具体のAAD、鍵Scope、期限、Restore時全Session破棄は本Projectの設計案であり、公式指定ではない。
 
 設計Review: 新しい独立Security Reviewer cycle2と保存前work_planning_evaluatorはいずれもpass、Finding／不足Evidenceなし。Ownerは2026-10-11に詳細設計へ「はい。」と承認した。設計承認・レビューは実DB／Provider実証を代替しない。[ADR承認証跡 #212](https://github.com/takeshi-arihori/kakei_app/issues/212)、[設計Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)を参照する。
+
+## 11. A4a暗号部品の実装Trace
+
+[Task #215](https://github.com/takeshi-arihori/kakei_app/issues/215)はA3 Schema #214と是正 #222のdevelop統合後、個別Ready評価を経て認証専用Port／Codec／HMACを追加する。配置・Payload・Provider境界と検証限界は[認証暗号README](../../apps/api/src/shared/infrastructure/authentication/README.md)へ対応づける。A2の方式・TTL・Inventory・保持・鍵Scopeを変更しない。
+
+Payloadは`payloadVersion: 1`＋全平文Metadataの`row` Copyと、Identityのissuer／subject、Attemptのnonce／csrf、Sessionのcsrf。Cookie DigestのCopyはcanonical unpadded Base64URLの32-byte表現。未知・欠落・duplicate Fieldを拒否し、JSONの数値はsafe integerを検査する。Headerの形式・Scope・Record・版を選択行へ照合し、AADは選択行から毎回再構成する。AAD byte列をCaller指定の保存入力として受け取らない。現在時刻・有効epoch・Actor状態・Alias一意性は後続Storeが判断する。
+
+HMACは8固定用途ごとに独立型／Port／Namespaceを持ち、Provider返却の用途・世代・epoch不一致を拒否する。外部Ledger本文MAC／chain／WitnessはA4cの責務として維持する。合成Providerのnonce burn・並行割当・閾値・後退封鎖・世代更新TestはProvider契約のEvidenceであり、外部Providerの耐障害永続性・本番有効化を証明しない。DB・HTTP・UI・実Googleの接続はA4aの完成に含めない。
