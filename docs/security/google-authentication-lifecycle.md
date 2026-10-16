@@ -1,6 +1,6 @@
 # Google認証内部Lifecycle契約
 
-根拠: [認証Epic #202](https://github.com/takeshi-arihori/kakei_app/issues/202)、[Accepted認証ADR](../adr/google-login-actor-session.md)。対象はAPI内の共有ApplicationとPortだけ。HTTP、Cookie設定、DB実装、暗号実装、Audit／Rate limit Adapter、環境変数、Production wiringは後続Taskである。
+根拠: [認証Epic #202](https://github.com/takeshi-arihori/kakei_app/issues/202)、[Accepted認証ADR](../adr/google-login-actor-session.md)。共有ApplicationとPortを定め、暗号部品#215と[PostgreSQL Store #216](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md)へ接続する。HTTP、Cookie設定、Rate limit、環境変数、具体鍵ProviderとProduction wiringは後続Taskである。
 
 ## 型と境界
 
@@ -10,7 +10,7 @@ Entropy Portは用途`attempt`／`nonce`／`login-csrf`／`session`／`session-c
 
 外部入力はunknownから検証し、Token／CSRF値の暗黙変換をしない。AttemptとSessionの秘密値はTransport内部のCookie setterへ渡すResultにだけ含め、Actor／Google IdentityをClient入力として受け取らない。VerifiedGoogleIdentityは既存Verifierからのみ取得し、その成功Resultを最小のCopyにしてStoreへ渡す。PortのSDK例外・Store例外・Callback例外はcauseやLogを付けず`unavailable`へ変換する。
 
-Storeは以下の原子的責務を持つPortであり、本Taskでそのdurable実装が完成したとは扱わない。ClockをPortへ渡し、Adapterはlock取得後・実際の判断点でClockを再取得する。ApplicationがI/O前に固定した時刻だけで期限を検証してはならない。
+Storeは以下の原子的責務を持つPortである。同一接続・Audit・競合・Outcomeは#216の実DB Testで検証し、具体Providerの本番durabilityは別Gateとする。ClockをPortへ渡し、Adapterはlock取得後・実際の判断点でClockを再取得する。ApplicationがI/O前に固定した時刻だけで期限を検証してはならない。
 
 ## Begin
 
@@ -44,12 +44,18 @@ Logoutは有効形式のSession秘密値だけをStore.revokeへ渡す。Cookie�
 
 begin／withSession／revokeもcompleteと同様に、commit前の確実なrollbackとcommit結果不明／成功後応答喪失を区別する。後者は状態変更済みの可能性がある`unavailable`である。beginの返却不能Attemptは期限で無効化・清掃し、Logoutは同じCookieで安全に再試行する。Test-only StoreではwithSessionのcommit前故障と成功後応答喪失でidle状態と返却値を比較する。実DBでの故障位置・Transaction Outcome検証は保存Adapter TaskへTraceする。
 
+## TransactionScopeの内部契約
+
+#216ではStoreとApplicationのCallback第2引数へ`AuthenticationTransactionScope`を渡し、Tを`AuthenticationSerializedValue`へ制約する。CallbackはScope.serialize(value)でJSON-safeな値を同期Copyし、lease内で確定した本文handleだけを返す。handleはown data propertyのbody:stringだけを持つnull prototypeのfrozen Object。Object identityと発行元Scopeを検証するため、同じ本文でも別Scopeのhandle・偽造Objectを受理しない。Result Union／status、Command／Actor、TTL、Verifier非呼出し規則は維持する。
+
+Scopeはopen（Callback操作受付）→sealed（受付停止・DB lease保持）→closed（Outcome処理後）と進む。Callback直後にsealedとし、未await query・握り潰されたquery／serialization失敗・handle所有を検査してからownerがAuditとcommitを行う。sealedでも正当なhandleを検証できるが、新query／serializeは拒否する。Accessor／toJSON／独自prototype／非JSON型／循環／疎Arrayを成功にしない。後続Transportはcommit後のresult.value.bodyをそのまま送信し、元Dataやhandleを再serializationしない。Applicationへpg型・SQL・接続所有能力を露出しない。
+
 ## 保証と検証範囲
 
 Application Unit TestはTest-onlyの決定的なStore／Entropy／Clock／Verifierを境界として使い、呼出し回数だけでなく状態・返却値を検査する。期待nonce、期限等値・検証中期限跨ぎ、Actor再利用、試行二重消費、Session絶対／idle、inspect非延長、失効対象限定、Callback拒否／例外、障害非漏出、未知入力・Entropy異常をTDDで検証する。
 
-Fake Storeでの成功はSQL原子性・平文禁止・Audit永続化・鍵Rotation・実Browser認証のEvidenceではない。実Adapter Taskでは同じContractを実PostgreSQLの2接続、故障注入、応答喪失、lease対Logout、暗号／Audit障害で検証する。ProductionにTest Store／固定Actorを追加しない。
+Fake Storeでの成功はSQL原子性・平文禁止・Audit永続化・鍵Rotation・実Browser認証のEvidenceではない。#216の実Adapter Testでは同じContractを実PostgreSQLの2接続、故障注入、応答喪失、lease対Logout、暗号／Audit障害で検証する。ProductionにTest Store／固定Actorを追加しない。
 
 ## A2保存設計へのTrace
 
-[認証Data保護保存仕様](authentication-protected-storage.md)と[ADR](../adr/authentication-protected-storage.md)は2026-10-11のOwner会話承認「はい。」と独立Security Review passによりAccepted。Storeの原子的責務を認証専用Envelope・Digest・Key-state／Row Lock・Auditへ写像し、清掃・削除・Restoreを分割する。文書のdevelop統合・個別Task Ready評価・実Adapter検証・Production Gateは残る。Application契約・TTL・commit不明時の保証は本書を維持する。
+[認証Data保護保存仕様](authentication-protected-storage.md)と[ADR](../adr/authentication-protected-storage.md)は2026-10-11のOwner会話承認「はい。」と独立Security Review passによりAccepted。Storeの原子的責務を認証専用Envelope・Digest・Key-state／Row Lock・Auditへ写像し、清掃・削除・Restoreを分割する。Schema・暗号・Storeの検証と、未接続のProduction Gateを区別する。Application契約・TTL・commit不明時の保証は本書を維持する。

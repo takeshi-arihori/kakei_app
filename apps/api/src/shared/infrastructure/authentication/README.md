@@ -53,6 +53,6 @@ DEKはIdentityでActor別、Attempt／SessionでRecord別、kindごとに独立�
 
 `test/authentication-golden-vectors.json`は公開用の既知合成鍵`00..1f`とNonce`00..0b`による固定vector。TLV／JSONはProduction Moduleを読まない独立Python参照計算、AES primitiveはNode標準で生成した。全3kindのAAD／Payload／Ciphertext／Tagを固定する。HMAC vectorもPython標準hmac／hashlibによる参照値。実鍵・Token・PIIではない。
 
-`test/authentication-crypto-fixtures.ts`のRegistryは合成Provider instanceの外に割当を保持する契約Fake。後退／喪失TestはProviderの判定を注入してCodecの拒否・封鎖要求を確認する。Process crash、disk、別Failure domain、実Providerの後退検出・線形化・durability・全世代破棄・Restore耐性を実証していない。具体Provider／IAM／本番Compositionは引き続きProduction Gate。DB保存・Audit・競合は#216、清掃・Restoreは#217、HTTPは#218、Google画面は#219で検証する。
+`test/authentication-crypto-fixtures.ts`のRegistryは合成Provider instanceの外に割当を保持する契約Fake。後退／喪失TestはProviderの判定を注入してCodecの拒否・封鎖要求を確認する。Process crash、disk、別Failure domain、実Providerの後退検出・線形化・durability・全世代破棄・Restore耐性を実証していない。具体Provider／IAM／本番Compositionは引き続きProduction Gate。DB保存・Audit・競合は[#216のStore境界](postgres/README.md)、清掃・Restoreは#217、HTTPは#218、Google画面は#219で検証する。
 
 APIのUnit Testと型検査、依存方向、既存Group／Settlement vectorを含む回帰、root `pnpm check`で検証する。今回DB／HTTP／UI変更がないため、新DB結合／Browser／実Google手動のEvidenceはこの暗号部品の検証として追加しない。

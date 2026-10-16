@@ -6,7 +6,7 @@ Knowledge State: **Accepted（詳細保存設計）**。[A2 ADR](../adr/authenti
 
 - Base: `61ee0f95a6cf564a5dfbbdf15447e10b7e87b20c`。2026-10-11にGitHub developと一致、PR #211 Merged／Task #210 Closedを確認した。
 - Requirement: [Epic #202](https://github.com/takeshi-arihori/kakei_app/issues/202)と[内部Lifecycle契約](google-authentication-lifecycle.md)のR1〜R6をdurable保存へ写像する。方式・5分／7日／24時間・削除24時間・Audit90日・Backup35日の方針は既存ADRの範囲を維持する。
-- 現状: `AuthenticationStore`はbegin／readAttempt／complete／withSession／revokeを持ち、Fake Testは57件。実DB、鍵、暗号、Audit、清掃は未接続。Groupのprotected-recordはGroup-bound、用途別DigestもgroupId必須で、偽Group IDによる流用を禁止する。
+- 実装境界: `AuthenticationStore`のbegin／readAttempt／complete／withSession／revokeをA4b #216のPostgreSQL Adapterへ接続する。暗号部品はA4a #215、清掃・削除・Restoreは#217、具体鍵ProviderはProduction Gate。Groupのprotected-recordはGroup-bound、用途別DigestもgroupId必須で、偽Group IDによる流用を禁止する。
 - Domain要素: ActorはランダムUUIDv4の本人性参照。Identity、Attempt、Sessionは共有技術境界が所有し、Participant／Role／Invitation／精算履歴は保存しない。既存Google Verifierは変更不要。
 - 配置: Portは`shared/application/authentication`、実装は`shared/infrastructure/authentication`。Domain→暗号、Application→pg／crypto、Groupから認証Tableへの直接依存を追加しない。新Package／業務Contextは作らない。
 - Quality: Storeが一意性とTransactionを所有し、Codecが保護形式、Providerが鍵／Nonce、Audit writerが同じTransactionへの追記を所有する。CodecやVerifierにActor登録・Group認可を混ぜない。
@@ -109,11 +109,19 @@ commit前故障は全rollback、Nonce割当だけはburnしたまま。Audit／�
 
 ## 7. Audit
 
+A4bのWriterはactor／attempt／sessionで独立した鍵Materialを使い、同じkey_state公開で3用途のwrite-requiredラベルを揃える。audit_key_versionはこの共通key-setラベル、用途別の列にも実参照世代を保存する。部分公開・不足・不一致はfail closedとする。3用途の更新はkey_state排他Lock下でまとめて公開し、具体Operator／Providerは本Taskへ追加しない。
+
 認証Store内でserver-generated CSPRNG UUIDv4のeventId／requestIdを作る。Client requestIdをAuditの一意性や本人性に使わない。A1 Portに新HTTP入力を追加しない。HTTP側requestIdとの相関が必要な場合はA5で信頼Contextの契約を別設計する。
 
 actionはbegin／read-attempt／complete／inspect／activity／logout／disable／purge、decisionはallow／deny、reasonは固定enum。Actor／Attempt／Sessionは用途別HMAC仮名のみ。存在しない対象は仮名nullとし、入力秘密値を仮名代わりに保存しない。Audit Key versionを記録し90日保持。成功LoginのAttempt仮名は世代更新で重複許可しないよう、Attempt消費CASを正本の一意性fenceとする。
 
 Storeで評価した許可／拒否はAudit insert成功後にだけ返す。拒否のAuditは業務変更なしの同Transactionでcommitする。Audit失敗は汎用unavailable＋固定Code Alert。Application入口の形式不正／Verifier拒否はA1のStore非呼出し契約を維持し、記録が必要なら後続HTTP境界でdurable拒否Auditを行う。LogやAlertからAudit内容・Token・直接IDを漏らさない。requestIdは認証成功の再送Keyではない。
+
+### A4bのScope・検索実装
+
+[Store README](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md)にTransaction所有能力と参加query能力を分離する。共有ApplicationにはScopeと確定本文handleだけを公開し、CallbackのTをAuthenticationSerializedValueへ制約する。openで同期Copy／serializationし、Callback直後にsealedとして操作受付を止めてもDB leaseは保持する。ownerは未完了query・失敗記録・handleのObject identityと所有Scopeを確認してからAudit／COMMITを実行し、Outcome後にclosedとする。同じ本文の別Scope handle、偽造、未await query、握り潰されたSQL／serialization失敗は共通commitしない。後続Transportはcommit後にvalue.bodyをそのまま送信する。
+
+新Cookieの衝突は現行書込世代のUnique制約だけに依存せず、全searchable世代で確認する。既存Identityは全hitを同じIdentity／Actorへ解決し、復号値・hit Aliasを再照合して不足write-required Aliasを同Transactionで補完する。Alias Unique敗者だけを全rollback確認後に最大3Transactionで再照合し、Cookie／Session ID／Audit衝突やcommit結果不明を再試行しない。
 
 ## 8. 清掃・退会・Backup Restore
 

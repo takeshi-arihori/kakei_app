@@ -19,6 +19,10 @@ import {
   type SessionUsage,
 } from './authentication-ports.js';
 import { GoogleAuthenticationService } from './google-authentication-service.js';
+import type {
+  AuthenticationSerializedValue,
+  AuthenticationTransactionScope,
+} from './authentication-transaction-scope.js';
 
 // すべて合成値。実Cookie・Token・個人情報はFixtureへ保存しない。
 const secret = (n: number) => n.toString(16).padStart(42, '0') + 'A';
@@ -38,6 +42,13 @@ type Session = AuthenticatedActor & { idleExpiresAt: number; revoked: boolean };
 
 // Portの契約を観測する決定的な境界Fake。暗号・永続化・実DB排他の証明には使わない。
 class ContractStore implements AuthenticationStore {
+  // ここでは橋渡しだけを観測する。leaseの生存期間と実体の所有検証はAdapter Testの責務。
+  readonly scope = Object.freeze({
+    serialize: (value: unknown) =>
+      Object.freeze({
+        body: JSON.stringify(value),
+      }) as AuthenticationSerializedValue,
+  }) as AuthenticationTransactionScope;
   readonly attempts = new Map<string, Attempt>();
   readonly actors = new Map<string, { subject: string; active: boolean }>();
   readonly sessions = new Map<string, Session>();
@@ -173,21 +184,27 @@ class ContractStore implements AuthenticationStore {
     });
   }
 
-  async withSession<T>(
+  async withSession<T extends AuthenticationSerializedValue>(
     token: string,
     usage: SessionUsage,
     clock: AuthenticationClock,
-    callback: (actor: AuthenticatedActor) => Promise<T>,
+    callback: (
+      actor: AuthenticatedActor,
+      scope: AuthenticationTransactionScope,
+    ) => Promise<T>,
   ): Promise<AuthenticatedActorResult<T>> {
     return this.exclusive(async () => {
       const now = clock.now();
       const s = this.activeSession(token, now);
       if (!s) return { status: 'unauthenticated' };
-      const value = await callback({
-        actorSubject: s.actorSubject,
-        csrf: s.csrf,
-        absoluteExpiresAt: s.absoluteExpiresAt,
-      });
+      const value = await callback(
+        {
+          actorSubject: s.actorSubject,
+          csrf: s.csrf,
+          absoluteExpiresAt: s.absoluteExpiresAt,
+        },
+        this.scope,
+      );
       if (this.failure === 'before')
         throw new Error('synthetic-private-detail');
       if (usage === 'activity')
@@ -310,8 +327,9 @@ describe('Google認証内部Lifecycle', () => {
     const f = fixture();
     const session = await login(f);
     f.time(2_000_000);
-    const callback = vi.fn((actor: AuthenticatedActor) =>
-      Promise.resolve(actor.actorSubject),
+    const callback = vi.fn(
+      (actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+        Promise.resolve(scope.serialize(actor.actorSubject)),
     );
     expect(
       await f.service.withAuthenticatedActor(
@@ -321,7 +339,7 @@ describe('Google認証内部Lifecycle', () => {
       ),
     ).toEqual({
       status: 'authenticated',
-      value: '00000000-0000-4000-8000-000000000001',
+      value: { body: '"00000000-0000-4000-8000-000000000001"' },
     });
     expect(callback.mock.calls[0]?.[0]).toEqual({
       actorSubject: '00000000-0000-4000-8000-000000000001',
@@ -331,6 +349,26 @@ describe('Google認証内部Lifecycle', () => {
     expect(f.store.sessions.get(session.sessionSecret)?.idleExpiresAt).toBe(
       1_000_000 + ttl.idle,
     );
+  });
+
+  it('Storeが発行した同一ScopeをCallbackへ渡して確定本文handleを保持する', async () => {
+    const f = fixture();
+    const session = await login(f);
+    const handle = f.store.scope.serialize({ allowed: true });
+    const callback = vi.fn(
+      (_actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+        Promise.resolve().then(() => {
+          expect(scope).toBe(f.store.scope);
+          return handle;
+        }),
+    );
+    const result = await f.service.withAuthenticatedActor(
+      session.sessionSecret,
+      'inspect',
+      callback,
+    );
+    expect(result.status).toBe('authenticated');
+    if (result.status === 'authenticated') expect(result.value).toBe(handle);
   });
 
   it('現在Sessionを失効し、同じActorの別Sessionを維持する', async () => {
@@ -346,16 +384,18 @@ describe('Google認証内部Lifecycle', () => {
       await f.service.withAuthenticatedActor(
         first.sessionSecret,
         'inspect',
-        () => Promise.resolve('forbidden'),
+        (_actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+          Promise.resolve(scope.serialize('forbidden')),
       ),
     ).toEqual(unauthenticated);
     expect(
       await f.service.withAuthenticatedActor(
         second.sessionSecret,
         'inspect',
-        () => Promise.resolve('ok'),
+        (_actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+          Promise.resolve(scope.serialize('ok')),
       ),
-    ).toEqual({ status: 'authenticated', value: 'ok' });
+    ).toEqual({ status: 'authenticated', value: { body: '"ok"' } });
     expect(await f.service.logoutCurrentSession(first.sessionSecret)).toEqual({
       status: 'logged-out',
     });
@@ -377,7 +417,10 @@ describe('Google認証内部Lifecycle', () => {
       const read = vi.spyOn(f.store, 'readAttempt');
       const guard = vi.spyOn(f.store, 'withSession');
       const revoke = vi.spyOn(f.store, 'revoke');
-      const callback = vi.fn(() => Promise.resolve('forbidden'));
+      const callback = vi.fn(
+        (_actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+          Promise.resolve(scope.serialize('forbidden')),
+      );
       expect(
         await f.service.completeGoogleLogin({
           credential: 'synthetic',
@@ -702,7 +745,10 @@ describe('Google認証内部Lifecycle', () => {
     expect(
       await f.service.completeGoogleLogin({ ...a, credential: 'synthetic' }),
     ).toEqual(restart);
-    const callback = vi.fn(() => Promise.resolve('forbidden'));
+    const callback = vi.fn(
+      (_actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+        Promise.resolve(scope.serialize('forbidden')),
+    );
     expect(
       await f.service.withAuthenticatedActor(
         session.sessionSecret,
@@ -723,7 +769,10 @@ describe('Google認証内部Lifecycle', () => {
       if (!s) throw new Error('Sessionが必要');
       if (expiry === 'absolute') s.idleExpiresAt = s.absoluteExpiresAt + 1;
       f.time(expiry === 'idle' ? s.idleExpiresAt : s.absoluteExpiresAt);
-      const callback = vi.fn(() => Promise.resolve('forbidden'));
+      const callback = vi.fn(
+        (_actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+          Promise.resolve(scope.serialize('forbidden')),
+      );
       expect(
         await f.service.withAuthenticatedActor(
           session.sessionSecret,
@@ -749,9 +798,10 @@ describe('Google認証内部Lifecycle', () => {
         await f.service.withAuthenticatedActor(
           session.sessionSecret,
           'activity',
-          () => Promise.resolve('ok'),
+          (_actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+            Promise.resolve(scope.serialize('ok')),
         ),
-      ).toEqual({ status: 'authenticated', value: 'ok' });
+      ).toEqual({ status: 'authenticated', value: { body: '"ok"' } });
       expect(f.store.sessions.get(session.sessionSecret)?.idleExpiresAt).toBe(
         Math.min(now + ttl.idle, session.absoluteExpiresAt),
       );
@@ -761,7 +811,8 @@ describe('Google認証内部Lifecycle', () => {
       await f.service.withAuthenticatedActor(
         session.sessionSecret,
         'activity',
-        () => Promise.resolve('forbidden'),
+        (_actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+          Promise.resolve(scope.serialize('forbidden')),
       ),
     ).toEqual(unauthenticated);
   });
@@ -820,7 +871,8 @@ describe('Google認証内部Lifecycle', () => {
         await f.service.withAuthenticatedActor(
           session.sessionSecret,
           'activity',
-          () => Promise.resolve('synthetic-private-value'),
+          (_actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+            Promise.resolve(scope.serialize('synthetic-private-value')),
         ),
       ).toEqual(unavailable);
       expect(f.store.sessions.get(session.sessionSecret)?.idleExpiresAt).toBe(
@@ -866,18 +918,24 @@ describe('Google認証内部Lifecycle', () => {
     const guarded = f.service.withAuthenticatedActor(
       session.sessionSecret,
       'activity',
-      async () => {
+      async (_actor, scope) => {
         entered();
         await pending;
-        return 'first';
+        return scope.serialize('first');
       },
     );
     await running;
     const logout = f.service.logoutCurrentSession(session.sessionSecret);
     finish();
-    expect(await guarded).toEqual({ status: 'authenticated', value: 'first' });
+    expect(await guarded).toEqual({
+      status: 'authenticated',
+      value: { body: '"first"' },
+    });
     expect(await logout).toEqual({ status: 'logged-out' });
-    const callback = vi.fn(() => Promise.resolve('forbidden'));
+    const callback = vi.fn(
+      (_actor: AuthenticatedActor, scope: AuthenticationTransactionScope) =>
+        Promise.resolve(scope.serialize('forbidden')),
+    );
     expect(
       await f.service.withAuthenticatedActor(
         session.sessionSecret,
@@ -922,8 +980,10 @@ describe('Google認証内部Lifecycle', () => {
     ).toEqual(unavailable);
     vi.spyOn(f.store, 'withSession').mockResolvedValue(detail);
     expect(
-      await f.service.withAuthenticatedActor(secret(90), 'inspect', () =>
-        Promise.resolve('forbidden'),
+      await f.service.withAuthenticatedActor(
+        secret(90),
+        'inspect',
+        (_actor, scope) => Promise.resolve(scope.serialize('forbidden')),
       ),
     ).toEqual(unavailable);
     vi.spyOn(f.store, 'revoke').mockResolvedValue(detail);

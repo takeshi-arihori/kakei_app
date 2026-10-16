@@ -196,7 +196,11 @@ const validateDependency = (
         : `${relativeToSource(sourcePath)}はGoogle SDKの許可済みAdapterではない`;
     }
     if (source.kind === 'shared-infrastructure') {
-      return specifier === 'node:crypto'
+      return specifier === 'node:crypto' ||
+        (specifier === 'pg' &&
+          relativeToSource(sourcePath).startsWith(
+            'shared/infrastructure/authentication/postgres/',
+          ))
         ? null
         : `shared infrastructure must not depend on unapproved external module ${specifier}`;
     }
@@ -660,6 +664,33 @@ describe('API architecture dependencies', () => {
         'node:crypto',
       ),
     ).toBeNull();
+  });
+
+  it('認証PostgreSQL Adapterだけが共有基盤からpgを参照できる', () => {
+    expect(
+      validateDependency(
+        fixturePath(
+          'shared/infrastructure/authentication/postgres/transaction.ts',
+        ),
+        'pg',
+      ),
+    ).toBeNull();
+    for (const source of [
+      'shared/application/authentication/authentication-transaction-scope.ts',
+      'shared/infrastructure/authentication/authentication-record-codec.ts',
+      'shared/infrastructure/authentication/google-id-token-verifier.ts',
+      'shared/infrastructure/other/postgres/transaction.ts',
+    ]) {
+      expect(validateDependency(fixturePath(source), 'pg')).not.toBeNull();
+    }
+    expect(
+      validateDependency(
+        fixturePath(
+          'shared/infrastructure/authentication/postgres/transaction.ts',
+        ),
+        'pg/lib/client',
+      ),
+    ).not.toBeNull();
   });
 
   it.each(['authentication-record-codec.ts', 'authentication-digests.ts'])(

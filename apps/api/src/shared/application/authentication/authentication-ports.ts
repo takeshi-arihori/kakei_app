@@ -1,4 +1,8 @@
 import type { VerifiedGoogleIdentity } from '../google-id-token-verification.js';
+import type {
+  AuthenticationSerializedValue,
+  AuthenticationTransactionScope,
+} from './authentication-transaction-scope.js';
 
 /** Owner承認済みの試行・Session期限。全Adapterで同じmillisecondsを用いる。 */
 export const authenticationLifetime = Object.freeze({
@@ -145,11 +149,11 @@ export interface Unauthenticated {
 }
 
 /** lease下のCallback結果。障害ではcommit済みの可能性があっても値を返さない。 */
-export type AuthenticatedActorResult<T> =
+export type AuthenticatedActorResult<T extends AuthenticationSerializedValue> =
   | {
       /** Session検証とCallbackのcommit／serializationが完了した。 */
       readonly status: 'authenticated';
-      /** 非公開ApplicationのCallback結果。外部公開はTransportで変換する。 */
+      /** lease内で確定した本文handle。Transportはcommit後にbodyをそのまま送る。 */
       readonly value: T;
     }
   | Unauthenticated
@@ -164,7 +168,8 @@ export type LogoutResult =
   | AuthenticationUnavailable;
 
 /**
- * 原子的な認証保存境界。実Adapterは後続Taskで実DB・故障注入によって証明する。
+ * 原子的な認証保存境界。PostgreSQL Adapterは#216で実DB・故障注入を検証する。
+ * 具体鍵Providerの耐障害性・Production wiringは別Gateで確認する。
  * すべての時刻判定はlock取得後のClockで行う。確実なrollback以外の障害では
  * 状態変更済みの可能性を残してunavailableとし、秘密値やCallback値を返さない。
  */
@@ -206,14 +211,17 @@ export interface AuthenticationStore {
    * @param sessionSecret 照合対象の秘密値。他SessionやRoleを選択させない。
    * @param usage 照会か許可された活動か。inspectは延長しない。
    * @param clock lock取得後の期限判断とidle更新に用いるClock。
-   * @param callback 同Transaction範囲で実行する内部処理。外部副作用のrollbackは保証しない。
-   * @returns Callback結果、本人性なし、または結果不明を含む障害。
+   * @param callback 同TransactionのScopeで本文を確定する内部処理。外部副作用のrollbackは保証しない。
+   * @returns 同Scopeで発行した確定本文、本人性なし、または結果不明を含む障害。
    */
-  withSession<T>(
+  withSession<T extends AuthenticationSerializedValue>(
     sessionSecret: string,
     usage: SessionUsage,
     clock: AuthenticationClock,
-    callback: (actor: AuthenticatedActor) => Promise<T>,
+    callback: (
+      actor: AuthenticatedActor,
+      scope: AuthenticationTransactionScope,
+    ) => Promise<T>,
   ): Promise<AuthenticatedActorResult<T>>;
   /**
    * 同Sessionを排他取得して現在Sessionだけを失効する。先に開始したleaseは先に完了する。

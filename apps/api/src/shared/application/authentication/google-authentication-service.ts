@@ -18,6 +18,10 @@ import {
   type LogoutResult,
   type SessionUsage,
 } from './authentication-ports.js';
+import type {
+  AuthenticationSerializedValue,
+  AuthenticationTransactionScope,
+} from './authentication-transaction-scope.js';
 
 /** BrowserのCookie由来値のみを受ける。Actorや期待nonceをClient指定させない。 */
 export interface BeginGoogleLoginInput {
@@ -86,7 +90,7 @@ export class GoogleAuthenticationService {
 
   /**
    * @param verifier Server期待nonceを照合する既存Google検証Port。
-   * @param store 原子的な認証保存Port。実Adapterは後続Taskで検証する。
+   * @param store 原子的な認証保存Port。#216で実DBの保存・監査・競合を検証し、本番Providerは別Gateとする。
    * @param entropy 用途ごとに独立した秘密値を発行するPort。
    * @param clock Storeの判断点で取得するUTC Clock。
    */
@@ -250,13 +254,16 @@ export class GoogleAuthenticationService {
   /**
    * @param sessionSecret Cookie由来のSession秘密値。不正形式ならStoreもCallbackも呼ばない。
    * @param usage 許可された活動か照会か。照会はidleを延長しない。
-   * @param callback Storeのlease／Transaction下で実行する非公開Application処理。
-   * @returns Callback結果、本人性なし、または結果不明を含む障害。例外causeを返さない。
+   * @param callback Storeのlease下でScopeから本文handleを発行して返す非公開処理。
+   * @returns 同Scopeで確定した本文、本人性なし、または結果不明を含む障害。例外causeを返さない。
    */
-  async withAuthenticatedActor<T>(
+  async withAuthenticatedActor<T extends AuthenticationSerializedValue>(
     sessionSecret: unknown,
     usage: SessionUsage,
-    callback: (actor: AuthenticatedActor) => Promise<T>,
+    callback: (
+      actor: AuthenticatedActor,
+      scope: AuthenticationTransactionScope,
+    ) => Promise<T>,
   ): Promise<AuthenticatedActorResult<T>> {
     if (!isSecret(sessionSecret)) return { status: 'unauthenticated' };
     if (usage !== 'inspect' && usage !== 'activity')
@@ -266,7 +273,7 @@ export class GoogleAuthenticationService {
         sessionSecret,
         usage,
         this.checkedClock,
-        (actor) => {
+        (actor, scope) => {
           const copy = Object.freeze({
             actorSubject: actor.actorSubject,
             absoluteExpiresAt: actor.absoluteExpiresAt,
@@ -279,7 +286,7 @@ export class GoogleAuthenticationService {
             this.checkedClock.now() >= copy.absoluteExpiresAt
           )
             throw new Error('認証本人性の契約違反');
-          return callback(copy);
+          return callback(copy, scope);
         },
       );
       return result.status === 'authenticated'
