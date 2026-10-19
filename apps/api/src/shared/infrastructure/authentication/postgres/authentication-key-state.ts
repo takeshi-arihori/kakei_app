@@ -48,13 +48,15 @@ const known = new Set([
 ]);
 
 /**
- * Lock順の先頭で現行世代を固定し、不足・部分公開・Restore中を拒否する。
- * @param connection Storeが所有するTransaction接続。
+ * Lock順の先頭で世代を固定し、専用入口が許可したState以外と部分公開を拒否する。
+ * @param connection 呼出し元が所有するTransaction接続。
+ * @param statuses 各専用入口で固定した許可State。
  * @returns commitまで共有Lockで守られた世代集合。
  * @throws 不正State、世代不足、またはDB障害。
  */
-export const readAuthenticationKeyState = async (
+const readState = async (
   connection: AuthenticationQueryConnection,
+  statuses: readonly string[],
 ): Promise<AuthenticationStoreKeyState> => {
   const stateResult = await connection.query(
     'SELECT state_id, status, generation_version, epoch FROM authentication.key_state WHERE state_id = 1 FOR SHARE',
@@ -64,7 +66,8 @@ export const readAuthenticationKeyState = async (
   const state = authenticationDatabaseRow(stateResult.rows[0]);
   if (
     state.state_id !== 1 ||
-    (state.status !== 'active' && state.status !== 'rotating')
+    typeof state.status !== 'string' ||
+    !statuses.includes(state.status)
   )
     throw new AuthenticationCryptoUnavailable();
   const epoch = authenticationUuid(state.epoch);
@@ -148,3 +151,35 @@ export const readAuthenticationKeyState = async (
     auditVersion,
   });
 };
+
+/**
+ * 通常認証Writerはactive/rotatingだけを許可する。
+ * @param connection 認証操作が所有するTransaction接続。
+ * @returns commitまで共有Lockで固定した現行世代集合。
+ * @throws 不正State、隔離/復旧中、世代不足、またはDB障害。
+ */
+export const readAuthenticationKeyState = (
+  connection: AuthenticationQueryConnection,
+): Promise<AuthenticationStoreKeyState> =>
+  readState(connection, ['active', 'rotating']);
+
+/**
+ * 清掃は隔離後も再試行できるがRestoreと並行しない。
+ * @param connection 保守操作が所有するTransaction接続。
+ * @returns 通常運転またはquarantinedの共有Lock付き世代。
+ * @throws 未初期化/Restore中、不正State、鍵世代不足。
+ */
+export const readAuthenticationMaintenanceKeyState = (
+  connection: AuthenticationQueryConnection,
+): Promise<AuthenticationStoreKeyState> =>
+  readState(connection, ['active', 'rotating', 'quarantined']);
+
+/**
+ * 外部fenceを検証した復旧専用Adapterだけが使う。
+ * @param connection 復旧処理が所有するTransaction接続。
+ * @returns restoringに限定した共有Lock付き世代。
+ * @throws restoring以外、不正State、鍵世代不足。
+ */
+export const readAuthenticationRestoreKeyState = (
+  connection: AuthenticationQueryConnection,
+): Promise<AuthenticationStoreKeyState> => readState(connection, ['restoring']);

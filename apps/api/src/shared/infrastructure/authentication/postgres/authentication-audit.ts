@@ -4,9 +4,16 @@ import type { AuthenticationDigests } from '../../../application/authentication/
 import type { AuthenticationStoreKeyState } from './authentication-key-state.js';
 import type { AuthenticationQueryConnection } from './authentication-transaction-scopes.js';
 
-/** 本Taskが保存する認証操作。削除・無効化Workflowは後続Taskが所有する。 */
+/** 認証Storeと保守Adapterだけが保存する固定操作。 */
 export type AuthenticationStoreAction =
-  'begin' | 'read-attempt' | 'complete' | 'inspect' | 'activity' | 'logout';
+  | 'begin'
+  | 'read-attempt'
+  | 'complete'
+  | 'inspect'
+  | 'activity'
+  | 'logout'
+  | 'disable'
+  | 'purge';
 /** 外部入力や例外自由文を含まない拒否理由。 */
 export type AuthenticationStoreReason =
   | 'success'
