@@ -780,6 +780,28 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
     expect(await store.readAttempt(command, clock)).toEqual({
       status: 'restart-required',
     });
+    const freshAttempt = {
+      attemptSecret: secret(51),
+      csrf: secret(52),
+      nonce: secret(53),
+    };
+    expect((await store.begin(freshAttempt, clock)).status).toBe('started');
+    const freshRead = await store.readAttempt(freshAttempt, clock);
+    expect(freshRead.status).toBe('ready');
+    if (freshRead.status !== 'ready')
+      throw new Error('復旧後の新規試行が読取り可能であることが必要');
+    expect(freshRead.snapshot.nonce).toEqual(freshAttempt.nonce);
+    expect(publication.epoch).not.toBe(manifest.epoch);
+    expect(
+      authenticationDatabaseRow(
+        (await observer.query('SELECT epoch FROM authentication.login_attempt'))
+          .rows[0],
+      ).epoch,
+    ).toBe(publication.epoch);
+    expect(await count('login_attempt')).toBe(1);
+    expect(await store.readAttempt(command, clock)).toEqual({
+      status: 'restart-required',
+    });
   });
   it.each(['foreign-fence', 'no-completion', 'changed-identity'] as const)(
     '%sではRestore開通CASを許可しない',
