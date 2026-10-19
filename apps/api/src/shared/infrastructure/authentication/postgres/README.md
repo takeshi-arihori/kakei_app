@@ -1,6 +1,6 @@
 # 認証PostgreSQL保存境界
 
-[Task #216](https://github.com/takeshi-arihori/kakei_app/issues/216)と[Accepted A2](../../../../../../../docs/security/authentication-protected-storage.md)に従う認証Storeの5操作・同Transaction Audit・Callback lease。HTTP、業務Repositoryの本番接続、具体鍵Provider、削除／Restoreは含めない。
+[Task #216](https://github.com/takeshi-arihori/kakei_app/issues/216)と[Accepted A2](../../../../../../../docs/security/authentication-protected-storage.md)に従う認証Storeの5操作・同Transaction Audit・Callback lease。HTTP、業務Repositoryの本番接続、具体鍵Providerは含めない。#217の保守Adapterは下記の別能力として提供する。
 
 ## 責務と接続
 
@@ -47,4 +47,12 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 
 `apps/api/test/authentication-store.integration.spec.ts`は末尾_testの実DBにv5＋v6を適用する。既存Suiteと同じadvisory lockで直列化し、Schema不存在を確認し、Suite所有Schemaだけを削除する。異なるbackend PIDとpg_blocking_pidsで同Attempt・同本人・Logout・Actor無効化・Rotation競合を観測する。合成参加TableのPIDとxminで書込み・idle・Auditの同一Transactionを確認する。SQL／鍵／Codec故障、期限等値・Lock待機中期限跨ぎ、再試行上限、世代混在、改竄、Scope逸脱、commit前rollbackと実COMMIT後応答喪失、秘密値非漏出も検証する。
 
-テスト用無効化／Rotation Writerは競合を検証する合成実装であり、本番Workflowではない。具体Providerのdurability・独立Failure domain・IAM・全世代破棄・外部Ledger／Witness・Restore訓練、HTTP／Rate limit／実Google／Browserは別Evidenceが必要。削除／Restoreは#217、HTTPは#218、Google画面は#219にTraceする。
+テスト用無効化／Rotation Writerは競合を検証する合成実装であり、本番Workflowではない。具体Providerのdurability・独立Failure domain・IAM・全世代破棄・外部Ledger／Witness・Restore訓練、HTTP／Rate limit／実Google／Browserは別Evidenceが必要。削除／Restoreは#217の保守Adapter、HTTPは#218、Google画面は#219にTraceする。
+
+## #217 清掃・削除・Restore
+
+`postgres-authentication-cleanup`は共通期限PolicyとActor候補Pageの空Lock解放・次Page走査／Row Lock後LIMITの小Batch／SKIP LOCKED／版付きDELETE／purge Auditを所有する。`postgres-authentication-deletion`はActor排他Lock下のdisabled／全Session revoked／同Intent／Audit共通commit、scope inventory登録後のIdentity／Alias／Session除去、0-rowとIntent CASを所有する。`authentication-deletion-intents`は外部証跡との同operation／仮名／世代／参照照合を共有する。通常Storeのactive／rotating許可は広げず、清掃だけquarantinedも許可し、Restoreはrestoring専用に分離する。
+
+`postgres-authentication-restore`は外部所有fenceの閉鎖確認とkey_state排他Lockを各Transactionへ要求する。初回Manifest版一致と、同runの隔離進行版のDB外durable記録を専用Portへ要求し、未登録版を拒否する。Coordinatorは未完了Actor票の固定snapshot全Page照合をDB削除より先に行い、既知の期限未達は鍵／disable障害に先行して封鎖する。真正な削除証跡から旧Backupの行を再除去し、全Credentialを破棄する。新epoch／全9用途の公開実体に合わせActor MAC／保持Identityの新DEK再Seal／全required Aliasを同Transactionで移行する。所有completionの型付きfingerprintと現DBをactivate時に再照合する。具体外部制御、物理Backupの真正性、Traffic開通自体はPortの責務で、SQL Adapterの成功だけで本番を開けない。
+
+`authentication-maintenance.integration.spec.ts`はPostgreSQL17のSuite所有Schemaで実Lock／CAS／rollback／commit応答喪失、削除20段・Restore18段の故障と旧Backup復旧、35日境界、偽造fence・DB変更・重複Identityを検証する。外部鍵／Ledger／制御はDB巻戻しと独立した合成状態である。[保守仕様](../../../../../../../docs/security/authentication-maintenance.md)と[Runbook](../../../../../../../docs/operations/authentication-retention-restore.md)へTraceし、Schema／Migrationは変更しない。

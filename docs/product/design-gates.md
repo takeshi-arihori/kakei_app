@@ -109,3 +109,7 @@ A2は[正式Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)�
 [Task #200](https://github.com/takeshi-arihori/kakei_app/issues/200)の[Draft編集契約](../domain/receipt-draft-edit-contract.md)は、Uploaderだけが確定前の購入日・宣言合計・Item／Adjustment候補を置換し、同Receipt ID・Uploader・Draftと不変前後履歴を維持する。内容・順序が変わる場合だけ版を進め、全条件を満たす同値操作と閲覧で編集時刻を増やさない。未完成候補を自動確定せず、最新期待版の明示確認と既存Validation・全編集履歴を維持する。実本人性・Group／Category Source、保存CAS／再送／保護保存、Draft30日の期限・削除実行、OCR／画像、公開API／画面／Projection、Confirmed／未割当一般編集・Adjustment構造訂正は後続Gate。Accepted本文・承認履歴・公開Ready状態を変更しない。
 
 2026-10-11 Owner会話承認「はい。」によりA2詳細保存設計をAcceptedへ同期した。独立Security Reviewはpass済み。PR #220のdevelop統合、先行Task mergeと個別Ready評価は引き続き必要で、#214〜#219は一括Readyにしない。PRのReady化／Merge・Production有効化は本承認に含まない。
+
+## A4c認証保守の実装境界
+
+#217は[保守仕様](../security/authentication-maintenance.md)の期限清掃、削除Intent Saga、最新Ledger証跡検証、Restore隔離／全Credential破棄／新epoch／Identity鍵・Alias移行を内部PortとPostgreSQL Adapterで実装する。具体外部Providerの耐久性・独立Failure domain・IAM、物理Backup真正性、Traffic／Writer fence、Scheduler／監視配信は[Runbookの本番Capability](../operations/authentication-retention-restore.md)に残す。HTTP／Rate limit／Origin／CSRF／Cookie／Proxyは#218、Googleログイン画面・実API E2Eは#219の個別Ready評価後に実装する。退会受付・未完了責務・Group過去参照保持のDecisionを変更せず、本番へwireしない。

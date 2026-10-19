@@ -30,7 +30,7 @@ Parserはroot／rowだけのObjectを受理し、escape表記を含むduplicate 
 
 HMAC用途・入力順はA2の固定表どおり。Actor状態MACは本人性・版・state・作成日時・nullable無効化日時を束縛する。Identity DEK破棄後も独立鍵で検証する。秘密値・保存MACは固定32-byteをNode標準の定数時間比較で照合し、形式不正を一致にしない。Timing benchmarkによる定数時間性の実証を主張せず、採用primitiveと呼出し境界を確認する。
 
-Providerは各Namespaceへ独立ランダム256-bit鍵を供給する。同じ鍵にpurpose文字列だけを加えた構成はこの契約を満たさない。`createAuthenticationDigests`には必要用途のPortを注入できるが、省略した用途の呼出しはunavailable。検索可能世代の列挙・Alias再導出と照合・世代移行・SQL一意性は後続Storeが所有する。外部削除Ledgerの本文MAC・chain・Witnessは後続#217で扱う。
+Providerは各Namespaceへ独立ランダム256-bit鍵を供給する。同じ鍵にpurpose文字列だけを加えた構成はこの契約を満たさない。`createAuthenticationDigests`には必要用途のPortを注入できるが、省略した用途の呼出しはunavailable。検索可能世代の列挙・Alias再導出と照合・世代移行・SQL一意性は後続Storeが所有する。外部削除Ledgerの本文MAC・chain・最新attestation検証は#217の`authentication-ledger-evidence.ts`が所有する。具体Checkpoint／Witness Providerは本番Gate。
 
 ## Nonceと障害
 
@@ -53,6 +53,10 @@ DEKはIdentityでActor別、Attempt／SessionでRecord別、kindごとに独立�
 
 `test/authentication-golden-vectors.json`は公開用の既知合成鍵`00..1f`とNonce`00..0b`による固定vector。TLV／JSONはProduction Moduleを読まない独立Python参照計算、AES primitiveはNode標準で生成した。全3kindのAAD／Payload／Ciphertext／Tagを固定する。HMAC vectorもPython標準hmac／hashlibによる参照値。実鍵・Token・PIIではない。
 
-`test/authentication-crypto-fixtures.ts`のRegistryは合成Provider instanceの外に割当を保持する契約Fake。後退／喪失TestはProviderの判定を注入してCodecの拒否・封鎖要求を確認する。Process crash、disk、別Failure domain、実Providerの後退検出・線形化・durability・全世代破棄・Restore耐性を実証していない。具体Provider／IAM／本番Compositionは引き続きProduction Gate。DB保存・Audit・競合は[#216のStore境界](postgres/README.md)、清掃・Restoreは#217、HTTPは#218、Google画面は#219で検証する。
+`test/authentication-crypto-fixtures.ts`のRegistryは合成Provider instanceの外に割当を保持する契約Fake。後退／喪失TestはProviderの判定を注入してCodecの拒否・封鎖要求を確認する。Process crash、disk、別Failure domain、実Providerの後退検出・線形化・durability・全世代破棄・Restore耐性を実証していない。具体Provider／IAM／本番Compositionは引き続きProduction Gate。DB保存・Audit・競合は[#216のStore境界](postgres/README.md)、清掃・Restoreは[保守契約](../../../../../../docs/security/authentication-maintenance.md)と#217の専用Adapter、HTTPは#218、Google画面は#219で検証する。
 
 APIのUnit Testと型検査、依存方向、既存Group／Settlement vectorを含む回帰、root `pnpm check`で検証する。今回DB／HTTP／UI変更がないため、新DB結合／Browser／実Google手動のEvidenceはこの暗号部品の検証として追加しない。
+
+## 認証保守の証跡境界
+
+`authentication-ledger-evidence.ts`は専用256-bit HMAC、application／用途／namespace付きCanonical TLV、SHA256 chain、全page連続性、freshな両latest head／attestation、Prepared→Complete版とManifest hash所属を検証する。検証済みhead／intentは所有registryに登録し、構造だけの証拠を受理しない。retired MAC鍵は検証専用で新規appendを拒否する。全鍵破棄／外部fenceの保証は専用Port提供者が所有し、Test-only合成実装をProductionへimportしない。詳細と未実装本番Capabilityは[保守契約](../../../../../../docs/security/authentication-maintenance.md)と[Runbook](../../../../../../docs/operations/authentication-retention-restore.md)を参照する。

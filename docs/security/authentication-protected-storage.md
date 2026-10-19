@@ -1,6 +1,6 @@
 # 認証Dataの保護保存契約（A2）
 
-Knowledge State: **Accepted（詳細保存設計）**。[A2 ADR](../adr/authentication-protected-storage.md)は2026-10-11のOwner会話承認「はい。」と独立Security Review passを根拠とする。PR #220のdevelop統合・先行Task merge・個別Ready評価までは依存実装に進まない。これは仕様であり、DB／鍵Provider／削除／Restoreが実装済みというEvidenceではない。
+Knowledge State: **Accepted（詳細保存設計）**。[A2 ADR](../adr/authentication-protected-storage.md)は2026-10-11のOwner会話承認「はい。」と独立Security Review passを根拠とする。PR #220のdevelop統合・先行Task merge・個別Ready評価までは依存実装に進まない。この仕様の実装状態は末尾のTraceで区別し、具体鍵Provider・本番運用のEvidenceを別Gateとして扱う。
 
 ## 1. 基準・要求・境界
 
@@ -173,3 +173,7 @@ Restore手順は次の順を必須とする。
 Payloadは`payloadVersion: 1`＋全平文Metadataの`row` Copyと、Identityのissuer／subject、Attemptのnonce／csrf、Sessionのcsrf。Cookie DigestのCopyはcanonical unpadded Base64URLの32-byte表現。未知・欠落・duplicate Fieldを拒否し、JSONの数値はsafe integerを検査する。Headerの形式・Scope・Record・版を選択行へ照合し、AADは選択行から毎回再構成する。AAD byte列をCaller指定の保存入力として受け取らない。現在時刻・有効epoch・Actor状態・Alias一意性は後続Storeが判断する。
 
 HMACは8固定用途ごとに独立型／Port／Namespaceを持ち、Provider返却の用途・世代・epoch不一致を拒否する。外部Ledger本文MAC／chain／WitnessはA4cの責務として維持する。合成Providerのnonce burn・並行割当・閾値・後退封鎖・世代更新TestはProvider契約のEvidenceであり、外部Providerの耐障害永続性・本番有効化を証明しない。DB・HTTP・UI・実Googleの接続はA4aの完成に含めない。
+
+## A4c実装Trace
+
+#217は[認証保守契約](authentication-maintenance.md)に従い、期限Policy、清掃／削除／Restore Coordinator、認証専用Ledger HMAC／chain／opaque証跡検証、PostgreSQLのLock／CAS／原子Audit／隔離移行Adapterを実装する。既存Schema v5／v6とEnvelope／AADを維持する。実PostgreSQL17で競合・Crash Window・旧Backup差戻しを検証するが、外部Providerは合成Portである。具体鍵／Nonce／全世代破棄、独立Ledger／Witness、外部Traffic fence、Backup真正性、Scheduler／監視の実配置は[運用Runbook](../operations/authentication-retention-restore.md)の本番Gateとして残る。HTTP／画面は#218／#219であり、退会受付と本番Compositionを含めない。
