@@ -12,6 +12,14 @@
 
 OpenAPIはGraphQL業務TypeやFieldを再定義しません。業務契約の確認と変更は`apps/api/schema.graphql`を起点にし、`pnpm codegen`で生成型を同期します。
 
+## Backend配置と実装状況
+
+3業務Contextの4層、shared、共通GraphQLと`app.ts`／`main.ts`の責務・実在Path・予定Pathは、[Backend配置ガイド](../engineering/backend.md#context別4層と共通入口の実装状況)を参照します。Context固有Resolver／入出力変換は`src/<context>/presentation/graphql`、SDL読込・生成型・Resolver集約の共通入口は`src/presentation/graphql`に配置します。
+
+現在の公開GraphQL Operationは`Query.apiStatus`のみです。内部Domain／Use Case／Adapterの実装と、公開経路への接続・機能完成を区別します。確認基準CommitとContext別の未実装／未接続、未決Decisionは配置ガイドを参照してください。
+
+Context／Layer／共有基盤の配置・責務やwiring、公開Operationを変更するTaskは、同じ差分で配置ガイドの実装状況・基準Commitと本入口の参照も同期します。公開契約の更新は下記のSDL／Operation catalog更新Ruleに従います。
+
 ## 公開HTTP契約
 
 - `GET /health`: Liveness
