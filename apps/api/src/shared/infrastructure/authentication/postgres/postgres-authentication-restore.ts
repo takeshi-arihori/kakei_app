@@ -463,7 +463,8 @@ export const createPostgresAuthenticationRestore = (
         const state = await readAuthenticationRestoreKeyState(connection);
         const activeActors = new Set<string>();
         for (const stored of actors) {
-          if (!state.actorRead.includes(stored.keyVersion)) return fail();
+          // 旧MACは世代切替前に検証済み。新しい読取集合に旧世代を要求せず、
+          // Lock下で検証した行を現行書込世代へCASして移行する。
           if (stored.row.state === 'active')
             activeActors.add(stored.row.actorId);
           if (stored.keyVersion === state.actorWrite) continue;

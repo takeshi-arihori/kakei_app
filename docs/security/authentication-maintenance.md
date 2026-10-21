@@ -44,6 +44,8 @@ OperatorがTrafficと他の認証／保守Writerを外部fenceで閉じてから
 
 削除再適用は真正なLedger binding下で行い、既にDestroyedのIdentityを復号必須にしない。保持Identityは復号・本人一意性を必須とする。未完了Actor票はProvider所有の固定snapshot cursorで全Pageを先行照合し、1,000件の先頭だけで打ち切らない。集合／版／inventoryの途中変更、別Provider cursor、重複operation、繰返cursor、空の中間Pageは拒否する。真の末尾だけnextCursor=nullとし、全件照合後に不可逆DB変更へ進む。全9用途の鍵Stateを検証し、公開されたLedger MAC書込世代とVerifierの現行世代も一致させる。新headが到着したら最大3回再適用し、収束しなければ隔離する。
 
+保持Actorは世代切替前、同一TransactionのRow Lock下で旧状態MACを検証する。新しい`actorRead`に旧MAC世代が含まれない場合も、検証済みの行を現行`actorWrite`で再MAC化し、版を進めてCASする。新しい読取集合への旧世代所属を再MAC化の前提にしない。旧鍵Materialの読取可否やBackup参照Windowの保持条件はProvider側の既存契約を維持する。旧ActorのMACが不正なら新MACで認証し直さず、世代公開・Actor更新をrollbackし、completionと外部Traffic開通を許可しない。
+
 移行completionは同じDB Adapter所有のfenceに結び付け、同TransactionのActor／Identity／Alias／鍵State／Intent／全Credentialの型付きTLV fingerprintを保持する。activateは所有completion、現在fingerprint、Credential 0-row、Prepared Intentなし、外部publicationの再検証を要求する。Auditは認証判断のfingerprintに含めない。復旧の各SQL操作は外部閉鎖をcommit前にも確認する。初回隔離はManifestのkey-state版と現DB版の完全一致を外部制御で確認し、固定Manifest／runへ進行版をDB外でdurable登録する。再試行の進行済み版はこの登録と公開epochへ照合し、単なる下限一致やrestoring flagだけで許可しない。中断・応答喪失で既発行epoch／Nonce／破棄を戻さず、同runのforward-fixで再検証する。openの応答喪失・開通後の監視失敗でも同runで外部を再閉鎖してverifyClosedし、DB封鎖と両方を確認した場合だけquarantinedを返す。どちらか未確認ならunavailableとする。
 
 ## Done CriteriaとEvidence
@@ -53,6 +55,6 @@ OperatorがTrafficと他の認証／保守Writerを外部fenceで閉じてから
 | C: UTC／24h／90d／35d、SKIPとCAS | retention-policy Unit、実PostgreSQL17の期限等値・活動／消費／Logout／Rotation両順序・oldest overdue |
 | D: 原子無効化と不可逆削除 | 同commit／Audit rollback／全世代破棄、20 Crash Windowと旧Backup差戻し、管理票の欠落・不整合時の隔離と同operation再開、旧Cookie拒否、再登録新Actor |
 | E: strict MAC／chain／最新証跡 | 独立golden vector、不正Namespace／Getter／fork／欠落／改竄／未知・退役MAC鍵／偽造handle、片側Witness障害 |
-| R: 隔離と所有completion | 18 Restore Crash Window、35日±1ms、外部状態を戻さない再試行、偽造fence／completion欠落／DB変更拒否、重複Identity rollback |
+| R: 隔離と所有completion | 18 Restore Crash Window、35日±1ms、外部状態を戻さない再試行、旧Actor MAC世代を含めない新世代への正常移行・改竄旧MAC拒否とrollback、偽造fence／completion欠落／DB変更拒否、重複Identity rollback |
 
 `authentication-maintenance.integration.spec.ts`はPostgreSQL17、末尾_test、Schema不存在、共通advisory lockを要求し、Suite所有Schemaだけを作成・削除する。競合は異なるPIDとpg_blocking_pids、制御barrierで観測する。合成ProviderはDBとは別状態に保持するが、Process／disk耐久性や独立Failure domainの実証ではない。具体の未実装Capabilityと再試行手順は[運用Runbook](../operations/authentication-retention-restore.md)に従う。

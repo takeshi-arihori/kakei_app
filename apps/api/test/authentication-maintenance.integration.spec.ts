@@ -31,7 +31,10 @@ import { createAuthenticationRestoreService } from '../src/shared/application/au
 import { createAuthenticationCleanupService } from '../src/shared/application/authentication/authentication-cleanup-service.js';
 import type { AuthenticationConnectionPool } from '../src/shared/infrastructure/authentication/postgres/authentication-transactions.js';
 import { authenticationDatabaseRow } from '../src/shared/infrastructure/authentication/postgres/authentication-database-values.js';
-import { readStoredAuthenticationIdentity } from '../src/shared/infrastructure/authentication/postgres/authentication-record-rows.js';
+import {
+  readStoredAuthenticationActor,
+  readStoredAuthenticationIdentity,
+} from '../src/shared/infrastructure/authentication/postgres/authentication-record-rows.js';
 
 const secret = (n: number) => Buffer.alloc(32, n).toString('base64url');
 const key = <P extends AuthenticationMacPurpose>(purpose: P, n: number) => ({
@@ -689,119 +692,234 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       state: 'complete',
     });
   });
-  it('隔離Restoreで全Cookie行/鍵を破棄し、Identityを新DEKと現行Aliasへ移行する', async () => {
-    const managed = syntheticAuthenticationManagedKeys();
-    codec = createAuthenticationRecordCodec({ keys: managed.provider });
-    store = createPostgresAuthenticationStore({
-      pool,
-      codec,
-      digests,
-      scopes: createAuthenticationTransactionScopes(),
-    });
-    destruction = managed.keys;
-    cleanup = createPostgresAuthenticationCleanup({
-      pool,
-      codec,
-      digests,
-      keys: destruction,
-      clock,
-    });
-    const control = syntheticAuthenticationRestoreControl(managed, ledger);
-    const restore = createPostgresAuthenticationRestore({
-      pool,
-      codec,
-      digests,
-      keys: destruction,
-      clock,
-      ledger: ledger.evidence,
-      control: control.control,
-    });
-    const command = await begin();
-    expect((await store.complete(command, clock)).status).toBe('authenticated');
-    const original = authenticationDatabaseRow(
-      (
-        await observer.query(
-          'SELECT actor_id,key_version FROM authentication.google_identity',
-        )
-      ).rows[0],
+  it.each(['v1', 'v2'])(
+    '隔離Restoreで全Cookie行/鍵を破棄し、Actor MACを%s、Identityを新DEKと現行Aliasへ移行する',
+    async (actorStateKeyVersion) => {
+      const managed = syntheticAuthenticationManagedKeys();
+      codec = createAuthenticationRecordCodec({ keys: managed.provider });
+      store = createPostgresAuthenticationStore({
+        pool,
+        codec,
+        digests,
+        scopes: createAuthenticationTransactionScopes(),
+      });
+      destruction = managed.keys;
+      cleanup = createPostgresAuthenticationCleanup({
+        pool,
+        codec,
+        digests,
+        keys: destruction,
+        clock,
+      });
+      const control = syntheticAuthenticationRestoreControl(
+        managed,
+        ledger,
+        actorStateKeyVersion,
+      );
+      const restore = createPostgresAuthenticationRestore({
+        pool,
+        codec,
+        digests,
+        keys: destruction,
+        clock,
+        ledger: ledger.evidence,
+        control: control.control,
+      });
+      const command = await begin();
+      expect((await store.complete(command, clock)).status).toBe(
+        'authenticated',
+      );
+      const original = authenticationDatabaseRow(
+        (
+          await observer.query(
+            'SELECT actor_id,key_version FROM authentication.google_identity',
+          )
+        ).rows[0],
+      );
+      const originalActor = readStoredAuthenticationActor(
+        (await observer.query('SELECT * FROM authentication.actor')).rows[0],
+      );
+      const manifest = {
+        createdAt: now,
+        schemaVersion: 6,
+        keyStateVersion: 1,
+        epoch: ids.epoch,
+        checkpoint: { sequence: 0, hash: '0'.repeat(64) },
+      };
+      const runId = randomUUID();
+      const fence = await control.control.close(runId);
+      const version = await restore.isolate(fence, manifest);
+      for (const ticket of await restore.discardCredentials(fence)) {
+        const proof = await destruction.destroy(ticket);
+        expect(await destruction.verify(proof, ticket)).toBe(true);
+      }
+      expect(await count('login_attempt')).toBe(0);
+      expect(await count('session_record')).toBe(0);
+      const publication = await control.control.publishEpoch(fence, ids.epoch);
+      expect(
+        publication.generations
+          .filter((generation) => generation.purpose === 'actor-state-mac')
+          .map((generation) => generation.keyVersion),
+      ).toEqual([actorStateKeyVersion]);
+      const digest = await restore.migrateIdentity(fence, publication);
+      const migratedActor = readStoredAuthenticationActor(
+        (await observer.query('SELECT * FROM authentication.actor')).rows[0],
+      );
+      expect(migratedActor.row.actorId).toBe(originalActor.row.actorId);
+      expect(migratedActor.keyVersion).toBe(actorStateKeyVersion);
+      expect(migratedActor.row.version).toBe(
+        originalActor.row.version +
+          (originalActor.keyVersion === actorStateKeyVersion ? 0 : 1),
+      );
+      expect(
+        await digests.verifyActorState({
+          row: migratedActor.row,
+          keyVersion: actorStateKeyVersion,
+          mac: migratedActor.mac,
+        }),
+      ).toBe(true);
+      const migrated = authenticationDatabaseRow(
+        (
+          await observer.query(
+            'SELECT actor_id,key_version FROM authentication.google_identity',
+          )
+        ).rows[0],
+      );
+      expect(migrated.actor_id).toBe(original.actor_id);
+      expect(migrated.key_version).not.toBe(original.key_version);
+      expect(
+        managed.inventory({
+          recordKind: 'google-identity',
+          keyScopeId: original.actor_id as string,
+        })[0].mode,
+      ).toBe('read-only');
+      expect(await count('identity_alias')).toBe(1);
+      const head = await ledger.evidence.append(
+        await ledger.evidence.latest(),
+        {
+          kind: 'recovery',
+          operationId: runId,
+          epoch: publication.epoch,
+          completedAt: now,
+          evidenceDigest: digest,
+        },
+      );
+      expect(await restore.activate(fence, version, publication.epoch)).toBe(
+        true,
+      );
+      expect(
+        await control.control.open(
+          fence,
+          publication,
+          ledger.evidence.head(head),
+          digest,
+        ),
+      ).toBe(true);
+      expect(await store.readAttempt(command, clock)).toEqual({
+        status: 'restart-required',
+      });
+      const freshAttempt = {
+        attemptSecret: secret(51),
+        csrf: secret(52),
+        nonce: secret(53),
+      };
+      expect((await store.begin(freshAttempt, clock)).status).toBe('started');
+      const freshRead = await store.readAttempt(freshAttempt, clock);
+      expect(freshRead.status).toBe('ready');
+      if (freshRead.status !== 'ready')
+        throw new Error('復旧後の新規試行が読取り可能であることが必要');
+      expect(freshRead.snapshot.nonce).toEqual(freshAttempt.nonce);
+      expect(publication.epoch).not.toBe(manifest.epoch);
+      expect(
+        authenticationDatabaseRow(
+          (
+            await observer.query(
+              'SELECT epoch FROM authentication.login_attempt',
+            )
+          ).rows[0],
+        ).epoch,
+      ).toBe(publication.epoch);
+      expect(await count('login_attempt')).toBe(1);
+      expect(
+        (
+          await store.complete(
+            {
+              ...freshAttempt,
+              snapshot: freshRead.snapshot,
+              identity: command.identity,
+              sessionSecret: secret(54),
+              sessionCsrf: secret(55),
+            },
+            clock,
+          )
+        ).status,
+      ).toBe('authenticated');
+      expect(await count('actor')).toBe(1);
+      expect(await store.readAttempt(command, clock)).toEqual({
+        status: 'restart-required',
+      });
+    },
+  );
+  it('旧Actor MACが改竄されていたら新世代へ再MAC化せずRestoreを閉鎖したまま拒否する', async () => {
+    await login();
+    const control = syntheticAuthenticationRestoreControl(
+      managed,
+      ledger,
+      'v2',
     );
-    const manifest = {
+    const restore = components(pool, control).dbRestore;
+    const fence = await control.control.close(randomUUID());
+    const version = await restore.isolate(fence, {
       createdAt: now,
       schemaVersion: 6,
       keyStateVersion: 1,
       epoch: ids.epoch,
       checkpoint: { sequence: 0, hash: '0'.repeat(64) },
-    };
-    const runId = randomUUID();
-    const fence = await control.control.close(runId);
-    const version = await restore.isolate(fence, manifest);
+    });
     for (const ticket of await restore.discardCredentials(fence)) {
       const proof = await destruction.destroy(ticket);
       expect(await destruction.verify(proof, ticket)).toBe(true);
     }
-    expect(await count('login_attempt')).toBe(0);
-    expect(await count('session_record')).toBe(0);
+    const stored = readStoredAuthenticationActor(
+      (await observer.query('SELECT * FROM authentication.actor')).rows[0],
+    );
+    const tamperedMac = Buffer.from(stored.mac);
+    tamperedMac[0] ^= 1;
+    await observer.query(
+      'UPDATE authentication.actor SET state_mac=$1 WHERE actor_id=$2',
+      [tamperedMac, stored.row.actorId],
+    );
+    const beforeActor = (
+      await observer.query('SELECT * FROM authentication.actor')
+    ).rows;
+    const beforeState = (
+      await observer.query('SELECT * FROM authentication.key_state')
+    ).rows;
+    const beforeGenerations = (
+      await observer.query(
+        'SELECT * FROM authentication.key_generation ORDER BY purpose, key_version',
+      )
+    ).rows;
     const publication = await control.control.publishEpoch(fence, ids.epoch);
-    const digest = await restore.migrateIdentity(fence, publication);
-    const migrated = authenticationDatabaseRow(
+    await expect(restore.migrateIdentity(fence, publication)).rejects.toThrow();
+    expect(
+      (await observer.query('SELECT * FROM authentication.actor')).rows,
+    ).toEqual(beforeActor);
+    expect(
+      (await observer.query('SELECT * FROM authentication.key_state')).rows,
+    ).toEqual(beforeState);
+    expect(
       (
         await observer.query(
-          'SELECT actor_id,key_version FROM authentication.google_identity',
+          'SELECT * FROM authentication.key_generation ORDER BY purpose, key_version',
         )
-      ).rows[0],
-    );
-    expect(migrated.actor_id).toBe(original.actor_id);
-    expect(migrated.key_version).not.toBe(original.key_version);
-    expect(
-      managed.inventory({
-        recordKind: 'google-identity',
-        keyScopeId: original.actor_id as string,
-      })[0].mode,
-    ).toBe('read-only');
-    expect(await count('identity_alias')).toBe(1);
-    const head = await ledger.evidence.append(await ledger.evidence.latest(), {
-      kind: 'recovery',
-      operationId: runId,
-      epoch: publication.epoch,
-      completedAt: now,
-      evidenceDigest: digest,
-    });
+      ).rows,
+    ).toEqual(beforeGenerations);
     expect(await restore.activate(fence, version, publication.epoch)).toBe(
-      true,
+      false,
     );
-    expect(
-      await control.control.open(
-        fence,
-        publication,
-        ledger.evidence.head(head),
-        digest,
-      ),
-    ).toBe(true);
-    expect(await store.readAttempt(command, clock)).toEqual({
-      status: 'restart-required',
-    });
-    const freshAttempt = {
-      attemptSecret: secret(51),
-      csrf: secret(52),
-      nonce: secret(53),
-    };
-    expect((await store.begin(freshAttempt, clock)).status).toBe('started');
-    const freshRead = await store.readAttempt(freshAttempt, clock);
-    expect(freshRead.status).toBe('ready');
-    if (freshRead.status !== 'ready')
-      throw new Error('復旧後の新規試行が読取り可能であることが必要');
-    expect(freshRead.snapshot.nonce).toEqual(freshAttempt.nonce);
-    expect(publication.epoch).not.toBe(manifest.epoch);
-    expect(
-      authenticationDatabaseRow(
-        (await observer.query('SELECT epoch FROM authentication.login_attempt'))
-          .rows[0],
-      ).epoch,
-    ).toBe(publication.epoch);
-    expect(await count('login_attempt')).toBe(1);
-    expect(await store.readAttempt(command, clock)).toEqual({
-      status: 'restart-required',
-    });
+    expect(control.isClosed()).toBe(true);
+    expect(ledger.entries).toHaveLength(0);
   });
   it.each(['foreign-fence', 'no-completion', 'changed-identity'] as const)(
     '%sではRestore開通CASを許可しない',
