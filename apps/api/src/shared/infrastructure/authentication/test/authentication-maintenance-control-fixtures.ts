@@ -25,11 +25,13 @@ const purposes = [
  * 外部所有権とepoch/CASのTest-only制御。実Traffic/IAM/failure domainの証明ではない。
  * @param keys DBと独立して保持する合成全世代Registry。
  * @param ledger MAC/chainを実検証する合成外部Ledger。
+ * @param actorStateKeyVersion 復旧後のActor MAC世代。旧世代を含めない移行も検証する。
  * @returns 同runの所有fence・公開実体・故障注入だけの合成制御。
  */
 export const syntheticAuthenticationRestoreControl = (
   keys: ReturnType<typeof syntheticAuthenticationManagedKeys>,
   ledger: ReturnType<typeof syntheticAuthenticationLedger>,
+  actorStateKeyVersion = 'v1',
 ) => {
   const fence = Object.freeze(
     Object.create(null),
@@ -146,9 +148,11 @@ export const syntheticAuthenticationRestoreControl = (
               keyVersion:
                 purpose === 'deletion-ledger-mac'
                   ? ledger.evidence.writeKeyVersion
-                  : purpose.includes('cookie')
-                    ? 'v2'
-                    : 'v1',
+                  : purpose === 'actor-state-mac'
+                    ? actorStateKeyVersion
+                    : purpose.includes('cookie')
+                      ? 'v2'
+                      : 'v1',
               epoch: purpose.includes('cookie') ? epoch : null,
               searchable: true,
               writeRequired: true,

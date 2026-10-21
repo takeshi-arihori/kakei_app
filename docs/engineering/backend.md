@@ -74,7 +74,7 @@
 | [`src/app.ts`](../../apps/api/src/app.ts) | HonoとYogaを組み、`/health`と`/graphql`のHTTP Adapterを作る。業務Use Case、Repository、認証GuardのCompositionはない。 |
 | [`src/main.ts`](../../apps/api/src/main.ts) | `createApp`をNode HTTP Serverへ渡し、Port・終了Signalを扱う起動入口。具体業務／認証Adapterを生成・注入していない。 |
 
-基準Commitには[PR #228](https://github.com/takeshi-arihori/kakei_app/pull/228)の認証保守Codeが含まれる。ただし[#217](https://github.com/takeshi-arihori/kakei_app/issues/217)は復旧時のActor MAC世代移行に未修正のMajorを残しており、統合だけで完了とはしない。[本番Capability](../operations/authentication-retention-restore.md)も別Gateである。本表は配置を説明し、この不具合修正・本番検証・公開接続を行うものではない。
+基準Commitには[PR #228](https://github.com/takeshi-arihori/kakei_app/pull/228)の認証保守Codeが含まれる。その時点で[#217](https://github.com/takeshi-arihori/kakei_app/issues/217)に残ったActor MAC世代移行のMajorは、2026-10-21の追補で、旧公開読取集合への所属と旧MACを世代切替前に検証し、現行MAC世代へCASするよう修正した。新しい読取集合に旧MAC世代を含めない正常移行と、改竄旧MACおよび旧公開集合の世代外MACの拒否・rollbackを実DBで検証する契約は[保守仕様](../security/authentication-maintenance.md)に従う。過去の未完了記録と修正・評価結果は#217で追跡し、統合だけで完了とは判断しない。[本番Capability](../operations/authentication-retention-restore.md)と公開接続は引き続き別Gateである。
 
 ### PortとResolverの依存例
 
@@ -104,7 +104,7 @@ Architecture Testは、Production TypeScriptの配置分類と静的なImport／
 
 配置・依存の照合では、実在するContext／shared／共通入口が既存Ruleに収まり、Architecture Testにも違反がないため、Code移動・新Layer・境界変更は不要と判断した。一方、従来の「Expense Recording／SettlementのContext Directoryを今後追加する」という説明は既存Domainと不一致だったため、上段のRuleと本表を同期した。共通GraphQLとContext固有Presentationの区別もここで補足した。既存の[#63](https://github.com/takeshi-arihori/kakei_app/issues/63)（再配置）、[#107](https://github.com/takeshi-arihori/kakei_app/issues/107)（全量Review）、[#142](https://github.com/takeshi-arihori/kakei_app/issues/142)（Operation Trace）を再実施しない。
 
-残る公開接続は既存の[#202](https://github.com/takeshi-arihori/kakei_app/issues/202)（認証・Group招待）、[#218](https://github.com/takeshi-arihori/kakei_app/issues/218)（認証HTTP）、[#219](https://github.com/takeshi-arihori/kakei_app/issues/219)（Google画面）、[#92](https://github.com/takeshi-arihori/kakei_app/issues/92)（公開契約）等へTraceする。具体Port・保存契約やProvider／HTTPの未決Decisionは[設計Gate](../product/design-gates.md)に従い、[#12](https://github.com/takeshi-arihori/kakei_app/issues/12)のAPI方式／Runtime比較も採用済みとはしない。#217の既知不具合は同Taskで追跡し、重複Issueや追加Production修正は本Taskで作らない。新しい配置不整合や別の修正候補が見つかった場合は、根拠・既存Taskとの重複・必要Decisionを別Planningで確認する。
+残る公開接続は既存の[#202](https://github.com/takeshi-arihori/kakei_app/issues/202)（認証・Group招待）、[#218](https://github.com/takeshi-arihori/kakei_app/issues/218)（認証HTTP）、[#219](https://github.com/takeshi-arihori/kakei_app/issues/219)（Google画面）、[#92](https://github.com/takeshi-arihori/kakei_app/issues/92)（公開契約）等へTraceする。具体Port・保存契約やProvider／HTTPの未決Decisionは[設計Gate](../product/design-gates.md)に従い、[#12](https://github.com/takeshi-arihori/kakei_app/issues/12)のAPI方式／Runtime比較も採用済みとはしない。#217の復旧MAC移行の旧Findingと修正・検証結果は同Taskで追跡する。配置説明の整備を理由に重複Issueや無関係なProduction修正を増やさない。新しい配置不整合や別の修正候補が見つかった場合は、根拠・既存Taskとの重複・必要Decisionを別Planningで確認する。
 
 Context／Layer／共有基盤の追加・移動・責務変更、Resolver／Use Case／Adapterのwiring、公開Operationの追加・削除を行うTaskは、同じ差分で本節の実在／予定Path、実装状況、確認基準Commit、API入口の参照を同期する。文書統合直前にも最新developと再照合する。公開Operationは[Operation catalog](../api/graphql-contracts.md)も同時更新し、未決事項を実装済みへ昇格させない。
 
