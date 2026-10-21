@@ -74,7 +74,7 @@
 | [`src/app.ts`](../../apps/api/src/app.ts) | HonoとYogaを組み、`/health`と`/graphql`のHTTP Adapterを作る。業務Use Case、Repository、認証GuardのCompositionはない。 |
 | [`src/main.ts`](../../apps/api/src/main.ts) | `createApp`をNode HTTP Serverへ渡し、Port・終了Signalを扱う起動入口。具体業務／認証Adapterを生成・注入していない。 |
 
-基準Commitには[PR #228](https://github.com/takeshi-arihori/kakei_app/pull/228)の認証保守Codeが含まれる。その時点で[#217](https://github.com/takeshi-arihori/kakei_app/issues/217)に残ったActor MAC世代移行のMajorは、2026-10-21の追補で、旧MAC検証後に現行MAC世代へCASするよう修正した。新しい読取集合に旧MAC世代を含めない正常移行と、改竄旧MACの拒否・rollbackを実DBで検証する契約は[保守仕様](../security/authentication-maintenance.md)に従う。過去の未完了記録と修正・評価結果は#217で追跡し、統合だけで完了とは判断しない。[本番Capability](../operations/authentication-retention-restore.md)と公開接続は引き続き別Gateである。
+基準Commitには[PR #228](https://github.com/takeshi-arihori/kakei_app/pull/228)の認証保守Codeが含まれる。その時点で[#217](https://github.com/takeshi-arihori/kakei_app/issues/217)に残ったActor MAC世代移行のMajorは、2026-10-21の追補で、旧公開読取集合への所属と旧MACを世代切替前に検証し、現行MAC世代へCASするよう修正した。新しい読取集合に旧MAC世代を含めない正常移行と、改竄旧MACおよび旧公開集合の世代外MACの拒否・rollbackを実DBで検証する契約は[保守仕様](../security/authentication-maintenance.md)に従う。過去の未完了記録と修正・評価結果は#217で追跡し、統合だけで完了とは判断しない。[本番Capability](../operations/authentication-retention-restore.md)と公開接続は引き続き別Gateである。
 
 ### PortとResolverの依存例
 

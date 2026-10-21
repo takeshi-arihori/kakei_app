@@ -860,67 +860,102 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       });
     },
   );
-  it('旧Actor MACが改竄されていたら新世代へ再MAC化せずRestoreを閉鎖したまま拒否する', async () => {
-    await login();
-    const control = syntheticAuthenticationRestoreControl(
-      managed,
-      ledger,
-      'v2',
-    );
-    const restore = components(pool, control).dbRestore;
-    const fence = await control.control.close(randomUUID());
-    const version = await restore.isolate(fence, {
-      createdAt: now,
-      schemaVersion: 6,
-      keyStateVersion: 1,
-      epoch: ids.epoch,
-      checkpoint: { sequence: 0, hash: '0'.repeat(64) },
-    });
-    for (const ticket of await restore.discardCredentials(fence)) {
-      const proof = await destruction.destroy(ticket);
-      expect(await destruction.verify(proof, ticket)).toBe(true);
-    }
-    const stored = readStoredAuthenticationActor(
-      (await observer.query('SELECT * FROM authentication.actor')).rows[0],
-    );
-    const tamperedMac = Buffer.from(stored.mac);
-    tamperedMac[0] ^= 1;
-    await observer.query(
-      'UPDATE authentication.actor SET state_mac=$1 WHERE actor_id=$2',
-      [tamperedMac, stored.row.actorId],
-    );
-    const beforeActor = (
-      await observer.query('SELECT * FROM authentication.actor')
-    ).rows;
-    const beforeState = (
-      await observer.query('SELECT * FROM authentication.key_state')
-    ).rows;
-    const beforeGenerations = (
-      await observer.query(
-        'SELECT * FROM authentication.key_generation ORDER BY purpose, key_version',
-      )
-    ).rows;
-    const publication = await control.control.publishEpoch(fence, ids.epoch);
-    await expect(restore.migrateIdentity(fence, publication)).rejects.toThrow();
-    expect(
-      (await observer.query('SELECT * FROM authentication.actor')).rows,
-    ).toEqual(beforeActor);
-    expect(
-      (await observer.query('SELECT * FROM authentication.key_state')).rows,
-    ).toEqual(beforeState);
-    expect(
-      (
+  it.each(['MAC改竄', '旧公開世代外'] as const)(
+    '旧Actorが%sなら新世代へ再MAC化せずRestoreを閉鎖したまま拒否する',
+    async (fault) => {
+      await login();
+      const control = syntheticAuthenticationRestoreControl(
+        managed,
+        ledger,
+        'v2',
+      );
+      const restore = components(pool, control).dbRestore;
+      const fence = await control.control.close(randomUUID());
+      const version = await restore.isolate(fence, {
+        createdAt: now,
+        schemaVersion: 6,
+        keyStateVersion: 1,
+        epoch: ids.epoch,
+        checkpoint: { sequence: 0, hash: '0'.repeat(64) },
+      });
+      for (const ticket of await restore.discardCredentials(fence)) {
+        const proof = await destruction.destroy(ticket);
+        expect(await destruction.verify(proof, ticket)).toBe(true);
+      }
+      const stored = readStoredAuthenticationActor(
+        (await observer.query('SELECT * FROM authentication.actor')).rows[0],
+      );
+      if (fault === 'MAC改竄') {
+        const tamperedMac = Buffer.from(stored.mac);
+        tamperedMac[0] ^= 1;
+        await observer.query(
+          'UPDATE authentication.actor SET state_mac=$1 WHERE actor_id=$2',
+          [tamperedMac, stored.row.actorId],
+        );
+      } else {
+        // Providerが読める真正MACでも、旧公開集合に属さなければ信頼しない。
+        const unpublished = await digests.actorState({
+          row: stored.row,
+          keyVersion: 'v2',
+        });
+        expect(
+          await digests.verifyActorState({
+            row: stored.row,
+            keyVersion: unpublished.keyVersion,
+            mac: unpublished.bytes,
+          }),
+        ).toBe(true);
+        expect(
+          (
+            await observer.query(
+              "SELECT key_version FROM authentication.key_generation WHERE purpose='actor-state-mac' AND searchable=true",
+            )
+          ).rows,
+        ).toEqual([{ key_version: 'v1' }]);
+        await observer.query(
+          'UPDATE authentication.actor SET control_key_version=$1,state_mac=$2 WHERE actor_id=$3',
+          [
+            unpublished.keyVersion,
+            Buffer.from(unpublished.bytes),
+            stored.row.actorId,
+          ],
+        );
+      }
+      const beforeActor = (
+        await observer.query('SELECT * FROM authentication.actor')
+      ).rows;
+      const beforeState = (
+        await observer.query('SELECT * FROM authentication.key_state')
+      ).rows;
+      const beforeGenerations = (
         await observer.query(
           'SELECT * FROM authentication.key_generation ORDER BY purpose, key_version',
         )
-      ).rows,
-    ).toEqual(beforeGenerations);
-    expect(await restore.activate(fence, version, publication.epoch)).toBe(
-      false,
-    );
-    expect(control.isClosed()).toBe(true);
-    expect(ledger.entries).toHaveLength(0);
-  });
+      ).rows;
+      const publication = await control.control.publishEpoch(fence, ids.epoch);
+      await expect(
+        restore.migrateIdentity(fence, publication),
+      ).rejects.toThrow();
+      expect(
+        (await observer.query('SELECT * FROM authentication.actor')).rows,
+      ).toEqual(beforeActor);
+      expect(
+        (await observer.query('SELECT * FROM authentication.key_state')).rows,
+      ).toEqual(beforeState);
+      expect(
+        (
+          await observer.query(
+            'SELECT * FROM authentication.key_generation ORDER BY purpose, key_version',
+          )
+        ).rows,
+      ).toEqual(beforeGenerations);
+      expect(await restore.activate(fence, version, publication.epoch)).toBe(
+        false,
+      );
+      expect(control.isClosed()).toBe(true);
+      expect(ledger.entries).toHaveLength(0);
+    },
+  );
   it.each(['foreign-fence', 'no-completion', 'changed-identity'] as const)(
     '%sではRestore開通CASを許可しない',
     async (fault) => {
