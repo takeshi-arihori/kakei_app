@@ -433,12 +433,18 @@ export const createPostgresAuthenticationRestore = (
       if (!(await options.control.verifyPublication(fence, publication)))
         return fail();
       const result = await restoring(fence, async (connection, version) => {
+        const previousState =
+          await readAuthenticationRestoreKeyState(connection);
         const selectedActors = await connection.query(
           'SELECT * FROM authentication.actor ORDER BY actor_id FOR UPDATE',
         );
         const actors = [];
-        for (const value of selectedActors.rows as unknown[])
-          actors.push(await checkActor(value));
+        for (const value of selectedActors.rows as unknown[]) {
+          const stored = await checkActor(value);
+          if (!previousState.actorRead.includes(stored.keyVersion))
+            return fail();
+          actors.push(stored);
+        }
         await credentialsAbsent(connection);
         const epochChanged = await connection.query(
           'UPDATE authentication.key_state SET epoch=$1 WHERE state_id=1 AND generation_version=$2 AND status=$3',
@@ -463,7 +469,8 @@ export const createPostgresAuthenticationRestore = (
         const state = await readAuthenticationRestoreKeyState(connection);
         const activeActors = new Set<string>();
         for (const stored of actors) {
-          if (!state.actorRead.includes(stored.keyVersion)) return fail();
+          // 旧公開集合への所属とMACは世代切替前に検証済み。新集合に旧世代を要求せず、
+          // Lock下で検証した行を現行書込世代へCASして移行する。
           if (stored.row.state === 'active')
             activeActors.add(stored.row.actorId);
           if (stored.keyVersion === state.actorWrite) continue;
