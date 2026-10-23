@@ -24,6 +24,8 @@ type ModuleRole =
   | Readonly<{ kind: 'shared-application' }>
   | Readonly<{ kind: 'shared-infrastructure' }>
   | Readonly<{ kind: 'shared-presentation'; generated: boolean }>
+  | Readonly<{ kind: 'authentication-http' }>
+  | Readonly<{ kind: 'development-composition' }>
   | Readonly<{ kind: 'composition' }>
   | Readonly<{ kind: 'test' }>
   | Readonly<{ kind: 'unknown' }>;
@@ -54,6 +56,9 @@ const classifyModule = (path: string): ModuleRole => {
     return { kind: 'test' };
   }
 
+  if (relativePath.startsWith('../dev/'))
+    return { kind: 'development-composition' };
+
   if (relativePath === 'app.ts' || relativePath === 'main.ts') {
     return { kind: 'composition' };
   }
@@ -75,6 +80,10 @@ const classifyModule = (path: string): ModuleRole => {
       kind: 'shared-presentation',
       generated: relativePath.startsWith('presentation/graphql/generated/'),
     };
+  }
+
+  if (relativePath.startsWith('presentation/http/authentication/')) {
+    return { kind: 'authentication-http' };
   }
 
   const [context, layer] = relativePath.split('/');
@@ -197,6 +206,9 @@ const validateDependency = (
     }
     if (source.kind === 'shared-infrastructure') {
       return specifier === 'node:crypto' ||
+        (specifier === 'node:net' &&
+          relativeToSource(sourcePath) ===
+            'shared/infrastructure/authentication/postgres/postgres-authentication-http-rate.ts') ||
         (specifier === 'pg' &&
           relativeToSource(sourcePath).startsWith(
             'shared/infrastructure/authentication/postgres/',
@@ -204,6 +216,8 @@ const validateDependency = (
         ? null
         : `shared infrastructure must not depend on unapproved external module ${specifier}`;
     }
+    if (source.kind === 'authentication-http')
+      return 'authentication HTTP must use application ports only';
     if (
       source.kind === 'shared-domain' ||
       source.kind === 'shared-application' ||
@@ -226,6 +240,12 @@ const validateDependency = (
   if (target.kind === 'unknown') {
     return `${relativeToSource(sourcePath)} depends on unclassified module ${relativeToSource(resolvedPath)}`;
   }
+  if (
+    target.kind === 'development-composition' &&
+    source.kind !== 'development-composition'
+  )
+    return 'production must not depend on development composition';
+  if (source.kind === 'development-composition') return null;
   if (source.kind === 'composition') {
     return null;
   }
@@ -250,6 +270,16 @@ const validateDependency = (
       (target.kind === 'context' && target.layer === 'presentation')
       ? null
       : 'shared GraphQL composition may depend only on shared or context presentation';
+  }
+
+  if (source.kind === 'authentication-http') {
+    return target.kind === 'authentication-http' ||
+      (target.kind === 'shared-application' &&
+        relativeToSource(resolvedPath).startsWith(
+          'shared/application/authentication/',
+        ))
+      ? null
+      : 'authentication HTTP must use its presentation or authentication application ports';
   }
 
   if (target.kind === 'context' && target.context !== source.context) {
@@ -312,7 +342,10 @@ const loadCompilerOptions = (): ts.CompilerOptions => {
 
 const findArchitectureViolations = (): string[] => {
   const compilerOptions = loadCompilerOptions();
-  const productionFiles = listTypeScriptFiles(sourceRoot).filter(
+  const productionFiles = [
+    ...listTypeScriptFiles(sourceRoot),
+    ...listTypeScriptFiles(resolve(sourceRoot, '../dev')),
+  ].filter(
     (path) =>
       !isTestModulePath(relativeToSource(path)) &&
       !normalize(path).includes('/presentation/graphql/generated/'),
@@ -763,6 +796,83 @@ describe('API architecture dependencies', () => {
         fixturePath('group-management/application/a.ts'),
         reference?.specifier ?? '',
         fixturePath('shared/infrastructure/protected-record/index.ts'),
+      ),
+    ).not.toBeNull();
+  });
+  it('認証HTTPだけが認証Applicationへ依存でき、Infrastructure/業務へは逆流しない', () => {
+    const http = fixturePath(
+      'presentation/http/authentication/authentication-http.ts',
+    );
+    expect(
+      validateDependency(
+        http,
+        './local.js',
+        fixturePath(
+          'shared/application/authentication/authentication-http-ports.ts',
+        ),
+      ),
+    ).toBeNull();
+    for (const target of [
+      'shared/infrastructure/authentication/authentication-http-security.ts',
+      'group-management/application/group-command-service.ts',
+      'shared/application/purpose-separated-digest.ts',
+    ])
+      expect(
+        validateDependency(http, './local.js', fixturePath(target)),
+      ).not.toBeNull();
+    expect(validateDependency(http, 'node:crypto')).not.toBeNull();
+    expect(
+      validateDependency(
+        fixturePath('presentation/graphql/resolvers.ts'),
+        './local.js',
+        http,
+      ),
+    ).not.toBeNull();
+  });
+  it('開発入口は実Adapterを組めるがProductionとTest-only Providerの境界を守る', () => {
+    const dev = fixturePath('../dev/authentication-development-runtime.ts');
+    expect(
+      validateDependency(
+        dev,
+        './local.js',
+        fixturePath(
+          'shared/infrastructure/authentication/postgres/postgres-authentication-store.ts',
+        ),
+      ),
+    ).toBeNull();
+    expect(
+      validateDependency(
+        dev,
+        './local.js',
+        fixturePath(
+          'shared/infrastructure/authentication/test/authentication-crypto-fixtures.ts',
+        ),
+      ),
+    ).not.toBeNull();
+    for (const source of [
+      'app.ts',
+      'main.ts',
+      'shared/infrastructure/authentication/authentication-record-codec.ts',
+    ])
+      expect(
+        validateDependency(fixturePath(source), '../dev/local.js', dev),
+      ).not.toBeNull();
+  });
+  it('IPの標準解析はHTTP共有Rate Adapterの正確なPathだけで許可する', () => {
+    expect(
+      validateDependency(
+        fixturePath(
+          'shared/infrastructure/authentication/postgres/postgres-authentication-http-rate.ts',
+        ),
+        'node:net',
+      ),
+    ).toBeNull();
+    expect(
+      validateDependency(
+        fixturePath(
+          'shared/infrastructure/authentication/authentication-record-codec.ts',
+        ),
+        'node:net',
       ),
     ).not.toBeNull();
   });

@@ -177,3 +177,9 @@ HMACは8固定用途ごとに独立型／Port／Namespaceを持ち、Provider返
 ## A4c実装Trace
 
 #217は[認証保守契約](authentication-maintenance.md)に従い、期限Policy、清掃／削除／Restore Coordinator、認証専用Ledger HMAC／chain／opaque証跡検証、PostgreSQLのLock／CAS／原子Audit／隔離移行Adapterを実装する。既存Schema v5／v6とEnvelope／AADを維持する。実PostgreSQL17で競合・Crash Window・旧Backup差戻しを検証するが、外部Providerは合成Portである。具体鍵／Nonce／全世代破棄、独立Ledger／Witness、外部Traffic fence、Backup真正性、Scheduler／監視の実配置は[運用Runbook](../operations/authentication-retention-restore.md)の本番Gateとして残る。HTTP／画面は#218／#219であり、退会受付と本番Compositionを含めない。
+
+## A5 HTTP予算とのInventory境界
+
+[HTTP契約](authentication-http-boundary.md)により、独立Schema `authentication_http`へ共有Rateの単一Policyと期限付きcounterを追加する。A2の認証Record/Envelope/AAD/既存MAC用途/保持を変更せず、Rate専用HMAC `auth-http-rate-subject/v1`と独立した256-bit鍵を使う。Raw IPは保存せず、用途・Namespace・Windowに束縛した32-byte仮名を24h以内に除去する。鍵照合値とPolicy Metadata以外の自由文・識別子は追加しない。列・制約・IndexとForward-onlyは[Migration Inventory](../../apps/api/migrations/authentication/README.md#version-7-http専用の共有rate予算)を参照する。
+
+Ownerが承認した[localhost使い捨て例外](../adr/authentication-http-and-development-boundary.md)では、開発鍵はprocess終了で失われ、既存の認証Data/Metadataがあれば再起動を拒否する。永続Providerのdurabilityを実装済みとしない。[専用Runbook](../operations/authentication-local-development.md)の明示resetだけが再開手順であり、本番や既存開発Dataへの例外拡張はない。

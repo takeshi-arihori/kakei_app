@@ -36,7 +36,7 @@
 
 ## Context別4層と共通入口の実装状況
 
-確認基準はdevelop [`c12ea1ef031e51de3ff2cec8793579212eb2ce6e`](https://github.com/takeshi-arihori/kakei_app/commit/c12ea1ef031e51de3ff2cec8793579212eb2ce6e)（2026-10-19確認、以下の全表に適用）。Pathは特記しない限り`apps/api/`からの相対Pathである。これは配置と内部実装の確認であり、各機能の完了判定ではない。
+確認基準はdevelop [`bc7ab5b9c4a3b794e255f8ce05dcd5f42135de1c`](https://github.com/takeshi-arihori/kakei_app/commit/bc7ab5b9c4a3b794e255f8ce05dcd5f42135de1c)を基点とする[#218](https://github.com/takeshi-arihori/kakei_app/issues/218)の認証HTTP・共有Rate・専用開発Composition追加後の差分（2026-10-23確認、以下の全表に適用）。2026-10-19の配置整理時はdevelop `c12ea1ef031e51de3ff2cec8793579212eb2ce6e`を確認したが、#218の追加を含む現在の実装状況とは区別する。Pathは特記しない限り`apps/api/`からの相対Pathである。これは配置と内部実装の確認であり、各機能の完了判定ではない。
 
 4層は責務と依存方向を表す。4つのDirectoryが揃っていることや、Domain／Adapterが存在することを公開Use Caseの完成条件にしない。次の「実装済み」は記載した内部部品の存在を指す。「未実装」のPathは設計上の予定であり、現時点では存在しない。利用開始前に空Directoryを作らない。
 
@@ -66,15 +66,17 @@
 | 実在Path・主要Code | 責務と現在の接続状況 |
 | --- | --- |
 | [`src/shared/domain/money.ts`](../../apps/api/src/shared/domain/money.ts) | 複数Contextで使うJPY金額のValue Object。業務Context固有のRuleを集める場所ではない。 |
-| [`src/shared/application/`](../../apps/api/src/shared/application)、[`authentication/google-authentication-service.ts`](../../apps/api/src/shared/application/authentication/google-authentication-service.ts)、[`authentication/authentication-ports.ts`](../../apps/api/src/shared/application/authentication/authentication-ports.ts) | 用途別Digest・Google検証契約、ログイン試行／Actor／Sessionの内部技術Use CaseとPort。HTTP／Cookie・Group Roleとは分離し、公開経路へ未接続。 |
+| [`src/shared/application/`](../../apps/api/src/shared/application)、[`authentication/google-authentication-service.ts`](../../apps/api/src/shared/application/authentication/google-authentication-service.ts)、[`authentication/authentication-ports.ts`](../../apps/api/src/shared/application/authentication/authentication-ports.ts) | 用途別Digest・Google検証契約、ログイン試行／Actor／Sessionの内部技術Use CaseとPort。HTTP／Cookie・Group Roleとは分離する。#218の認証HTTP Adapterから呼ばれ、専用開発入口だけが実Storeへ接続する。通常mainの本番接続は未有効。 |
 | [`src/shared/application/authentication/`](../../apps/api/src/shared/application/authentication)の[`authentication-retention-policy.ts`](../../apps/api/src/shared/application/authentication/authentication-retention-policy.ts)、[`authentication-cleanup-service.ts`](../../apps/api/src/shared/application/authentication/authentication-cleanup-service.ts)、[`authentication-deletion-service.ts`](../../apps/api/src/shared/application/authentication/authentication-deletion-service.ts)、[`authentication-restore-service.ts`](../../apps/api/src/shared/application/authentication/authentication-restore-service.ts) | 認証の期限Policy・清掃・削除再開・Restore Coordinatorと証跡Port。Schedulerや退会受付を実装済みとしない。 |
 | [`src/shared/infrastructure/protected-record/`](../../apps/api/src/shared/infrastructure/protected-record)、[`authentication/google-id-token-verifier.ts`](../../apps/api/src/shared/infrastructure/authentication/google-id-token-verifier.ts)、[`authentication/`](../../apps/api/src/shared/infrastructure/authentication) | 保存用暗号Wrapper、Google公式SDK Adapter、認証専用Codec／Digest／Ledger検証。業務Modelや認可、具体Cloud Providerの所有先ではない。 |
-| [`src/shared/infrastructure/authentication/postgres/`](../../apps/api/src/shared/infrastructure/authentication/postgres)、[`postgres-authentication-store.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-store.ts)、[`postgres-authentication-cleanup.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-cleanup.ts)、[`postgres-authentication-deletion.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-deletion.ts)、[`postgres-authentication-restore.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-restore.ts) | 認証Store・同Transaction Audit・Scope lease、および保守用のLock／CAS／隔離移行Adapter。内部実装が存在する段階で、公開HTTP・本番Providerへ未接続。[Store README](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md)を参照。 |
+| [`src/shared/infrastructure/authentication/postgres/`](../../apps/api/src/shared/infrastructure/authentication/postgres)、[`postgres-authentication-store.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-store.ts)、[`postgres-authentication-cleanup.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-cleanup.ts)、[`postgres-authentication-deletion.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-deletion.ts)、[`postgres-authentication-restore.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-restore.ts) | 認証Store・同Transaction Audit・Scope lease、および保守用のLock／CAS／隔離移行Adapter。#218の専用開発Compositionが認証Storeを接続する。本番Providerは未接続。[Store README](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md)を参照。 |
 | [`src/presentation/graphql/schema.ts`](../../apps/api/src/presentation/graphql/schema.ts)、[`generated/resolvers.ts`](../../apps/api/src/presentation/graphql/generated/resolvers.ts)、[`resolvers.ts`](../../apps/api/src/presentation/graphql/resolvers.ts) | SDL読込・Schema組立、生成型、Transport全体のResolver集約の入口。現行Resolverは`Query.apiStatus`のみで、Context Resolverの集約は今後の接続時に行う。 |
-| [`src/app.ts`](../../apps/api/src/app.ts) | HonoとYogaを組み、`/health`と`/graphql`のHTTP Adapterを作る。業務Use Case、Repository、認証GuardのCompositionはない。 |
+| [`src/app.ts`](../../apps/api/src/app.ts) | HonoとYogaを組み、`/health`と`/graphql`を提供する。4認証HTTP経路は注入能力へ委譲し、不在なら503で封鎖する。業務Use Case/Repositoryは組み立てない。 |
 | [`src/main.ts`](../../apps/api/src/main.ts) | `createApp`をNode HTTP Serverへ渡し、Port・終了Signalを扱う起動入口。具体業務／認証Adapterを生成・注入していない。 |
+| [`src/presentation/http/authentication/`](../../apps/api/src/presentation/http/authentication) | #218の共有認証HTTP境界。Origin/JSON/Cookie/公開Errorを所有し、認証Application/HTTP Portだけを使う。GraphQLへ認証Mutationを追加しない。 |
+| [`dev/`](../../apps/api/dev)、[`authentication-development-runtime.ts`](../../apps/api/dev/authentication-development-runtime.ts) | localhost限定の使い捨て開発Composition。実SDK/pg Store/共有Rateを組み、専用DB・単一process lease・非空拒否を適用する。Production build/通常mainから除外する。 |
 
-基準Commitには[PR #228](https://github.com/takeshi-arihori/kakei_app/pull/228)の認証保守Codeが含まれる。その時点で[#217](https://github.com/takeshi-arihori/kakei_app/issues/217)に残ったActor MAC世代移行のMajorは、2026-10-21の追補で、旧公開読取集合への所属と旧MACを世代切替前に検証し、現行MAC世代へCASするよう修正した。新しい読取集合に旧MAC世代を含めない正常移行と、改竄旧MACおよび旧公開集合の世代外MACの拒否・rollbackを実DBで検証する契約は[保守仕様](../security/authentication-maintenance.md)に従う。過去の未完了記録と修正・評価結果は#217で追跡し、統合だけで完了とは判断しない。[本番Capability](../operations/authentication-retention-restore.md)と公開接続は引き続き別Gateである。
+2026-10-19の旧基準Commitには[PR #228](https://github.com/takeshi-arihori/kakei_app/pull/228)の認証保守Codeが含まれる。その時点で[#217](https://github.com/takeshi-arihori/kakei_app/issues/217)に残ったActor MAC世代移行のMajorは、2026-10-21の追補で、旧公開読取集合への所属と旧MACを世代切替前に検証し、現行MAC世代へCASするよう修正した。新しい読取集合に旧MAC世代を含めない正常移行と、改竄旧MACおよび旧公開集合の世代外MACの拒否・rollbackを実DBで検証する契約は[保守仕様](../security/authentication-maintenance.md)に従う。修正は[PR #230](https://github.com/takeshi-arihori/kakei_app/pull/230)で統合済みであり、過去の未完了記録と修正・評価結果は#217で追跡する。[本番Capability](../operations/authentication-retention-restore.md)と本番公開接続は引き続き別Gateである。
 
 ### PortとResolverの依存例
 
@@ -92,19 +94,21 @@ Context固有Resolverを追加するときの配置例は`src/group-management/p
 | Context Infrastructure | 同Context Infrastructure／Application／Domain、shared Application／Infrastructure |
 | shared Domain / Application / Infrastructure | Domainはshared Domainのみ、Applicationはshared Applicationのみ、Infrastructureはshared Application／Infrastructureのみ |
 | 共通GraphQL | 共通GraphQL、各Context Presentation。Context Application／Domain／Infrastructureを直接参照しない |
-| `app.ts` / `main.ts` | 分類済みのProduction Moduleを組み立てる入口。ProductionからTestへの参照禁止は適用される |
+| 認証HTTP | 同じ認証HTTP Presentationと`shared/application/authentication`だけ。具体SDK/pg/cryptoと業務Contextへ依存しない |
+| `dev/` | 専用開発Composition。分類済みProduction Moduleと開発Moduleを組み立て、Testへの参照を禁止する。ProductionからのImportも禁止する |
+| `app.ts` / `main.ts` | 分類済みのProduction Moduleを組み立てる入口。ProductionからTest/開発Moduleへの参照禁止は適用される |
 
-外部Moduleの許可は上段のLayer RuleとArchitecture Testに従う。特にGoogle SDKは指定Verifierの本体参照だけ、共有基盤からの`pg`本体は認証postgres配下だけを許可する。生成型を参照できることは、共通Resolver実装への逆依存を許可する意味ではない。
+外部Moduleの許可は上段のLayer RuleとArchitecture Testに従う。特にGoogle SDKは指定Verifierの本体参照だけ、共有基盤からの`pg`本体は認証postgres配下だけを許可する。接続PeerのIP解析用`node:net`はHTTP共有Rate Adapterの正確なPathだけに追加許可する。生成型を参照できることは、共通Resolver実装への逆依存を許可する意味ではない。
 
 ### 公開段階・不整合の確認と更新契機
 
 現行[SDL](../../apps/api/schema.graphql)、[Resolver](../../apps/api/src/presentation/graphql/resolvers.ts)、[Operation catalog](../api/graphql-contracts.md)を照合すると、公開GraphQL Operationは`Query.apiStatus`のみでMutationはない。Group／支出／精算の内部Domain、Group Applicationや保存Adapter、共有認証の存在だけでは、公開業務機能の完成や本人性・認可の本番接続を意味しない。
 
-Architecture Testは、Production TypeScriptの配置分類と静的なImport／Export／require／dynamic importを解析し、Layer逆転・Context横断・解決不能参照・ProductionからTestへの依存・解析不能な動的Import・限定した外部依存の違反を検出する。Test ModuleとGraphQL生成Module自体はProduction走査から除外する。基準Commitの対象実行では**1 File／82件pass**。この結果は責務の意味的妥当性、業務Rule、全Layerの完成、実際のDI／公開経路、認証安全性・本番運用の保証ではない。
+Architecture Testは、Productionと独立した開発CompositionのTypeScript配置分類と静的なImport／Export／require／dynamic importを解析し、Layer逆転・Context横断・解決不能参照・ProductionからTestへの依存・解析不能な動的Import・限定した外部依存の違反を検出する。Test ModuleとGraphQL生成Module自体はProduction走査から除外する。2026-10-19の配置整理時は1 File／82件passであり、#218ではHTTP/開発/限定IP解析の拒否例を追加し、1 File／85件を検証する。この結果は責務の意味的妥当性、業務Rule、全Layerの完成、実際のDI／公開経路、認証安全性・本番運用の保証ではない。
 
 配置・依存の照合では、実在するContext／shared／共通入口が既存Ruleに収まり、Architecture Testにも違反がないため、Code移動・新Layer・境界変更は不要と判断した。一方、従来の「Expense Recording／SettlementのContext Directoryを今後追加する」という説明は既存Domainと不一致だったため、上段のRuleと本表を同期した。共通GraphQLとContext固有Presentationの区別もここで補足した。既存の[#63](https://github.com/takeshi-arihori/kakei_app/issues/63)（再配置）、[#107](https://github.com/takeshi-arihori/kakei_app/issues/107)（全量Review）、[#142](https://github.com/takeshi-arihori/kakei_app/issues/142)（Operation Trace）を再実施しない。
 
-残る公開接続は既存の[#202](https://github.com/takeshi-arihori/kakei_app/issues/202)（認証・Group招待）、[#218](https://github.com/takeshi-arihori/kakei_app/issues/218)（認証HTTP）、[#219](https://github.com/takeshi-arihori/kakei_app/issues/219)（Google画面）、[#92](https://github.com/takeshi-arihori/kakei_app/issues/92)（公開契約）等へTraceする。具体Port・保存契約やProvider／HTTPの未決Decisionは[設計Gate](../product/design-gates.md)に従い、[#12](https://github.com/takeshi-arihori/kakei_app/issues/12)のAPI方式／Runtime比較も採用済みとはしない。#217の復旧MAC移行の旧Findingと修正・検証結果は同Taskで追跡する。配置説明の整備を理由に重複Issueや無関係なProduction修正を増やさない。新しい配置不整合や別の修正候補が見つかった場合は、根拠・既存Taskとの重複・必要Decisionを別Planningで確認する。
+残る公開接続は既存の[#202](https://github.com/takeshi-arihori/kakei_app/issues/202)（認証・Group招待）、[#218](https://github.com/takeshi-arihori/kakei_app/issues/218)（認証HTTP）、[#219](https://github.com/takeshi-arihori/kakei_app/issues/219)（Google画面）、[#92](https://github.com/takeshi-arihori/kakei_app/issues/92)（公開契約）等へTraceする。具体Port・保存契約や本番Provider／業務HTTP接続の未決Decisionは[設計Gate](../product/design-gates.md)に従い、[#12](https://github.com/takeshi-arihori/kakei_app/issues/12)のAPI方式／Runtime比較も採用済みとはしない。#217の復旧MAC移行の旧Findingと修正・検証結果は同Taskで追跡する。配置説明の整備を理由に重複Issueや無関係なProduction修正を増やさない。新しい配置不整合や別の修正候補が見つかった場合は、根拠・既存Taskとの重複・必要Decisionを別Planningで確認する。
 
 Context／Layer／共有基盤の追加・移動・責務変更、Resolver／Use Case／Adapterのwiring、公開Operationの追加・削除を行うTaskは、同じ差分で本節の実在／予定Path、実装状況、確認基準Commit、API入口の参照を同期する。文書統合直前にも最新developと再照合する。公開Operationは[Operation catalog](../api/graphql-contracts.md)も同時更新し、未決事項を実装済みへ昇格させない。
 
@@ -138,3 +142,7 @@ Event Sourcing、CQRS、Projection、Outboxの採否と適用範囲は[domain-de
 - 採用済みのRepository、Migration、Event Store、Projection、Outbox、冪等性は実PostgreSQLまたは合意した分離環境でIntegration Testする。
 - GraphQLでは認証、認可、Validation、Error契約、Pagination、Depth／Complexity、N+1、Schema差分を確認する。
 - Critical BranchのCoverage目標は[testing.md](testing.md)に従う。
+
+### #218の認証HTTP接続基準
+
+基点develop `bc7ab5b9c4a3b794e255f8ce05dcd5f42135de1c`に対し、#218は前述のHTTP Adapter/共有Rateと専用開発Compositionを追加する。Webの同一Origin転送は`apps/web/app/auth/[...path]/route.ts`がdevelopmentだけで固定loopbackへ行い、Productionでは503を返す。通常API main、業務GraphQL、業務認可、本番Providerを有効化しない。Taskの最終検証・4専門Review・PR結果はIssue #218を参照する。
