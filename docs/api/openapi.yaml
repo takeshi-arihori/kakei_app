@@ -2,12 +2,16 @@ openapi: 3.1.0
 info:
   title: Kakei App HTTP Transport API
   version: 0.1.0
-  description: |
-    Public HTTP transport for the kakei app.
+  description: 'Public HTTP transport for the kakei app.
+
 
     The canonical GraphQL business contract is ../../apps/api/schema.graphql.
+
     This document describes only HTTP methods, content types, and transport
+
     envelopes. It does not redefine GraphQL business types or fields.
+
+    '
   license:
     name: UNLICENSED
 servers:
@@ -19,39 +23,273 @@ paths:
       operationId: getHealth
       summary: Check API liveness
       responses:
-        "200":
+        '200':
           description: API process is alive
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthResponse"
+                $ref: '#/components/schemas/HealthResponse'
   /graphql:
     post:
       operationId: executeGraphQL
       summary: Execute a GraphQL operation
-      description: |
-        Executes the operation defined by the canonical GraphQL SDL at
+      description: 'Executes the operation defined by the canonical GraphQL SDL at
+
         ../../apps/api/schema.graphql. GraphQL business types and fields are
+
         intentionally not duplicated in this OpenAPI document.
+
+        '
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GraphQLRequest"
+              $ref: '#/components/schemas/GraphQLRequest'
       responses:
-        "200":
+        '200':
           description: GraphQL response envelope; inspect errors before data
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GraphQLResponse"
-        "400":
+                $ref: '#/components/schemas/GraphQLResponse'
+        '400':
           description: Invalid GraphQL-over-HTTP request envelope
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GraphQLResponse"
+                $ref: '#/components/schemas/GraphQLResponse'
+  /auth/google/attempt:
+    post:
+      operationId: beginGoogleLogin
+      summary: Server保存のLogin Attemptを開始する
+      tags:
+        - Authentication
+      servers:
+        - url: http://localhost:3000
+          description: 使い捨て開発profile。Webの同一Origin転送。
+      parameters:
+        - $ref: '#/components/parameters/KakeiRequest'
+        - $ref: '#/components/parameters/AuthenticationFetchSite'
+        - in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+          description: POSTは固定canonical Originと完全一致。欠落/null/重複/別scheme/portは403。GETは不在を許し、存在すれば同じ完全一致。Forwarded/Hostから補わない。
+        - $ref: '#/components/parameters/AttemptCookie'
+        - $ref: '#/components/parameters/DevelopmentAttemptCookie'
+        - $ref: '#/components/parameters/SessionCookieParameter'
+        - $ref: '#/components/parameters/DevelopmentSessionCookieParameter'
+      security: []
+      responses:
+        '400':
+          $ref: '#/components/responses/Authentication400'
+        '403':
+          $ref: '#/components/responses/Authentication403'
+        '405':
+          $ref: '#/components/responses/Authentication405'
+        '409':
+          $ref: '#/components/responses/Authentication409'
+        '413':
+          $ref: '#/components/responses/Authentication413'
+        '415':
+          $ref: '#/components/responses/Authentication415'
+        '429':
+          $ref: '#/components/responses/Authentication429'
+        '503':
+          $ref: '#/components/responses/Authentication503'
+        '201':
+          description: 保存/監査のcommit確認後だけ成功。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/ContentTypeOptions'
+            Set-Cookie:
+              $ref: '#/components/headers/AuthenticationSetCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoogleAttemptResponse'
+      requestBody:
+        required: true
+        description: application/json、任意charset=utf-8のみ、identity以外の圧縮拒否。未知/重複Field（escape同名含む）拒否。全stream18,432 bytes/5秒上限。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthenticationEmptyRequest'
+      description: 任意の旧Attempt/Session Cookieを受け、保存成功後に新Attempt Cookieと公開nonce/csrfTokenを返す。有効Session競合409ではCookieを変えない。Attempt
+        Cookie上限5分。 通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、Node Header総量16KiB/64個。credential付きCORSなし。
+  /auth/google/login:
+    post:
+      operationId: completeGoogleLogin
+      summary: Google CredentialをServer試行へ結び付けSessionを発行する
+      tags:
+        - Authentication
+      servers:
+        - url: http://localhost:3000
+          description: 使い捨て開発profile。Webの同一Origin転送。
+      parameters:
+        - $ref: '#/components/parameters/KakeiRequest'
+        - $ref: '#/components/parameters/AuthenticationFetchSite'
+        - in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+          description: POSTは固定canonical Originと完全一致。欠落/null/重複/別scheme/portは403。GETは不在を許し、存在すれば同じ完全一致。Forwarded/Hostから補わない。
+        - $ref: '#/components/parameters/AttemptCookie'
+        - $ref: '#/components/parameters/DevelopmentAttemptCookie'
+        - $ref: '#/components/parameters/SessionCookieParameter'
+        - $ref: '#/components/parameters/DevelopmentSessionCookieParameter'
+        - $ref: '#/components/parameters/LoginCsrf'
+      security: []
+      responses:
+        '400':
+          $ref: '#/components/responses/Authentication400'
+        '401':
+          $ref: '#/components/responses/Authentication401'
+        '403':
+          $ref: '#/components/responses/Authentication403'
+        '405':
+          $ref: '#/components/responses/Authentication405'
+        '409':
+          $ref: '#/components/responses/Authentication409'
+        '413':
+          $ref: '#/components/responses/Authentication413'
+        '415':
+          $ref: '#/components/responses/Authentication415'
+        '429':
+          $ref: '#/components/responses/Authentication429'
+        '503':
+          $ref: '#/components/responses/Authentication503'
+        '204':
+          description: 保存/監査のcommit確認後だけ成功。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/ContentTypeOptions'
+            Set-Cookie:
+              $ref: '#/components/headers/AuthenticationSetCookie'
+      requestBody:
+        required: true
+        description: application/json、任意charset=utf-8のみ、identity以外の圧縮拒否。未知/重複Field（escape同名含む）拒否。全stream18,432 bytes/5秒上限。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+      description: 成功204でSession設定とAttempt削除。再開始409はAttemptだけ削除し、Session競合409はCookie不変。Credential拒否401/403/429/503でもCookie不変。Sessionの最長7日、idle24hを維持。
+        通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、Node Header総量16KiB/64個。credential付きCORSなし。
+  /auth/session:
+    get:
+      operationId: inspectAuthenticationSession
+      summary: 現在Sessionをidle非延長で照会する
+      tags:
+        - Authentication
+      servers:
+        - url: http://localhost:3000
+          description: 使い捨て開発profile。Webの同一Origin転送。
+      parameters:
+        - $ref: '#/components/parameters/KakeiRequest'
+        - $ref: '#/components/parameters/AuthenticationFetchSite'
+        - in: header
+          name: Origin
+          required: false
+          schema:
+            type: string
+          description: POSTは固定canonical Originと完全一致。欠落/null/重複/別scheme/portは403。GETは不在を許し、存在すれば同じ完全一致。Forwarded/Hostから補わない。
+        - $ref: '#/components/parameters/AttemptCookie'
+        - $ref: '#/components/parameters/DevelopmentAttemptCookie'
+        - $ref: '#/components/parameters/SessionCookieParameter'
+        - $ref: '#/components/parameters/DevelopmentSessionCookieParameter'
+      security:
+        - SessionCookie: []
+        - DevelopmentSessionCookie: []
+      responses:
+        '400':
+          $ref: '#/components/responses/Authentication400'
+        '401':
+          $ref: '#/components/responses/Authentication401'
+        '403':
+          $ref: '#/components/responses/Authentication403'
+        '405':
+          $ref: '#/components/responses/Authentication405'
+        '429':
+          $ref: '#/components/responses/Authentication429'
+        '503':
+          $ref: '#/components/responses/Authentication503'
+        '200':
+          description: 保存/監査のcommit確認後だけ成功。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/ContentTypeOptions'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationSessionResponse'
+      description: inspect lease内で本文を確定しcommit後にそのまま送信する。Actor/Google情報を返さずidleを延長しない。無効401ではSession Cookieを削除し、障害503では残す。
+        通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、Node Header総量16KiB/64個。credential付きCORSなし。
+  /auth/logout:
+    post:
+      operationId: logoutAuthenticationSession
+      summary: 現在CookieのSessionだけを失効する
+      tags:
+        - Authentication
+      servers:
+        - url: http://localhost:3000
+          description: 使い捨て開発profile。Webの同一Origin転送。
+      parameters:
+        - $ref: '#/components/parameters/KakeiRequest'
+        - $ref: '#/components/parameters/AuthenticationFetchSite'
+        - in: header
+          name: Origin
+          required: true
+          schema:
+            type: string
+          description: POSTは固定canonical Originと完全一致。欠落/null/重複/別scheme/portは403。GETは不在を許し、存在すれば同じ完全一致。Forwarded/Hostから補わない。
+        - $ref: '#/components/parameters/AttemptCookie'
+        - $ref: '#/components/parameters/DevelopmentAttemptCookie'
+        - $ref: '#/components/parameters/SessionCookieParameter'
+        - $ref: '#/components/parameters/DevelopmentSessionCookieParameter'
+        - $ref: '#/components/parameters/LogoutCsrf'
+      security: []
+      responses:
+        '400':
+          $ref: '#/components/responses/Authentication400'
+        '403':
+          $ref: '#/components/responses/Authentication403'
+        '405':
+          $ref: '#/components/responses/Authentication405'
+        '413':
+          $ref: '#/components/responses/Authentication413'
+        '415':
+          $ref: '#/components/responses/Authentication415'
+        '429':
+          $ref: '#/components/responses/Authentication429'
+        '503':
+          $ref: '#/components/responses/Authentication503'
+        '204':
+          description: 保存/監査のcommit確認後だけ成功。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/ContentTypeOptions'
+            Set-Cookie:
+              $ref: '#/components/headers/AuthenticationSetCookie'
+      requestBody:
+        required: true
+        description: application/json、任意charset=utf-8のみ、identity以外の圧縮拒否。未知/重複Field（escape同名含む）拒否。全stream18,432 bytes/5秒上限。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthenticationEmptyRequest'
+      description: 有効SessionをinspectしてCSRFを定数時間照合し、同Cookieのrevoke成功後だけ削除する。不在/不正形式の秘密値/期限切れ/失効済みは204で削除。Cookie構文不正/重複は400。inspect/revoke障害503は削除しない。
+        通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、Node Header総量16KiB/64個。credential付きCORSなし。
 components:
   schemas:
     HealthResponse:
@@ -76,16 +314,16 @@ components:
         operationName:
           type:
             - string
-            - "null"
+            - 'null'
         variables:
           type:
             - object
-            - "null"
+            - 'null'
           additionalProperties: true
         extensions:
           type:
             - object
-            - "null"
+            - 'null'
           additionalProperties: true
     GraphQLResponse:
       type: object
@@ -99,13 +337,13 @@ components:
         data:
           type:
             - object
-            - "null"
+            - 'null'
           additionalProperties: true
         errors:
           type: array
           minItems: 1
           items:
-            $ref: "#/components/schemas/GraphQLError"
+            $ref: '#/components/schemas/GraphQLError'
         extensions:
           type: object
           additionalProperties: true
@@ -128,3 +366,354 @@ components:
         extensions:
           type: object
           additionalProperties: true
+    AuthenticationSecret:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$
+      minLength: 43
+      maxLength: 43
+    AuthenticationEmptyRequest:
+      type: object
+      additionalProperties: false
+      maxProperties: 0
+    GoogleLoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - credential
+      properties:
+        credential:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          pattern: ^[\u0000-\u007f]+$
+          description: Googleの未検証ID Token。期待nonce/Actor/Roleは受け取らない。
+    GoogleAttemptResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - nonce
+        - csrfToken
+        - expiresAt
+      properties:
+        nonce:
+          $ref: '#/components/schemas/AuthenticationSecret'
+        csrfToken:
+          $ref: '#/components/schemas/AuthenticationSecret'
+        expiresAt:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          description: UTC Unix epoch milliseconds。Server期限の等値から無効。
+    AuthenticationSessionResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - authenticated
+        - csrfToken
+        - expiresAt
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        csrfToken:
+          $ref: '#/components/schemas/AuthenticationSecret'
+        expiresAt:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          description: UTC Unix epoch milliseconds。Server期限の等値から無効。
+    AuthenticationError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - requestId
+          properties:
+            code:
+              type: string
+              enum:
+                - INVALID_REQUEST
+                - AUTHENTICATION_REQUIRED
+                - REQUEST_REJECTED
+                - LOGIN_RESTART_REQUIRED
+                - RATE_LIMITED
+                - AUTHENTICATION_UNAVAILABLE
+            requestId:
+              type: string
+              format: uuid
+              pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+              description: Server発行のUUIDv4。Client申告値を使わない。
+  parameters:
+    KakeiRequest:
+      in: header
+      name: X-Kakei-Request
+      required: true
+      schema:
+        type: string
+        const: '1'
+      description: 全4操作で必須。CSRF Tokenや本人性の代替ではない。
+    AuthenticationOrigin:
+      in: header
+      name: Origin
+      required: true
+      schema:
+        type: string
+      description: POSTは固定canonical Originと完全一致。欠落/null/重複/別scheme/portは403。GETは不在を許し、存在すれば同じ完全一致。Forwarded/Hostから補わない。
+    AuthenticationFetchSite:
+      in: header
+      name: Sec-Fetch-Site
+      required: false
+      schema:
+        type: string
+        const: same-origin
+      description: 存在する場合はsame-originだけ。
+    LoginCsrf:
+      in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        $ref: '#/components/schemas/AuthenticationSecret'
+      description: 開始時csrfToken。欠落/形式不正403、canonicalな不一致は内部restart-requiredとして409。
+    LogoutCsrf:
+      in: header
+      name: X-CSRF-Token
+      required: false
+      schema:
+        $ref: '#/components/schemas/AuthenticationSecret'
+      description: 有効Sessionに束縛したcsrfTokenを要求し、不足/不一致403。Session無効/不在の冪等logoutでは不要。
+    AttemptCookie:
+      in: cookie
+      name: __Host-kakei-auth-attempt
+      required: false
+      schema:
+        $ref: '#/components/schemas/AuthenticationSecret'
+      description: Profileに対応するHttpOnly Cookie。重複/不正構文は400。不在・不正な秘密値の意味は各操作で処理する。
+    DevelopmentAttemptCookie:
+      in: cookie
+      name: kakei_dev_auth_attempt
+      required: false
+      schema:
+        $ref: '#/components/schemas/AuthenticationSecret'
+      description: Profileに対応するHttpOnly Cookie。重複/不正構文は400。不在・不正な秘密値の意味は各操作で処理する。
+    SessionCookieParameter:
+      in: cookie
+      name: __Host-kakei-auth-session
+      required: false
+      schema:
+        $ref: '#/components/schemas/AuthenticationSecret'
+      description: Profileに対応するHttpOnly Cookie。重複/不正構文は400。不在・不正な秘密値の意味は各操作で処理する。
+    DevelopmentSessionCookieParameter:
+      in: cookie
+      name: kakei_dev_auth_session
+      required: false
+      schema:
+        $ref: '#/components/schemas/AuthenticationSecret'
+      description: Profileに対応するHttpOnly Cookie。重複/不正構文は400。不在・不正な秘密値の意味は各操作で処理する。
+  headers:
+    CacheControl:
+      description: 認証Responseを保存しない。
+      schema:
+        type: string
+        const: no-store
+    ContentTypeOptions:
+      description: Content-Typeの推測を拒否する。
+      schema:
+        type: string
+        const: nosniff
+    AuthenticationSetCookie:
+      description: Profile固定のHttpOnly/SameSite=Lax/Path=/、Domainなし。ProductionはSecure/__Host名、localhost専用名だけ非Secure。複数Set-Cookieは独立したHeader行で送り、comma結合しない。
+      schema:
+        type: string
+  responses:
+    Authentication400:
+      description: JSON/重複Field/未知Field/Cookie構文/GET Body等の入力拒否。
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/ContentTypeOptions'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/AuthenticationError'
+              - properties:
+                  error:
+                    properties:
+                      code:
+                        const: INVALID_REQUEST
+    Authentication401:
+      description: 本人性なし、またはCredential拒否。Google/Sessionの詳細を公開しない。
+      headers:
+        Set-Cookie:
+          description: GET /auth/sessionでSessionが無効な場合だけSession CookieをMax-Age=0で削除する。POST /auth/google/loginのCredential拒否ではCookieを変更せず、このHeaderを返さない。環境で固定したCookie名と属性を使う。
+          required: false
+          schema:
+            type: string
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/ContentTypeOptions'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/AuthenticationError'
+              - properties:
+                  error:
+                    properties:
+                      code:
+                        const: AUTHENTICATION_REQUIRED
+    Authentication403:
+      description: Origin/必須Header/Fetch Metadata/CSRF拒否。
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/ContentTypeOptions'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/AuthenticationError'
+              - properties:
+                  error:
+                    properties:
+                      code:
+                        const: REQUEST_REJECTED
+    Authentication405:
+      description: 定義Method以外。認証preflight/CORSを許可しない。
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/ContentTypeOptions'
+        Allow:
+          description: GET /auth/sessionはGET、それ以外はPOSTのみ。
+          schema:
+            type: string
+            enum:
+              - GET
+              - POST
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/AuthenticationError'
+              - properties:
+                  error:
+                    properties:
+                      code:
+                        const: INVALID_REQUEST
+    Authentication409:
+      description: 再開始または有効Session競合。canonicalなLogin CSRF不一致と期限/消費済み/不在Attemptを区別しない。
+      headers:
+        Set-Cookie:
+          description: POST /auth/google/loginの再開始要求ではAttempt CookieだけをMax-Age=0で削除する。begin/loginの有効Session競合ではCookieを変更せず、このHeaderを返さない。Session Cookieは削除しない。環境で固定したCookie名と属性を使う。
+          required: false
+          schema:
+            type: string
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/ContentTypeOptions'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/AuthenticationError'
+              - properties:
+                  error:
+                    properties:
+                      code:
+                        const: LOGIN_RESTART_REQUIRED
+    Authentication413:
+      description: Body stream/Content-Lengthが18,432 bytes超。
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/ContentTypeOptions'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/AuthenticationError'
+              - properties:
+                  error:
+                    properties:
+                      code:
+                        const: INVALID_REQUEST
+    Authentication415:
+      description: 非JSON、不許可charset/Content-Encoding。
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/ContentTypeOptions'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/AuthenticationError'
+              - properties:
+                  error:
+                    properties:
+                      code:
+                        const: INVALID_REQUEST
+    Authentication429:
+      description: 共有Peer/globalの分予算超過。
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/ContentTypeOptions'
+        Retry-After:
+          description: 残Window秒の切上げ、最低1。
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/AuthenticationError'
+              - properties:
+                  error:
+                    properties:
+                      code:
+                        const: RATE_LIMITED
+    Authentication503:
+      description: 能力不足/DB/鍵/Audit/SDK/Rate障害/commit結果不明。Cookieを変更しない。
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/ContentTypeOptions'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/AuthenticationError'
+              - properties:
+                  error:
+                    properties:
+                      code:
+                        const: AUTHENTICATION_UNAVAILABLE
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-kakei-auth-session
+      description: 未有効のProduction契約。Secure/HttpOnly/Lax/Path=/、Domainなし。
+    DevelopmentSessionCookie:
+      type: apiKey
+      in: cookie
+      name: kakei_dev_auth_session
+      description: localhost使い捨てprofileだけの非Secure例外。

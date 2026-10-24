@@ -41,7 +41,7 @@ const collectReadmeEndpoints = (source) =>
     .map((match) => match[1])
     .sort();
 
-const expectedPublicEndpoints = ['GET /health', 'POST /graphql'];
+const expectedPublicEndpoints = ['GET /health', 'POST /graphql', 'POST /auth/google/attempt', 'POST /auth/google/login', 'GET /auth/session', 'POST /auth/logout'].sort();
 const catalogUrl = new URL(
   '../../docs/api/graphql-contracts.md',
   import.meta.url,
@@ -110,6 +110,13 @@ assert(
   !openApi.includes('apiStatus'),
   'OpenAPI must not duplicate GraphQL business fields',
 );
+
+for (const operationId of ['beginGoogleLogin', 'completeGoogleLogin', 'inspectAuthenticationSession', 'logoutAuthenticationSession']) {
+  assert(openApi.includes(`operationId: ${operationId}`), '認証Operation IDが不足しています');
+}
+for (const contract of ['AuthenticationError:', 'AuthenticationSecret:', 'X-Kakei-Request', 'X-CSRF-Token', 'LOGIN_RESTART_REQUIRED', 'Retry-After', 'no-store', 'nosniff']) {
+  assert(openApi.includes(contract), `認証HTTP契約が不足しています: ${contract}`);
+}
 
 for (const [name, source] of [
   ['docs/api/README.md', apiDocsReadme],

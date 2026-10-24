@@ -1,6 +1,6 @@
 # Google認証内部Lifecycle契約
 
-根拠: [認証Epic #202](https://github.com/takeshi-arihori/kakei_app/issues/202)、[Accepted認証ADR](../adr/google-login-actor-session.md)。共有ApplicationとPortを定め、暗号部品#215と[PostgreSQL Store #216](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md)へ接続する。HTTP、Cookie設定、Rate limit、環境変数、具体鍵ProviderとProduction wiringは後続Taskである。
+根拠: [認証Epic #202](https://github.com/takeshi-arihori/kakei_app/issues/202)、[Accepted認証ADR](../adr/google-login-actor-session.md)。本書は共有ApplicationとPortの内部契約を定め、暗号部品#215と[PostgreSQL Store #216](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md)へ接続する。HTTP、Cookie設定、共有Rate limit、localhost用環境設定と使い捨て鍵Providerは[#218のHTTP契約](authentication-http-boundary.md)に従う専用開発Compositionへ接続済みである。永続的な本番鍵／Nonce Provider、通常mainとProductionのwiringは引き続き別Gateであり、本書や開発接続の実装だけでは有効化しない。
 
 ## 型と境界
 
@@ -59,3 +59,7 @@ Fake Storeでの成功はSQL原子性・平文禁止・Audit永続化・鍵Rotat
 ## A2保存設計へのTrace
 
 [認証Data保護保存仕様](authentication-protected-storage.md)と[ADR](../adr/authentication-protected-storage.md)は2026-10-11のOwner会話承認「はい。」と独立Security Review passによりAccepted。Storeの原子的責務を認証専用Envelope・Digest・Key-state／Row Lock・Auditへ写像し、清掃・削除・Restoreを分割する。Schema・暗号・Storeの検証と、未接続のProduction Gateを区別する。Application契約・TTL・commit不明時の保証は本書を維持する。
+
+## A5 HTTP接続の追補（2026-10-22）
+
+[HTTP契約](authentication-http-boundary.md)と[HTTP ADR](../adr/authentication-http-and-development-boundary.md)に従い、#218が4操作/Cookie/共有Rateとlocalhost専用Compositionを接続する。内部Serviceの`restart-required`は維持し、Owner追補によりcanonicalなLogin CSRF不一致・期限切れ/消費済み/不在試行を一律409へ写像する。欠落/形式不正Headerは403。inspect本文はScope内で確定し、LogoutはSession CSRF照合とrevoke成功後のCookie削除をHTTP側で所有する。既存TTL、本人性、Store原子性、業務Roleの境界を変更しない。通常main/Production/退会運用は未有効、実Google Browserと画面は#219である。
