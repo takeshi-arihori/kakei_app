@@ -113,3 +113,7 @@ A2は[正式Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)�
 ## A4c認証保守の実装境界
 
 #217は[保守仕様](../security/authentication-maintenance.md)の期限清掃、削除Intent Saga、最新Ledger証跡検証、Restore隔離／全Credential破棄／新epoch／Identity鍵・Alias移行を内部PortとPostgreSQL Adapterで実装する。具体外部Providerの耐久性・独立Failure domain・IAM、物理Backup真正性、Traffic／Writer fence、Scheduler／監視配信は[Runbookの本番Capability](../operations/authentication-retention-restore.md)に残す。HTTP／Rate limit／Origin／CSRF／Cookie／Proxyは#218、Googleログイン画面・実API E2Eは#219の個別Ready評価後に実装する。退会受付・未完了責務・Group過去参照保持のDecisionを変更せず、本番へwireしない。
+
+## 認証HTTP・localhost接続の具体化（2026-10-22）
+
+[Task #218](https://github.com/takeshi-arihori/kakei_app/issues/218)は[HTTP ADR](../adr/authentication-http-and-development-boundary.md)と[HTTP契約](../security/authentication-http-boundary.md)へ、4API/同一Origin/Cookie/CSRF/公開Error/共有Rate/使い捨て開発のDecisionを固定した。Owner初回承認とLogin再開始409の追補を保持し、実装後の新規4専門Reviewを経てDraft PRへ進める。通常mainでは認証能力を有効化せず、開発の単一lease/非空拒否/実CSPRNGを永続Providerの実証へ読み替えない。実Google Browser/UIは#219、Production Provider/Proxy/TLS/Backup/退会/監視は既存Gateを維持する。

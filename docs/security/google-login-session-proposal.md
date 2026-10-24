@@ -1,6 +1,6 @@
 # Googleログイン接続の設計・作業提案
 
-Knowledge State: ADRの方式・TTL・保持方針は2026-10-11にOwner Accepted。A2詳細保存設計は2026-10-11にOwner Accepted。未実装公開契約・具体Provider・Production接続は個別Gateであり、一括Readyではない。上段のA1調査・候補表は当時の履歴、A2の現行状態は末尾追補とADR #212を参照する。[Accepted ADR](../adr/google-login-actor-session.md)と[内部Lifecycle契約](google-authentication-lifecycle.md)を参照する。
+Knowledge State: ADRの方式・TTL・保持方針は2026-10-11にOwner Accepted。A2詳細保存設計は2026-10-11にOwner Accepted。公開契約・具体Provider・Production接続は個別Gateであり、一括Readyではない。上段のA1調査・候補表は当時の履歴、A2の現行状態は末尾追補とADR #212を参照する。[Accepted ADR](../adr/google-login-actor-session.md)と[内部Lifecycle契約](google-authentication-lifecycle.md)を参照する。
 
 ## 基準と事前調査
 
@@ -133,3 +133,9 @@ PR #211がdevelop `61ee0f9`へ統合され、A1／Task #210は完了した。上
 A2は[正式Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)、詳細Decisionは[ADR #212](https://github.com/takeshi-arihori/kakei_app/issues/212)。後続は[Schema #214](https://github.com/takeshi-arihori/kakei_app/issues/214) → [暗号部品 #215](https://github.com/takeshi-arihori/kakei_app/issues/215) → [Store #216](https://github.com/takeshi-arihori/kakei_app/issues/216) → [清掃／復旧 #217](https://github.com/takeshi-arihori/kakei_app/issues/217) → [API #218](https://github.com/takeshi-arihori/kakei_app/issues/218) → [画面 #219](https://github.com/takeshi-arihori/kakei_app/issues/219)。Owner承認・Security pass・先行mergeと各Taskの未決設計を解消してから個別Ready評価する。
 
 2026-10-11 Owner会話承認「はい。」によりA2詳細保存設計をAcceptedへ同期した。独立Security Reviewはpass済み。PR #220のdevelop統合、先行Task mergeと個別Ready評価は引き続き必要で、#214〜#219は一括Readyにしない。PRのReady化／Merge・Production有効化は本承認に含まない。
+
+## A5の採用・実装範囲の追補（2026-10-22）
+
+上段の初回調査と候補表は履歴として保持する。[HTTP ADR](../adr/authentication-http-and-development-boundary.md)と[HTTP詳細契約](authentication-http-boundary.md)が、同一Origin/4API、Cookie/CSRF/入力/公開Error、PostgreSQL共有Rate、localhost限定の使い捨て開発Compositionを具体化した。Ownerは2026-10-21に設計を承認し、2026-10-22にはA1のrestart-requiredをcanonical CSRF不一致/期限/消費済み/不在について一律409へ写像する追補を承認した。CSRF Header欠落/形式不正、Origin拒否、Logoutの有効Session CSRF拒否は403を維持する。
+
+#218は上記の実装と実pg/HTTP結合検証、OpenAPI/Runbook/Inventory同期を届ける。5人日/SP8、先行PR230 merge済み・通常develop基点/Stackなし。#219の実Google Browser/UI、本番Provider/Ingress/Backup/退会運用は別Gateのまま。使い捨て開発は再起動後の既存Dataを再利用せず、[専用Runbook](../operations/authentication-local-development.md)の明示resetを要する。

@@ -24,8 +24,12 @@ Context／Layer／共有基盤の配置・責務やwiring、公開Operationを�
 
 - `GET /health`: Liveness
 - `POST /graphql`: GraphQL over HTTPの公開Endpoint
+- `POST /auth/google/attempt`: 試行開始201。nonce/CSRFとAttempt Cookie
+- `POST /auth/google/login`: Session発行204。Session設定とAttempt削除
+- `GET /auth/session`: idle非延長のSession照会200、本人性なし401
+- `POST /auth/logout`: 現在Sessionだけ失効204
 
-`apps/api/src/app.ts`はGraphQL YogaのUI／transport／preflight境界として`GET`／`OPTIONS /graphql`も受理します。これらは現行の公開業務API契約ではなく、Clientが依存する安定Methodとして扱いません。Authentication、Authorization、CORSの未決事項をこの文書で採用しません。
+`apps/api/src/app.ts`はGraphQL YogaのUI／transport／preflight境界として`GET`／`OPTIONS /graphql`も受理します。これらは現行の公開業務API契約ではなく、Clientが依存する安定Methodとして扱いません。業務AuthorizationやProduction Deploymentの未決事項をこの文書で採用しません。認証4操作は下記の承認済みHTTP契約へ分離します。
 
 ## Swagger UI
 
@@ -57,6 +61,14 @@ pnpm check
 
 `api-docs:check`は専用validator testを実行した後、OpenAPIとREADMEの公開Method集合、GraphQL SDLとOperation catalogの完全一致、entryの必須項目とRepository参照、固定Image、read-only mount、Request送信と外部Validatorの無効化を検査します。
 
-Knowledge State: `GET /health`と`POST /graphql`は現行公開契約。各Contextの未実装Operation、認証Provider、公開Error、Rate limitは未決または別Taskの対象です。
+Knowledge State: `GET /health`と`POST /graphql`は現行公開契約。各Contextの業務OperationとProduction認証Provider/Deploymentは別Task/Gateです。認証HTTP Errorと共有Rateは本Taskの契約です。
 
 関連Task: [#93](https://github.com/takeshi-arihori/kakei_app/issues/93)、[#142](https://github.com/takeshi-arihori/kakei_app/issues/142)
+
+## 認証HTTPの起動境界
+
+Knowledge State: Confirmed。[HTTP契約](../../docs/security/authentication-http-boundary.md)と[Accepted ADR](../../docs/adr/authentication-http-and-development-boundary.md)が4操作の詳細を定める。通常mainの認証能力は未接続で503。使い捨てlocalhost入口だけが実Google SDK/実pg Store/実CSPRNG/共有Rateを接続し、Production有効化とは区別する。[専用開発Runbook](../../docs/operations/authentication-local-development.md)に従い、再起動後の非空専用DBは明示resetを要する。
+
+全操作にX-Kakei-Request: 1、POSTに固定Origin完全一致、Cookie/CSRF/厳格JSON/stream18KiB/5秒制限、no-store/nosniffを適用する。Loginのcanonical CSRF不一致と期限切れ/消費済み/不在AttemptはOwner追補で一律409。CSRF Header欠落/形式不正は403、Logout有効SessionのCSRF不一致も403。共有Rateは429/Retry-After、能力障害や結果不明は503でCookieを変更しない。再開始409のAttemptだけ削除する挙動は有効Session競合409と区別する。Errorはcode/requestIdだけ、Actor/Google識別子/診断を返さない。
+
+既存Client契約への削除/変更はなく、認証経路を追加する。Production契約のCookie名/属性はOpenAPIとHTTP契約に示すが、本番Provider/Ingress/Backup/退会のGateを満たすまで有効化しない。Forward-fixで修正し、HTTPを止める場合は開発入口を閉じる。使用済み共有予算をDownで消さない。GraphQL SDL/生成型は変更しない。

@@ -9,15 +9,17 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc6 -p tsconfig.build.json",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"dev/**/*.ts\"",
     "start": "node dist/main.js",
-    "lint": "eslint \"{src,test}/**/*.ts\"",
+    "lint": "eslint \"{src,test,dev}/**/*.ts\"",
     "lint:fix": "pnpm lint --fix",
     "typecheck": "tsc6 --noEmit",
-    "test": "vitest run src",
+    "test": "vitest run src dev",
     "test:watch": "vitest src",
     "test:cov": "vitest run src --coverage",
-    "test:e2e": "vitest run test"
+    "test:e2e": "vitest run test",
+    "dev:auth": "tsx dev/main.ts",
+    "db:auth-dev:migrate": "tsx dev/migrate.ts"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
