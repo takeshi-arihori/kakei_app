@@ -216,15 +216,16 @@ export const openAuthenticationDevelopmentRuntime = async (
       if (cleaning || !active) return;
       cleaning = true;
       void (async () => {
+        let overdue = false;
         for (let batch = 0; batch < 20 && active; batch++) {
           const result = await rate.cleanup(500);
           if (result.status === 'unavailable') {
             console.error('AUTH_HTTP_RATE_CLEANUP_UNAVAILABLE');
             return;
           }
+          overdue ||= result.overdue;
           if (result.deleted < 500 || batch === 19) {
-            if (result.overdue)
-              console.error('AUTH_HTTP_RATE_CLEANUP_UNAVAILABLE');
+            if (overdue) console.error('AUTH_HTTP_RATE_CLEANUP_UNAVAILABLE');
             return;
           }
         }

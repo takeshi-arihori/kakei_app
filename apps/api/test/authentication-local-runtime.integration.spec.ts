@@ -66,6 +66,63 @@ describe('専用開発DBの実起動とprocess lease', () => {
   afterAll(async () => {
     await observer.end();
   });
+  it.each([1, 500, 501])(
+    '実Timerで超過%i行を全削除しても1回だけ通知し、次回の遅延なし清掃では通知しない',
+    async (count) => {
+      const intervals = vi.spyOn(globalThis, 'setInterval');
+      const notification = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      let runtime:
+        | Awaited<ReturnType<typeof openAuthenticationDevelopmentRuntime>>
+        | undefined;
+      try {
+        runtime = await openAuthenticationDevelopmentRuntime(env(), vi.fn());
+        const tick = intervals.mock.calls.find(([, ms]) => ms === 60_000)?.[0];
+        if (typeof tick !== 'function')
+          throw new Error('1分清掃Timerの登録が必要');
+        await database!.query(
+          "INSERT INTO authentication_http.rate_window(operation,kind,subject_digest,window_start_ms,count,expires_at_ms) SELECT 'attempt','peer',decode(lpad(to_hex(n),64,'0'),'hex'),0,1,60000 FROM generate_series(1,$1::int) AS n",
+          [count],
+        );
+        tick();
+        await vi.waitFor(() =>
+          expect(notification).toHaveBeenCalledExactlyOnceWith(
+            'AUTH_HTTP_RATE_CLEANUP_UNAVAILABLE',
+          ),
+        );
+        expect(
+          (
+            await database!.query(
+              'SELECT * FROM authentication_http.rate_window',
+            )
+          ).rows,
+        ).toEqual([]);
+        // 別sweepの完了を、削除した期限内行の不在から確認する。
+        await database!.query(
+          "INSERT INTO authentication_http.rate_window(operation,kind,subject_digest,window_start_ms,count,expires_at_ms) SELECT 'attempt','peer',decode(repeat('ff',32),'hex'),start,1,start+60000 FROM (SELECT (floor(extract(epoch FROM clock_timestamp())/60)*60000-60000)::bigint AS start) AS expired",
+        );
+        tick();
+        await vi.waitFor(async () =>
+          expect(
+            (
+              await database!.query(
+                'SELECT * FROM authentication_http.rate_window',
+              )
+            ).rows,
+          ).toEqual([]),
+        );
+        expect(notification).toHaveBeenCalledTimes(1);
+      } finally {
+        try {
+          await runtime?.close();
+        } finally {
+          intervals.mockRestore();
+          notification.mockRestore();
+        }
+      }
+    },
+  );
   it('実Runtimeの1分Timerで500行20Batchを上限に清掃し、遅延とDB障害を固定通知して再試行する', async () => {
     // 実Timerと実DBを保ち、登録された60秒callbackだけを制御して起動する。
     const intervals = vi.spyOn(globalThis, 'setInterval');
@@ -121,8 +178,10 @@ describe('専用開発DBの実起動とprocess lease', () => {
       );
       expect(await liveRows()).toEqual(live);
       cleanupTick();
-      await vi.waitFor(async () => expect(await expiredCount()).toBe(0));
-      expect(notification).toHaveBeenCalledTimes(1);
+      await vi.waitFor(async () => {
+        expect(await expiredCount()).toBe(0);
+        expect(notification).toHaveBeenCalledTimes(2);
+      });
       await database!.query(
         "INSERT INTO authentication_http.rate_window(operation,kind,subject_digest,window_start_ms,count,expires_at_ms) VALUES('attempt','peer',decode(repeat('01',32),'hex'),0,1,60000)",
       );
@@ -133,9 +192,10 @@ describe('専用開発DBの実起動とprocess lease', () => {
         'CREATE TRIGGER synthetic_cleanup_fail BEFORE DELETE ON authentication_http.rate_window FOR EACH ROW EXECUTE FUNCTION authentication_http.synthetic_cleanup_fail()',
       );
       cleanupTick();
-      await vi.waitFor(() => expect(notification).toHaveBeenCalledTimes(2));
+      await vi.waitFor(() => expect(notification).toHaveBeenCalledTimes(3));
       expect(await expiredCount()).toBe(1);
       expect(notification.mock.calls).toEqual([
+        ['AUTH_HTTP_RATE_CLEANUP_UNAVAILABLE'],
         ['AUTH_HTTP_RATE_CLEANUP_UNAVAILABLE'],
         ['AUTH_HTTP_RATE_CLEANUP_UNAVAILABLE'],
       ]);
@@ -148,7 +208,7 @@ describe('専用開発DBの実起動とprocess lease', () => {
       cleanupTick();
       await vi.waitFor(async () => expect(await expiredCount()).toBe(0));
       expect(await liveRows()).toEqual(live);
-      expect(notification).toHaveBeenCalledTimes(2);
+      expect(notification).toHaveBeenCalledTimes(4);
     } finally {
       try {
         await runtime?.close();

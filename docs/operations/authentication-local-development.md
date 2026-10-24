@@ -41,4 +41,4 @@ lease接続の切断またはProbe失敗時はHTTP受付を停止し、鍵能力
 
 ## HTTP予算の保守
 
-起動後は1分ごとに期限行を500行ずつ、1回の保守で最大20 Batch削除する。現WindowとPolicyは削除せず予算を戻さない。障害または24h以上の遅延は`AUTH_HTTP_RATE_CLEANUP_UNAVAILABLE`だけを通知する。繰返し発生する場合は受付を停止し、専用環境の接続/容量を調べる。診断へIP、Cookie、Google値、鍵、SQLを出さない。Productionの監視先・運用容量・Failoverによる巻戻し防止は別Gateである。
+起動後は1分ごとに期限行を500行ずつ、1回の保守で最大20 Batch削除する。現WindowとPolicyは削除せず予算を戻さない。障害または24h以上の遅延は`AUTH_HTTP_RATE_CLEANUP_UNAVAILABLE`だけを通知する。削除前に検出した遅延は同じ保守のBatch間で保持し、その回に超過行を全削除しても1回通知する。次回の保守に過去の遅延は持ち越さない。繰返し発生する場合は受付を停止し、専用環境の接続/容量を調べる。診断へIP、Cookie、Google値、鍵、SQLを出さない。Productionの監視先・運用容量・Failoverによる巻戻し防止は別Gateである。

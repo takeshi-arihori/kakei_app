@@ -2,6 +2,35 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GET, POST, OPTIONS } from './route';
 afterEach(() => {vi.unstubAllGlobals();vi.unstubAllEnvs();});
 describe('同一Origin認証の開発転送',()=>{
+  it.each([
+    ['/auth/google/attempt', 'POST', '{}', 201, '{"nonce":"synthetic-nonce","csrfToken":"synthetic-csrf","expiresAt":1}'],
+    ['/auth/google/login', 'POST', '{"credential":"synthetic-credential"}', 204, null],
+    ['/auth/session', 'GET', null, 200, '{"authenticated":true,"csrfToken":"synthetic-csrf","expiresAt":1}'],
+    ['/auth/logout', 'POST', '{}', 204, null],
+  ] as const)('%sの%sを固定loopbackへ転送し応答を維持する', async (path, method, body, status, responseBody) => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const upstream = new Response(responseBody, {status, headers:{'Content-Type':'application/json','Set-Cookie':'kakei_dev_auth_session=synthetic; HttpOnly'}});
+    const fetcher=vi.fn<typeof fetch>().mockResolvedValue(upstream);vi.stubGlobal('fetch',fetcher);
+    const request = new Request('http://localhost:3000'+path,{method,headers:{Origin:'http://localhost:3000','X-Kakei-Request':'1','X-CSRF-Token':'synthetic-csrf',Cookie:'kakei_dev_auth_session=synthetic',...(body === null ? {} : {'Content-Type':'application/json'})},body});
+    const response = await (method === 'GET' ? GET : POST)(request);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const [target, init] = fetcher.mock.calls[0];
+    expect(target).toBe('http://127.0.0.1:3001'+path);
+    expect(init?.method).toBe(method);
+    expect(init?.redirect).toBe('manual');
+    const forwarded = new Headers(init?.headers);
+    expect(forwarded.get('origin')).toBe('http://localhost:3000');
+    expect(forwarded.get('x-kakei-request')).toBe('1');
+    expect(forwarded.get('x-csrf-token')).toBe('synthetic-csrf');
+    expect(forwarded.get('cookie')).toBe('kakei_dev_auth_session=synthetic');
+    if (body === null) expect(init?.body).toBeNull();
+    else expect(await new Response(init?.body).text()).toBe(body);
+    expect(response.status).toBe(status);
+    expect(await response.text()).toBe(responseBody ?? '');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('content-type')).toBe('application/json');
+    expect(response.headers.getSetCookie()).toEqual(['kakei_dev_auth_session=synthetic; HttpOnly']);
+  });
   it.each(['http://localhost:3000','https://other.example.test',null])('Originを補わずCookieの複数行を維持する: %s',async origin=>{
     vi.stubEnv('NODE_ENV','development');
     const upstream=new Response(null,{status:204,headers:[['Set-Cookie','kakei_dev_auth_session=synthetic; HttpOnly'],['Set-Cookie','kakei_dev_auth_attempt=; Max-Age=0']]});

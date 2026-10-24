@@ -45,7 +45,7 @@ export type AuthenticationHttpRateCleanup =
   | Readonly<{
       /** commit済みの期限行削除。 */ status: 'cleaned';
       /** 実際に削除した行数。 */ deleted: number;
-      /** 24h以上遅れた行が残る場合はtrue。 */ overdue: boolean;
+      /** 当Batch削除前に24h以上遅れた行を観測した場合はtrue。 */ overdue: boolean;
     }>
   | Readonly<{ /** 結果不明も含め成功を主張しない。 */ status: 'unavailable' }>;
 /** Composition/保守だけが初期化・清掃を行う。HTTP Callerへはreserveのみを渡す。 */
@@ -193,6 +193,14 @@ export const createPostgresAuthenticationHttpRate = (
         async (connection) => {
           await policy(connection, 'FOR SHARE');
           const time = await now(connection);
+          // 全行を削除しても遅延を見失わず、Lock中の残存行も監視する。
+          const overdue =
+            (
+              await connection.query(
+                'SELECT 1 FROM authentication_http.rate_window WHERE expires_at_ms + 86400000 <= $1 LIMIT 1',
+                [time],
+              )
+            ).rows.length > 0;
           const removed = await connection.query(
             'DELETE FROM authentication_http.rate_window WHERE (operation,kind,subject_digest,window_start_ms) IN (SELECT operation,kind,subject_digest,window_start_ms FROM authentication_http.rate_window WHERE expires_at_ms <= $1 ORDER BY expires_at_ms,operation,kind,subject_digest,window_start_ms FOR UPDATE SKIP LOCKED LIMIT $2)',
             [time, limit],
@@ -203,13 +211,6 @@ export const createPostgresAuthenticationHttpRate = (
             removed.rowCount < 0
           )
             return failure();
-          const overdue =
-            (
-              await connection.query(
-                'SELECT 1 FROM authentication_http.rate_window WHERE expires_at_ms + 86400000 <= $1 LIMIT 1',
-                [time],
-              )
-            ).rows.length > 0;
           return { status: 'cleaned', deleted: removed.rowCount, overdue };
         },
       );

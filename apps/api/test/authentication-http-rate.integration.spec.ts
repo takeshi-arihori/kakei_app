@@ -308,6 +308,50 @@ describe('HTTP共有Rateの実PostgreSQL境界', () => {
       ).rows[0].count,
     ).toBe(2);
   });
+  it.each([1, 500, 501])(
+    '%i行の超過行を削除したBatchも遅延として返す',
+    async (count) => {
+      const a = rate();
+      await a.initialize();
+      now = 86_460_000;
+      await observer.query(
+        "INSERT INTO authentication_http.rate_window(operation,kind,subject_digest,window_start_ms,count,expires_at_ms) SELECT 'attempt','peer',decode(lpad(to_hex(n),64,'0'),'hex'),0,1,60000 FROM generate_series(1,$1::int) AS n",
+        [count],
+      );
+      expect(await a.cleanup(500)).toEqual({
+        status: 'cleaned',
+        deleted: Math.min(count, 500),
+        overdue: true,
+      });
+      if (count > 500)
+        expect(await a.cleanup(500)).toEqual({
+          status: 'cleaned',
+          deleted: 1,
+          overdue: true,
+        });
+      expect(await a.cleanup(500)).toEqual({
+        status: 'cleaned',
+        deleted: 0,
+        overdue: false,
+      });
+    },
+  );
+  it.each([
+    [-1, false],
+    [0, true],
+  ] as const)('24h遅延の等値境界%imsを判定する', async (offset, overdue) => {
+    const a = rate();
+    await a.initialize();
+    now = 86_460_000 + offset;
+    await observer.query(
+      "INSERT INTO authentication_http.rate_window(operation,kind,subject_digest,window_start_ms,count,expires_at_ms) VALUES('attempt','peer',decode(repeat('01',32),'hex'),0,1,60000)",
+    );
+    expect(await a.cleanup(500)).toEqual({
+      status: 'cleaned',
+      deleted: 1,
+      overdue,
+    });
+  });
   it('保守Batchが追いつかない24h遅延と接続障害を固定結果だけで返す', async () => {
     const a = rate();
     await a.initialize();
@@ -325,6 +369,11 @@ describe('HTTP共有Rateの実PostgreSQL境界', () => {
     expect(await a.cleanup(1)).toEqual({
       status: 'cleaned',
       deleted: 1,
+      overdue: true,
+    });
+    expect(await a.cleanup(1)).toEqual({
+      status: 'cleaned',
+      deleted: 0,
       overdue: false,
     });
     const failing = createPostgresAuthenticationHttpRate({
