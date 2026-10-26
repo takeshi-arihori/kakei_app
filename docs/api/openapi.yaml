@@ -120,7 +120,7 @@ paths:
             schema:
               $ref: '#/components/schemas/AuthenticationEmptyRequest'
       description: 任意の旧Attempt/Session Cookieを受け、保存成功後に新Attempt Cookieと公開nonce/csrfTokenを返す。有効Session競合409ではCookieを変えない。Attempt
-        Cookie上限5分。 通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、Node Header総量16KiB/64個。credential付きCORSなし。
+        Cookie上限5分。 通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、可視ASCIIとpairの名前/区切りを検査する。認証Cookieの値構文/重複を拒否し、他Cookie値は解釈せず無視する。Node Header総量16KiB/64個。credential付きCORSなし。
   /auth/google/login:
     post:
       operationId: completeGoogleLogin
@@ -181,7 +181,7 @@ paths:
             schema:
               $ref: '#/components/schemas/GoogleLoginRequest'
       description: 成功204でSession設定とAttempt削除。再開始409はAttemptだけ削除し、Session競合409はCookie不変。Credential拒否401/403/429/503でもCookie不変。Sessionの最長7日、idle24hを維持。
-        通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、Node Header総量16KiB/64個。credential付きCORSなし。
+        通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、可視ASCIIとpairの名前/区切りを検査する。認証Cookieの値構文/重複を拒否し、他Cookie値は解釈せず無視する。Node Header総量16KiB/64個。credential付きCORSなし。
   /auth/session:
     get:
       operationId: inspectAuthenticationSession
@@ -232,7 +232,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuthenticationSessionResponse'
       description: inspect lease内で本文を確定しcommit後にそのまま送信する。Actor/Google情報を返さずidleを延長しない。無効401ではSession Cookieを削除し、障害503では残す。
-        通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、Node Header総量16KiB/64個。credential付きCORSなし。
+        通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、可視ASCIIとpairの名前/区切りを検査する。認証Cookieの値構文/重複を拒否し、他Cookie値は解釈せず無視する。Node Header総量16KiB/64個。credential付きCORSなし。
   /auth/logout:
     post:
       operationId: logoutAuthenticationSession
@@ -288,8 +288,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AuthenticationEmptyRequest'
-      description: 有効SessionをinspectしてCSRFを定数時間照合し、同Cookieのrevoke成功後だけ削除する。不在/不正形式の秘密値/期限切れ/失効済みは204で削除。Cookie構文不正/重複は400。inspect/revoke障害503は削除しない。
-        通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、Node Header総量16KiB/64個。credential付きCORSなし。
+      description: 有効SessionをinspectしてCSRFを定数時間照合し、同Cookieのrevoke成功後だけ削除する。不在/不正形式の秘密値/期限切れ/失効済みは204で削除。Cookie Header違反/認証Cookieの値構文不正・重複は400。inspect/revoke障害503は削除しない。
+        通常main/Productionは未有効で503。全認証Responseはno-store/nosniff、204は本文なし。Cookie総量8KiB、可視ASCIIとpairの名前/区切りを検査する。認証Cookieの値構文/重複を拒否し、他Cookie値は解釈せず無視する。Node Header総量16KiB/64個。credential付きCORSなし。
 components:
   schemas:
     HealthResponse:
@@ -532,7 +532,7 @@ components:
         type: string
   responses:
     Authentication400:
-      description: JSON/重複Field/未知Field/Cookie構文/GET Body等の入力拒否。
+      description: JSON/重複Field/未知Field/Cookie Header違反/認証Cookieの値構文・重複/GET Body等の入力拒否。
       headers:
         Cache-Control:
           $ref: '#/components/headers/CacheControl'

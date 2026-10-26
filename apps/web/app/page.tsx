@@ -1,3 +1,4 @@
+import Link from 'next/link';
 /**
  * 業務接続前の入口として利用目的を説明し、未提供の操作を案内しない。
  * @returns 共有割り勘の流れと利用開始前であることを示す内容。
@@ -32,6 +33,7 @@ export default function Home() {
       </ol>
       <p className="scope-note">1〜4人のグループに対応。アプリ内で送金は行いません。</p>
       <p className="availability-note">利用開始の準備を進めています。</p>
+      <Link className="home-link" href="/login">ログインへ進む</Link>
     </>
   );
 }

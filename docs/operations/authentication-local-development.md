@@ -42,3 +42,10 @@ lease接続の切断またはProbe失敗時はHTTP受付を停止し、鍵能力
 ## HTTP予算の保守
 
 起動後は1分ごとに期限行を500行ずつ、1回の保守で最大20 Batch削除する。現WindowとPolicyは削除せず予算を戻さない。障害または24h以上の遅延は`AUTH_HTTP_RATE_CLEANUP_UNAVAILABLE`だけを通知する。削除前に検出した遅延は同じ保守のBatch間で保持し、その回に超過行を全削除しても1回通知する。次回の保守に過去の遅延は持ち越さない。繰返し発生する場合は受付を停止し、専用環境の接続/容量を調べる。診断へIP、Cookie、Google値、鍵、SQLを出さない。Productionの監視先・運用容量・Failoverによる巻戻し防止は別Gateである。
+
+
+## Google画面と手動確認
+
+Webの`.env.local`にAPIと同じ公開Client IDを設定し、Owner管理のGoogle Web Clientへ`http://localhost:3000`（Google推奨の`http://localhost`も）をAuthorized JavaScript Originとして登録します。Client Secretは使用しません。Webを起動して`http://localhost:3000/login`を開き、「Googleログインを準備」→公式Google button→ログイン中→再読込→ログアウトを確認します。Google画面を閉じた後は「ログインを中止」から再開始できます。
+
+認証E2Eは`pnpm --filter @kakei/web test:auth:e2e`。固定Portを使用するため、通常の開発API/Webは先に止めます。専用Test fixtureは試験所有DBをcleanupしますが、通常devの終了/再起動に自動resetはありません。合成画面/実SDK署名の結果と、実Google本人操作の結果は[UI契約](../security/google-authentication-ui.md)に従い別記録にします。

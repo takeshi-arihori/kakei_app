@@ -14,7 +14,9 @@ describe('共有割り勘の入口と共通外枠', () => {
     expect(html).toContain('受け取りまで確認');
     expect(html).toContain('アプリ内で送金は行いません');
     expect(html).toContain('利用開始の準備を進めています');
-    expect(html).not.toMatch(/<button|<input|href=/);
+    expect(html).not.toMatch(/<button|<input/);
+    expect(html).toContain('href="/login"');
+    expect(html).toContain('ログインへ進む');
   });
 
   it('日本語の外枠がRoute内容を単一の本文へ配置する', () => {

@@ -10,6 +10,8 @@ const eslintConfig = defineConfig([
     // eslint-config-nextの既定Ignore:
     ".next/**",
     "out/**",
+    "test-results/**",
+    "playwright-report/**",
     "build/**",
     "next-env.d.ts",
     "src/shared/graphql/generated.ts",

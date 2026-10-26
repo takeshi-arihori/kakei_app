@@ -121,4 +121,34 @@ describe('認証HTTPの未検証入力境界', () => {
       }),
     ).toEqual({ attemptSecret: 'synthetic', sessionSecret: undefined });
   });
+  it('認証に使わないSDK CookieのJSON値から本人性を解釈しない', () => {
+    expect(
+      authenticationCookieSecrets('g_state={"i_l":0}; a=synthetic', {
+        attempt: 'a',
+        session: 's',
+      }),
+    ).toEqual({ attemptSecret: 'synthetic', sessionSecret: undefined });
+  });
+  it.each([
+    'a=synthetic ',
+    'a=synthetic ; other=value',
+    's=synthetic ',
+    'other=value; s=synthetic ; a=other',
+    'a= synthetic',
+    's="synthetic" ',
+  ])('認証Cookie値の空白を暗黙に除去せず拒否する: %s', (cookie) => {
+    expect(() =>
+      authenticationCookieSecrets(cookie, { attempt: 'a', session: 's' }),
+    ).toThrow();
+  });
+  it.each([
+    'g_state={"i_l":0}; a=one; a=two',
+    'g_state={"i_l":0}; a={"not":"a-secret"}',
+    'g_state=bad\u0001; a=synthetic',
+    'other=' + 'x'.repeat(8192),
+  ])('SDK Cookieがあっても認証CookieとHeaderの拒否条件を維持する', (cookie) => {
+    expect(() =>
+      authenticationCookieSecrets(cookie, { attempt: 'a', session: 's' }),
+    ).toThrow();
+  });
 });
