@@ -117,3 +117,10 @@ A2は[正式Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)�
 ## 認証HTTP・localhost接続の具体化（2026-10-22）
 
 [Task #218](https://github.com/takeshi-arihori/kakei_app/issues/218)は[HTTP ADR](../adr/authentication-http-and-development-boundary.md)と[HTTP契約](../security/authentication-http-boundary.md)へ、4API/同一Origin/Cookie/CSRF/公開Error/共有Rate/使い捨て開発のDecisionを固定した。Owner初回承認とLogin再開始409の追補を保持し、実装後の新規4専門Reviewを経てDraft PRへ進める。通常mainでは認証能力を有効化せず、開発の単一lease/非空拒否/実CSPRNGを永続Providerの実証へ読み替えない。実Google Browser/UIは#219、Production Provider/Proxy/TLS/Backup/退会/監視は既存Gateを維持する。
+
+
+## A6認証画面の接続範囲
+
+Issue #219は[UI契約](../security/google-authentication-ui.md)に従い、localhostのGoogle buttonとA5相対4API、状態確認/logout/取消/期限/結果不明/別Tab復帰を接続する。CIのGoogle外部境界（GIS応答/公開鍵取得）の合成は2026-10-25 Owner承認。実SDK署名と実API/PG/Cookieを使うE2E、実Googleの手動、4専門Reviewは別Evidence。通常main/Production、永続鍵、退会/Backup/Ingress/監視、招待/Group画面のGateを解除しない。
+
+2026-10-25の追加Owner承認により、[Cookie共存ADR](../adr/authentication-cookie-coexistence.md)は非認証Cookie値を解釈せず無視する範囲だけHTTP ADRを部分変更する。認証Cookie/Origin/CSRF/署名/TTL/Rate/Production Gateは維持する。実Google再確認と独立Securityを含む4専門Reviewは別Evidenceを必要とする。

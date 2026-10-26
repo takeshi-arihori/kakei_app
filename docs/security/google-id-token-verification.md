@@ -28,10 +28,10 @@ Testは実行中だけ生成する合成RSA鍵とJWTを実SDKへ通し、公開�
 - [API用テンプレート](../../apps/api/.env.example): `.env`へコピーし、`GOOGLE_CLIENT_ID`にWebと同じ開発用Client IDを設定する想定。
 - [ルートのテンプレート](../../.env.example)は既存のDB・Docker用。ApplicationのGoogle設定とは配置を分ける。
 
-上記KEYは後続接続Task向けの設定例であり、環境変数からPortへの読込契約を実装済みとはしない。現行WebはKEYを参照せず、APIは`.env`の自動読込・KEYの参照・`allowedAudiences`への接続が未実装。空欄やファイルの存在だけで設定済み／認証有効と扱わない。Client SecretやAPI KeyはこのIDトークン検証に使用しないため設定例に含めない。実値はGit管理外のコピー先へ記載する。
+Web開発`/login`は公開IDを読み、API専用開発入口は明示環境変数をallowedAudiencesへ接続する。APIは`.env`を自動読込しない。設定だけでProduction認証を有効にせず、[localhost Runbook](../operations/authentication-local-development.md)と[UI契約](google-authentication-ui.md)を使う。Client Secret/API Keyは使用せず、実値はGit管理外に置く。
 
 ## 後続Gate
 
-nonce一致だけで再送防止やCSRFの完成を主張しない。[認証Lifecycle ADR](../adr/google-login-actor-session.md)は2026-10-11に方式・TTL・保持方針のOwner承認を受けた。[内部Lifecycle契約](google-authentication-lifecycle.md)でLogin試行の発行・原子的消費、Actor対応／登録、Session発行・利用・失効をPortへ分離する。保護された実保存、公開API／Error／Rate limit／CSRF／CORS、画面接続は後続Taskで確定・検証する。ここでのToken期限判定をSession TTLへ転用しない。Google APIアクセス用Tokenは取得しない。
+nonce一致だけで再送防止やCSRFの完成を主張しない。[認証Lifecycle ADR](../adr/google-login-actor-session.md)は2026-10-11に方式・TTL・保持方針のOwner承認を受けた。[内部Lifecycle契約](google-authentication-lifecycle.md)でLogin試行の発行・原子的消費、Actor対応／登録、Session発行・利用・失効をPortへ分離する。保護保存とlocalhost HTTP/画面は[HTTP契約](authentication-http-boundary.md)と[UI契約](google-authentication-ui.md)へ接続する。通常main/Productionの有効化と外部Capabilityの実証は別Gate。ここでのToken期限判定をSession TTLへ転用しない。Google APIアクセス用Tokenは取得しない。
 
 招待コードの期限・再発行・取消・保護保存・原子消費も別Gateとする。ADR #36／#52／#55の業務認可・Invitation lifecycle・Protection／Audit／Retention／Backup／Deploymentの条件を維持し、Verifierの存在をProduction接続許可と解釈しない。

@@ -16,11 +16,11 @@ pnpm -C apps/web build
 
 開発Serverは<http://localhost:3000>で起動します。
 
-## Googleログインの準備用設定
+## Googleログイン
 
-[`.env.example`](.env.example)を同Directoryの`.env.local`へコピーし、`NEXT_PUBLIC_GOOGLE_CLIENT_ID`に開発用Google Client IDを記載する想定です。既存ファイルがある場合は上書きせず、必要なKEYだけ追記します。APIの`GOOGLE_CLIENT_ID`と同じ値を使い、Client SecretやAPI Keyは記載しません。
+[`.env.example`](.env.example)を同Directoryの`.env.local`へコピーし、`NEXT_PUBLIC_GOOGLE_CLIENT_ID`に開発用Google Client IDを記載します。既存ファイルがある場合は上書きせず、必要なKEYだけ追記します。APIの`GOOGLE_CLIENT_ID`と同じ値を使い、Client SecretやAPI Keyは記載しません。
 
-このKEYは後続接続Task向けの設定例で、現行Webはまだ参照していません。設定だけではログインできません。API側の`.env`読込・本人性／Session・画面の接続も後続Taskです。[設定手順](../../README.md#googleログインの設定例)と[技術契約](../../docs/security/google-id-token-verification.md)を参照してください。
+開発の`/login`がこの公開IDを参照し、公式GISと同一Originの4APIへ接続します。APIは通常の`dev`ではなく専用`dev:auth`を起動します。通常main/Productionは未有効です。[設定手順](../../README.md#googleログインの設定例)と[技術契約](../../docs/security/google-id-token-verification.md)を参照してください。
 
 ## GraphQL
 
@@ -43,3 +43,12 @@ GraphQL Operation／Result型を手書きせず、Repository rootで`pnpm codege
 現行Scopeは共有Groupの割り勘です。個人用家計、口座、収入Transaction、日付境界Archiveを現行画面の前提にしません。
 
 詳細は[`AGENTS.md`](AGENTS.md)とRepository rootの[開発ガイド](../../docs/engineering/README.md)を参照してください。
+
+
+## 認証画面の検証
+
+```bash
+pnpm --filter @kakei/web test:auth:e2e
+```
+
+専用PG17末尾_testを`TEST_DATABASE_URL`で指定し、localhost:3000/127.0.0.1:3001を空けて実行します。Test所有の一時DBだけを作成・cleanupし、Google外部応答は合成、実SDK/実API/PG/Cookieを使います。Production入口の既存`test:e2e`と分離し、実Googleの成功とは別に記録します。契約と設定は[認証UI](../../docs/security/google-authentication-ui.md)、[開発Runbook](../../docs/operations/authentication-local-development.md)を参照してください。

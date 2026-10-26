@@ -61,7 +61,7 @@ export interface AuthenticationCookieSecrets {
  * @param header Cookie Headerまたは不在。
  * @param names Compositionが固定した2用途の名前。
  * @returns 同名重複のない未検証秘密値。
- * @throws 長過ぎる/不正構文/選択Cookie重複は400。
+ * @throws Header上限/制御文字/名前/区切り、選択Cookieの値構文/重複は400。
  */
 export const authenticationCookieSecrets = (
   header: string | null,
@@ -71,19 +71,20 @@ export const authenticationCookieSecrets = (
     reject(400);
   const selected = new Map<string, string>();
   for (const segment of header?.split(';') ?? []) {
-    const pair = segment.trim();
+    const pair = segment.trimStart();
     const separator = pair.indexOf('=');
     if (separator <= 0) reject(400);
     const name = pair.slice(0, separator);
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) reject(400);
+    // SDK等のCookie値は本人性にも構文判定にも使わない。
+    if (name !== names.attempt && name !== names.session) continue;
     const value = pair.slice(separator + 1);
     if (
-      !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) ||
       !/^(?:[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]*|"[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]*")$/.test(
         value,
       )
     )
       reject(400);
-    if (name !== names.attempt && name !== names.session) continue;
     if (selected.has(name)) reject(400);
     selected.set(name, value);
   }

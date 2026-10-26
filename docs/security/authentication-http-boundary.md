@@ -13,7 +13,7 @@ Browser操作をServer Attempt/Sessionへ接続する。変更されるのはTra
 - H-PRE-1 / Trust / #218 DC1: Server設定のcanonical Originを固定する。Production契約はHTTPS origin、開発profileは文字通り`http://localhost:3000`。userinfo/path/query/fragment/空/null/wildcard/Originリストを設定値として許可しない。RequestのOriginも一つのcanonical文字列として完全一致させ、suffixや部分一致を使わない。POSTで欠落/null/重複/不一致なら403。RefererやForwardedで救済しない。
 - H-PRE-2 / Transport / DC1: 全4操作で`X-Kakei-Request: 1`を要求する。GETはBrowserがOriginを送らない場合を許可するが、あれば完全一致を要求する。`Sec-Fetch-Site`があれば`same-origin`だけ許可し、欠落は独立した拒否理由にしない。credential付きCORSも認証preflight許可も追加しない。異Origin Scriptのcustom Header付きRequestはpreflightで拒否される。
 - H-PRE-3 / Input / DC1: POSTは`application/json`、任意のcharset=utf-8だけを許可。identity以外のContent-Encodingを拒否。全Bodyはstreamを読みながら18,432 bytesで制限し、Content-Lengthの省略/偽装でも超過を拒否する。読取期限は5秒。GETはBodyを受け付けない。Header総量16KiB/最大64個はNode入口で制限する。認証路でこれらを満たさない開発入口を成功扱いしない。
-- H-PRE-4 / Input / DC2: attempt/logoutはJSON Object `{}`だけ、loginは`{ credential: string }`だけ。未知Field、Actor/Role/expectedNonce、配列/null/重複JSON Fieldを拒否。Credentialは空不可、最大16,384 ASCII bytes、既存Verifierの検査を維持する。Cookie総量8KiB、選択Cookie名の重複・不正構文を400で拒否。秘密値は既存32-byte canonical Base64URL契約を使う。
+- H-PRE-4 / Input / DC2: attempt/logoutはJSON Object `{}`だけ、loginは`{ credential: string }`だけ。未知Field、Actor/Role/expectedNonce、配列/null/重複JSON Fieldを拒否。Credentialは空不可、最大16,384 ASCII bytes、既存Verifierの検査を維持する。Cookie総量8KiB、可視ASCII、各pairの名前/区切りを検査し、選択する認証Cookieの値構文・同名重複を400で拒否。他Cookieの値は解釈せず無視する（[Cookie共存ADR](../adr/authentication-cookie-coexistence.md)、2026-10-25 Owner承認）。秘密値は既存32-byte canonical Base64URL契約を使う。
 - H-PRE-5 / Resource / DC1/DC3: Rate予約に必要な接続Peer情報はNode接続から作る内部Contextであり、Header/Bodyで受け取らない。Rate/Crypto/Storeなど必須Capability不足は503または起動拒否。Test hookを設定から呼べるようにしない。
 
 GETでOriginが省略されることと、変更系POSTのOrigin必須を区別する。`X-Kakei-Request`は本人性やCSRF Tokenの代替ではない。RequestごとにServerがUUIDv4 requestIdを発行し、ClientのrequestIdを診断やAuditの正本に使わない。
@@ -27,7 +27,7 @@ GETでOriginが省略されることと、変更系POSTのOrigin必須を区別�
 | GET /auth/session | Session Cookie。200 `{ authenticated: true, csrfToken, expiresAt }`。無効なら401 envelope | H-POST-3 / AUTH-R3。Service.withAuthenticatedActorのinspect CallbackでScope.serializeした本文をcommit後にそのまま返す。Actor IDを公開せずidleを延長しない |
 | POST /auth/logout | `{}`、Session Cookie、有効Sessionがある場合はSession束縛`X-CSRF-Token`。204、Session Cookie削除 | H-POST-4 / AUTH-R4。先にinspect leaseでCSRFを定数時間照合し、同じCookieだけをrevokeする。失効commit成功後だけCookieを消す。Cookieなし/不正形式/期限切れ/失効済みはOrigin等の検査後204 |
 
-LogoutのCSRF照合と失効の間に他logoutが先行しても、同一Cookieの失効は冪等。新しいSessionの秘密値を再利用せず、別CookieのSessionは変更しない。inspect障害を「Cookieなし」とみなさない。有効SessionのCSRF不足/不一致は403、Cookieを残す。Cookie不正構文/重複は一般入力不正であり、冪等logoutの例外にしない。
+LogoutのCSRF照合と失効の間に他logoutが先行しても、同一Cookieの失効は冪等。新しいSessionの秘密値を再利用せず、別CookieのSessionは変更しない。inspect障害を「Cookieなし」とみなさない。有効SessionのCSRF不足/不一致は403、Cookieを残す。Cookie Headerの上限/制御文字/名前/区切り違反と認証Cookieの値構文不正/重複は一般入力不正であり、冪等logoutの例外にしない。
 
 2026-10-22 Owner追補承認により、A1が同じ`restart-required`で返すcanonicalなLogin CSRF不一致と試行の期限/消費済み/不在は、一律409へ変換する。欠落/形式不正CSRF Headerは403でServiceを呼ばない。内部結果を拡張して不一致理由を公開しない。再開始409ではAttemptだけを削除する。有効Session競合409ではCookieを変更しない。
 
@@ -50,7 +50,7 @@ H-FAIL-1 / DC3: HTTP前提違反でService/Google/認証Recordを呼ばず、認
 
 | HTTP | code | 主な条件 |
 | --- | --- | --- |
-| 400 | INVALID_REQUEST | JSON/未知Field/重複Field/Cookie構文不正、GET Body |
+| 400 | INVALID_REQUEST | JSON/未知Field/重複Field/Cookie Header違反/認証Cookie値構文不正・重複、GET Body |
 | 401 | AUTHENTICATION_REQUIRED | Sessionなし/失効/期限切れ、Google Credential拒否（存在や失敗理由を非開示） |
 | 403 | REQUEST_REJECTED | Origin/Request Header/Fetch Metadata、LoginのCSRF Header欠落/形式不正、Logoutの有効Sessionに対するCSRF不足/不一致 |
 | 405 | INVALID_REQUEST | 定義外Method。Allowは定義Methodのみ |
