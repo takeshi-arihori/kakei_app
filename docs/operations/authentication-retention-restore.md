@@ -46,3 +46,9 @@ Witness修復は真正な同headとFailure domainの運用証拠を確認する�
 | 認証HTTP／画面・退会業務 | #218／#219の個別Ready、CSRF／Origin／Cookie／Rate limit／Proxy、未完了業務と過去参照の受付方針 |
 
 合成Providerの成功をこれらの完了へ読み替えない。具体製品・配置・運用値は未承認のまま固定せず、後続Taskの設計・独立Security Review・実運用Evidenceが揃ってから本番Compositionへ接続する。
+
+## 招待コード拡張のProposal
+
+[Task #233の運用案](invitation-code-retention-restore.md)は未承認・未実装である。採用/実装時はコードRecord/全MAC鍵世代を清掃・Actor削除inventory・全コードRestore破棄へ追加し、新Schema/epochを理解しない旧Writer/Restoreをfenceする必要がある。既存の全Attempt/Session破棄だけでは十分にならない。
+
+現行Runbookがコードを既に扱うとは主張しない。GM Invitation/成功operationとの共通commitを片側SchemaのRestoreで巻き戻さず、全Context復旧点/Checkpoint整合を検証するまで開通しない。新たな本番Capabilityと実証は同案のB4/Production Gateに残す。
