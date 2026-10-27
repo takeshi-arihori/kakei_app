@@ -146,3 +146,9 @@ Event Sourcing、CQRS、Projection、Outboxの採否と適用範囲は[domain-de
 ### #218の認証HTTP接続基準
 
 基点develop `bc7ab5b9c4a3b794e255f8ce05dcd5f42135de1c`に対し、#218は前述のHTTP Adapter/共有Rateと専用開発Compositionを追加する。Webの同一Origin転送は`apps/web/app/auth/[...path]/route.ts`がdevelopmentだけで固定loopbackへ行い、Productionでは503を返す。通常API main、業務GraphQL、業務認可、本番Providerを有効化しない。Taskの最終検証・4専門Review・PR結果はIssue #218を参照する。
+
+## 招待コード保存の設計案（未採用）
+
+[Task #233の設計](../security/invitation-code-lifecycle.md)は共有認証技術によるコードRecord所有、GMによるInvitation/operation所有、専用本人性leaseとGMのquery限定Scope参加を提案する。既存withSession/GroupRepositoryを順番に呼んでも原子性は成立しない。
+
+これは[Proposed ADR](../adr/invitation-code-lifecycle-and-protected-storage.md)の判断入力であり、現在のLayer/採用済み保存形式を変更しない。Owner承認と個別Ready後、共有認証からGMへのimport、GMから認証TableへのSQL依存、Applicationへのpg/crypto露出を加えずに実装する。公開HTTP/OpenAPI/GraphQL/Composition接続とProduction有効化は別Gate。
