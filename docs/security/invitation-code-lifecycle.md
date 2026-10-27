@@ -145,6 +145,8 @@ Restoreは[運用設計](../operations/invitation-code-retention-restore.md)に�
 
 ## Threat / Verification matrix
 
+実装Trace: [#236](https://github.com/takeshi-arihori/kakei_app/issues/236)は[共有認証Application README](../../apps/api/src/shared/application/authentication/README.md)の入力値・最小Record構造検証・純粋Policy・内部Port/opaque型だけを対象とする。V01/V02/V03/V07/V11のPolicy/型の検証を、以下の実PG/暗号/HTTP/復旧の受入計画と区別する。実Session lease/registryは#239、原子的なGM統合は#243で実証する。
+
 すべて**後続の受入計画**。本Taskの文書検証を実DB/暗号/Browser実証と扱わない。契約IDからTestを導出し、合成Actor/秘密値だけをその場で生成する。
 
 | ID / Trace | Scenario | 期待結果 | Level / 後続担当 |
