@@ -1,20 +1,20 @@
-# 招待コードのLifecycle・保存・原子的消費の設計案
+# 招待コードのLifecycle・保存・原子的消費の設計
 
-Knowledge State: **Proposed / Owner未承認**。[ADR案](../adr/invitation-code-lifecycle-and-protected-storage.md)と[設計Task #233](https://github.com/takeshi-arihori/kakei_app/issues/233)に対応する。本文の「する」は案の内部整合性を表し、実装済み/Acceptedを意味しない。
+Knowledge State: **Accepted（詳細設計。実装・個別Ready・Production有効化は別Gate）**。[ADR](../adr/invitation-code-lifecycle-and-protected-storage.md)と[設計Task #233](https://github.com/takeshi-arihori/kakei_app/issues/233)に対応する。2026-10-27のOwner明示回答「はいお願いします。」を承認証跡とする。本文は採用済み設計の契約であり、実装済みや本番利用可能とは意味しない。
 
 ## 要求・調査・責務
 
-基準: `3b2f148b2c5483db825d5dab1cab8090370d8ee7`、2026-10-27 fetch済みdevelop。#233のScope 1〜5をR1 Lifecycle、R2本人束縛、R3一回消費/再送、R4保存/原子性、R5保持/復旧/公開境界としてTraceする。
+基準: `3b2f148b2c5483db825d5dab1cab8090370d8ee7`、2026-10-27の初回調査基準。Proposal PR #234はdevelop `72bc0d2f250fd079706677daedd9840fb100448c`へ統合済みで、その後のOwner承認を本追補で同期する。#233のScope 1〜5をR1 Lifecycle、R2本人束縛、R3一回消費/再送、R4保存/原子性、R5保持/復旧/公開境界としてTraceする。
 
 | Evidence | 成立済み/Gapと判断 |
 | --- | --- |
-| ADR #203 / #52 / #36 | 登録済み本人のコード共有、Owner入力、本人受諾、Invitationの7日/版/人数/原子性/再送はAccepted。コード詳細は未決 |
+| ADR #203 / #52 / #36 | 登録済み本人のコード共有、Owner入力、本人受諾、Invitationの7日/版/人数/原子性/再送はAccepted。コード詳細は初回調査時に未決で、本Accepted設計が補完する |
 | GroupCommandService inviteParticipant / acceptInvitationとspec | trusted Actorからの作成/本人受諾とGroup内原子性の内部契約。コード発行/検索/消費は存在しない |
 | PostgresGroupRepository commit / GroupAccessPolicy | 自前接続・BEGIN/COMMIT。認証leaseへ自動参加しない。既存Groupの版/Owner/CASとoperation namespaceを再利用するがTransaction ownerを分離する必要 |
 | AuthenticationStore withSession / TransactionScopes | caller Actor→Sessionを既にlockし、ScopeのObject identity/受付期間/失敗/確定本文を制御。追加宛先Actorの後付けlockや別接続の業務保存は不可 |
 | A2 / 認証保守のPort・実PG integration | Actor MAC/用途別Digest/同一Scope/監査/清掃/Restoreの基礎はある。新コードRecord・共同lease・GM enlist・旧コードの復活防止は新設計/未実装 |
 
-既存ActorSubjectは本人性参照のVO、GroupはOwner/在籍/人数/Invitationを所有するAggregate、InvitationはGroup配下の本人宛てRecord、Participantは在籍のEntity。新CodeSecretは技術入力値、RecipientCodeRecordは共有認証技術の状態Recordとする案であり、独立した業務Aggregate/ContextやEvent Sourcingを追加しない。発行/取消は本人credentialの管理、Invitation作成/受諾はGMの業務操作へ分ける。
+既存ActorSubjectは本人性参照のVO、GroupはOwner/在籍/人数/Invitationを所有するAggregate、InvitationはGroup配下の本人宛てRecord、Participantは在籍のEntity。新CodeSecretは技術入力値、RecipientCodeRecordは共有認証技術の状態Recordとし、独立した業務Aggregate/ContextやEvent Sourcingを追加しない。発行/取消は本人credentialの管理、Invitation作成/受諾はGMの業務操作へ分ける。
 
 Domainはpg/暗号/Sessionに依存しない。GM Applicationが既存Groupの純粋判断と公開Portを調整し、共有認証ApplicationはGMをimportしない。接続/鍵/Scope参加はInfrastructureとCompositionが組み立てる。GMからauthentication SchemaをSQL参照したり、共有認証StoreがInvitation payload/Roleを保存したりしない。新しいコードPolicyを既存Invitationの7日Ruleへ混ぜない。
 
@@ -56,12 +56,12 @@ ActorあたりIssued行は最大一つ。期限超過Issuedも新規発行時に
 | IC-PRE-5 | PRE / Domain | 自己招待/宛先のActive重複なし、Active人数<4。違反時コードを消費せずInvitationも作らない |
 | IC-POST-1 | POST / Application | Consumed、7日Pending Invitation、Invitation履歴、Group/Policy版、operation結果/Auditを一度だけ共通commit |
 | IC-INV-1 | INV / Accepted業務 | InvitationはParticipant/枠ではない。受諾のみが新Participant/joinOrder/在籍履歴を作る（ADR #52） |
-| IC-INV-2 | INV / 提案技術 | ActorあたりIssued最大一つ、一コードにつき新Invitation最大一つ |
+| IC-INV-2 | INV / 採用技術 | ActorあたりIssued最大一つ、一コードにつき新Invitation最大一つ |
 | IC-FAIL-1 | FAIL / Atomicity | 形式/業務拒否/確実rollbackではコード/Invitation/Group/operation不変。許可された拒否Audit/Session idle更新は業務状態と区別 |
 | IC-FAIL-2 | FAIL / Infrastructure | MAC/鍵/SQL/監査/Scope不正は汎用unavailable、固定Code Alert、部分確定なし。commit応答喪失だけは確定済みの可能性を保持 |
 | IC-POST-2 | POST / Replay | 同じcaller Actor/operation/内容の成功再送は保存済み最小結果のみ返す。異内容Mismatch、別Actorは取得不可 |
 
-IC-PRE-1/3/5、IC-INV-1と既存再送意味はAccepted ADR由来、コード詳細/新Port/保護表現は本Proposal由来。新規作成と成功再送では適用条件を区別する。正しい成功再送には現在Owner/宛先active/コード有効/現在Group版を要求しないが、caller自身の現在有効Sessionと元Actor一致は必要。
+IC-PRE-1/3/5、IC-INV-1と既存再送意味はAccepted ADR由来、コード詳細/新Port/保護表現は本Accepted ADR由来。新規作成と成功再送では適用条件を区別する。正しい成功再送には現在Owner/宛先active/コード有効/現在Group版を要求しないが、caller自身の現在有効Sessionと元Actor一致は必要。
 
 コード横取りは本人受諾を代替しない。Ownerに見せるのは自分の作成結果だけで、宛先の登録状態をErrorや応答項目の違いで開示しない。宛先本人のPending一覧/受諾は自分宛てのInvitationだけを安全に読み、実Groupを確認する別API/UI設計に残す。
 
@@ -79,11 +79,11 @@ COMMIT送信前の確認済みrollbackと結果不明を区別する。COMMIT送
 
 ## R4 保存Inventory・鍵・原子性
 
-以下は**将来Migrationの論理設計**で、SQL追加/適用は本Taskでは行わない。既存PostgreSQL 17/raw pg/番号付き追加Migrationを使う案で、他Store/ORMを追加しない。
+以下は**採用済みの将来Migrationの論理設計**で、SQL追加/適用は本Taskでは行わない。既存PostgreSQL 17/raw pg/番号付き追加Migrationを使い、他Store/ORMを追加しない。
 
 | Record / Owner | 平文許可・認証 | 保存しないもの / 制約 |
 | --- | --- | --- |
-| authentication.recipient_code / 共有認証技術 | CSPRNG UUIDv4 codeId、recipientActorId FK、recordVersion、epoch、作成/expiry、status/terminalAt、検索keyVersion+32-byte Digest、MAC keyVersion+32-byte MAC | raw code、Google Identity/Profile、Session原値、Group/Invitation FKなし。Actorと時刻のDB内Linkabilityは許容する案 |
+| authentication.recipient_code / 共有認証技術 | CSPRNG UUIDv4 codeId、recipientActorId FK、recordVersion、epoch、作成/expiry、status/terminalAt、検索keyVersion+32-byte Digest、MAC keyVersion+32-byte MAC | raw code、Google Identity/Profile、Session原値、Group/Invitation FKなし。Actorと時刻のDB内Linkabilityは本Decisionで許容する残Risk |
 | authentication.key_state拡張 / 共有認証技術 | code検索/Record MACの用途別世代制御、epoch。既存世代は変更せず拡張検証 | 鍵Materialなし。旧Writer/旧Restoreが新種別をskipできるまま開通しない |
 | GM operationの保護Record / GM | 既存Envelope Metadataのみ平文 | 新fingerprint/proof世代・codeId/宛先内部factsはGroup Envelope内。raw codeなし、別の平文Actor索引追加なし |
 | 認証Audit / 共有認証技術 | 固定action/decision/reason、Server event/request ID、UTC、用途別Actor/コード仮名、Audit世代 | 直接ID、code/Digest/proof、IP/UA、SQL例外、Profileなし |
@@ -97,9 +97,9 @@ MACは独立したRecord別256-bit Key、purpose `auth-recipient-code-state/v1`�
 
 制約: PK codeId、FK recipientActorIdは既存Actorの物理保持に従い削除cascadeを付けない、Unique(lookupKeyVersion,digest)、Unique(recipientActorId) WHERE status=Issued、cleanup due索引、status/terminalAtとTTL/版/byte長のCHECK。Expiredは時刻由来でありPartial Uniqueのpredicateにnow()を使わない。発行時はActor排他Lock下で旧Issuedを終端化してからinsertする。制約はMAC/本人認可の代替ではない。
 
-### TransactionとPort案
+### TransactionとPortの契約
 
-論理Port名は実装Taskで既存命名に合わせるが、次の能力/責務は固定できる案とする。
+論理Port名は実装Taskで既存命名に合わせるが、次の能力/責務を本設計の契約とする。
 
 - RecipientCodeSessionPort（共有認証Application契約）: 発行/取消/コード使用の入力からcaller Sessionと宛先hintを得て、必要Actorを先に並べてleaseを開始する。Callbackにはtrusted caller/recipient facts、opaqueな消費handle、既存AuthenticationTransactionScope相当だけを渡す。GM型/Domainをimportしない。
 - RegisteredRecipientInvitationService（GM Application）: GM-owned Port経由で既存Group判断、operation照合、Invitation commit計画を調整する。本人対応/鍵処理をDomainへ混ぜない。
@@ -137,11 +137,11 @@ GM-onlyの既存CommandはGM key-state→Groupの部分順序を守る。Group L
 
 Actor削除の対象inventoryへ全recipient-code Record/鍵を追加し、既存認証削除Prepared/Checkpoint/Witness/全世代closureに参加させる。GMの既存Invitation/過去Actor参照/operation結果をAuthenticationのcascadeで削除しない。disabled宛先の新規消費/受諾接続は必ず現在のActor状態を検証する。過去業務参照と退会受付のDecisionは既存Gateに残す。
 
-Restoreは[運用案](../operations/invitation-code-retention-restore.md)に従い、全コード/全MAC鍵世代を列挙して破棄し、新epochをDB外で公開する。認証Schemaだけの復旧/全Session破棄だけでGroupの成功operationやInvitationを巻き戻せると判断しない。全Contextで同じ整合した復旧点、既存GM削除Ledger/Checkpoint、認証Ledgerと独立Witnessを検証し、不足時はTrafficを閉じたままにする。
+Restoreは[運用設計](../operations/invitation-code-retention-restore.md)に従い、全コード/全MAC鍵世代を列挙して破棄し、新epochをDB外で公開する。認証Schemaだけの復旧/全Session破棄だけでGroupの成功operationやInvitationを巻き戻せると判断しない。全Contextで同じ整合した復旧点、既存GM削除Ledger/Checkpoint、認証Ledgerと独立Witnessを検証し、不足時はTrafficを閉じたままにする。
 
 後続HTTPは同一Origin/有効Session/変更CSRF/厳格入力/総量上限/共有Rateを必要とする。コードをURL/履歴/referrer/Analytics/Console/例外/Log/端末の永続Storageへ置かない。発行/入力Responseはno-store、画面で秘密値を消去し、コピーは明示操作だけ。一般のAccount/コード列挙やcode→Profile照会を提供しない。
 
-公開APIのPath/Schema/数値Rate/HTTP status、Groupの存在非開示と処理時間差の検証、Pending一覧のread policy、Proxy/Ingressは後続Taskで確定する。その契約/実Security証拠が揃うまで内部PortをHTTPへwireしない。既存4認証HTTP APIの仕様変更やProduction有効化を本案に含めない。
+公開APIのPath/Schema/数値Rate/HTTP status、Groupの存在非開示と処理時間差の検証、Pending一覧のread policy、Proxy/Ingressは後続Taskで確定する。その契約/実Security証拠が揃うまで内部PortをHTTPへwireしない。既存4認証HTTP APIの仕様変更やProduction有効化を本設計に含めない。
 
 ## Threat / Verification matrix
 
@@ -182,14 +182,14 @@ Restoreは[運用案](../operations/invitation-code-retention-restore.md)に従�
 | B4 | 清掃/Actor削除inventory/全コードRestore失効の永続契約 | B3 merge、既存認証保守の拡張を実PG検証 |
 | B5 | 公開API/共有Rate設計→発行/入力・本人Pending/受諾API→画面/E2E | B3/B4 mergeと公開契約/CSRF/Rate/存在非開示Decision。複数の独立Taskへ分割、#92/#90へTrace |
 
-採用後は各先行merge後の最新developから通常PR、Stack不要。B1/B2だけ設計上は並行可。前提merge後は対象Policy/暗号vector/Migration/2接続/再送/削除Restoreの影響Testを再実行してから後続Readyを評価する。#233自身も未承認の具体Decisionを解消せず実装Ready/Doneへ移さない。Provider/外部Ledger/Witness/物理Backup/退会業務/Deploymentの既存Production GateはB5完成でも残る。
+承認同期のdevelop統合後は、各先行merge後の最新developから通常PR、Stack不要。B1/B2だけ設計上は並行可。前提merge後は対象Policy/暗号vector/Migration/2接続/再送/削除Restoreの影響Testを再実行してから後続Readyを評価する。#233自身も承認同期のdevelop統合・完了条件確認前にDoneへ移さず、後続実装は個別Ready評価する。Provider/外部Ledger/Witness/物理Backup/退会業務/Deploymentの既存Production GateはB5完成でも残る。
 
-## 文書同期・検証限界・Ownerへの確認
+## 文書同期・検証限界・Owner Decision
 
-更新: 本仕様、ADR案/一覧、design-gates、Backendの案への参照、運用案。Schema inventoryは本案の表であり、実ER/SQL/Migration/OpenAPI/GraphQL/正式業務図は実装/公開設計時に同期する。Accepted業務Concept/図を未承認コードで書き換えない。Skill/AGENTS/既存暗号形式/依存Packageは変更不要。
+更新: 本仕様、Accepted ADR/一覧、design-gates、Backendの設計参照、運用設計。Schema inventoryは本設計の表であり、実ER/SQL/Migration/OpenAPI/GraphQL/正式業務図は実装/公開設計時に同期する。Accepted業務Concept/図を未実装のコード機能で書き換えない。Skill/AGENTS/既存暗号形式/依存Packageは変更不要。
 
 使用Skill: prepare-github-work/pre-investigation/domain-design/specification-contract/database-change、文書検証のtesting、Self Reviewのcode-review。domain-modelingは既存の業務境界を維持して新業務概念を発見する要求がないため省略。api-designはB5、implementationはProduction差分なし、stacked-pr-deliveryはStackなし、prepare-pr-evidenceは視覚証跡要求なしのため省略。
 
-Owner判断の対象はADR案Aの7点。特に10分/一Actor一つ/再表示なし/logoutでは維持/認証技術所有/共通commit/MACと再送proof/清掃24h/復旧時全破棄をまとめて判断できるよう提示する。具体ProviderやHTTP Rate数値まで承認済みとは扱わない。
+Ownerは2026-10-27、提示済みADR案Aの7点（10分/一Actor一つ/再表示なし/logoutでは維持/認証技術所有/共通commit/MACと再送proof/清掃24h/復旧時全破棄）を採用した。具体ProviderやHTTP Rate数値、実装Ready・Production有効化まで承認済みとは扱わない。
 
-外部根拠（2026-10-27確認）: [OWASPの一回使用Token指針](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html)は乱数・十分な長さ・安全な保存・本人束縛・使用後無効化を確認する参考であり、Password Resetを本アプリの招待と同じUse Caseとは扱わない。[PostgreSQL 17 Lock](https://www.postgresql.org/docs/17/explicit-locking.html)と[Isolation](https://www.postgresql.org/docs/17/transaction-iso.html)をLock待機/順序/READ COMMITTEDの技術根拠とした。TTLや保存所有、MAC形式/共通Portの具体設計はProject案である。
+外部根拠（2026-10-27確認）: [OWASPの一回使用Token指針](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html)は乱数・十分な長さ・安全な保存・本人束縛・使用後無効化を確認する参考であり、Password Resetを本アプリの招待と同じUse Caseとは扱わない。[PostgreSQL 17 Lock](https://www.postgresql.org/docs/17/explicit-locking.html)と[Isolation](https://www.postgresql.org/docs/17/transaction-iso.html)をLock待機/順序/READ COMMITTEDの技術根拠とした。TTLや保存所有、MAC形式/共通Portの具体設計はProjectの採用Decisionである。

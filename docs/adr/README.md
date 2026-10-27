@@ -4,7 +4,7 @@ Decision本文はこのディレクトリで管理する。Owner承認、関連T
 
 | Decision | Status | 関係・証拠 |
 | --- | --- | --- |
-| [招待コードのLifecycle・保護保存・原子的消費](invitation-code-lifecycle-and-protected-storage.md) | Proposed / Owner未承認 | [設計Task #233](https://github.com/takeshi-arihori/kakei_app/issues/233)。10分/一Actor一つ/不可逆検索値/共通commit/清掃・Restoreの案。コード実装・後続Ready・Production Gateを解放しない |
+| [招待コードのLifecycle・保護保存・原子的消費](invitation-code-lifecycle-and-protected-storage.md) | Accepted（詳細設計） | [設計Task #233](https://github.com/takeshi-arihori/kakei_app/issues/233)。2026-10-27 Owner会話承認「はいお願いします。」。10分/一Actor一つ/不可逆検索値/共通commit/清掃・Restore。承認同期のdevelop統合・個別Ready・Production Gateは維持 |
 | [認証Cookieと外部SDK Cookieの共存](authentication-cookie-coexistence.md) | Accepted（検査範囲のみ） | [#219](https://github.com/takeshi-arihori/kakei_app/issues/219)。2026-10-25 Owner会話承認。非認証Cookie値を解釈せず無視、認証Cookie/総量/制御文字の検査を維持。独立Security/実Google検証は別Gate |
 | [認証HTTP・共有Rate limit・使い捨て開発Composition](authentication-http-and-development-boundary.md) | Accepted（設計。本番Gateは別） | [#218](https://github.com/takeshi-arihori/kakei_app/issues/218)、2026-10-21 Owner会話承認・2026-10-22 HTTP追補承認。localhost例外・使い捨て開発を実装・検証。I5とDraft PRはTaskのDelivery Gate、本番未有効 |
 | [認証Dataの保護保存・原子的確定・復旧](authentication-protected-storage.md) | Accepted（詳細保存設計） | 2026-10-11 Owner会話承認「はい。」。[承認証跡 #212](https://github.com/takeshi-arihori/kakei_app/issues/212)、独立Security pass。認証専用Envelope／Digest／鍵更新／原子性／削除Restore。PR #220統合・個別Ready・Production Gateは維持 |

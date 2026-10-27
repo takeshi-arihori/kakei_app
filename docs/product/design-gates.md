@@ -125,8 +125,8 @@ Issue #219は[UI契約](../security/google-authentication-ui.md)に従い、loca
 
 2026-10-25の追加Owner承認により、[Cookie共存ADR](../adr/authentication-cookie-coexistence.md)は非認証Cookie値を解釈せず無視する範囲だけHTTP ADRを部分変更する。認証Cookie/Origin/CSRF/署名/TTL/Rate/Production Gateは維持する。実Google再確認と独立Securityを含む4専門Reviewは別Evidenceを必要とする。
 
-## 招待コード設計のProposal（2026-10-27）
+## 招待コード詳細設計のOwner承認（2026-10-27）
 
-[設計Task #233](https://github.com/takeshi-arihori/kakei_app/issues/233)の[ADR案](../adr/invitation-code-lifecycle-and-protected-storage.md)と[詳細設計](../security/invitation-code-lifecycle.md)はProposedである。10分TTL、一Actor一つ、本人取消/再発行、不可逆検索値とRecord MAC、コード消費/Invitation作成の共通Transaction、コード清掃とRestore時全破棄をOwnerへ提示する案であり、Acceptedではない。
+[設計Task #233](https://github.com/takeshi-arihori/kakei_app/issues/233)の[ADR](../adr/invitation-code-lifecycle-and-protected-storage.md)と[詳細設計](../security/invitation-code-lifecycle.md)は2026-10-27のOwner明示回答「はいお願いします。」によりAcceptedである。10分TTL、一Actor一つ、本人取消/再発行、不可逆検索値とRecord MAC、コード消費/Invitation作成の共通Transaction、コード清掃とRestore時全破棄を採用する。Proposal PR #234はdevelopへ統合済みで、この追補はOwner承認のStatus同期を行う。
 
-既存Invitationの7日/本人受諾/人数/版とADR #55/#212のGateを維持する。特に認証の既存withSessionへ宛先Actorを後付けlockせず、専用leaseとGMの同Scope参加を設計する。コードのAPI/UI・実Schema/暗号/Store/清掃/Restoreは未実装、#233はBacklog/Blocked Yesで、Owner判断・文書統合・各Taskの個別Ready前に実装を始めない。
+既存Invitationの7日/本人受諾/人数/版とADR #55/#212のGateを維持する。特に認証の既存withSessionへ宛先Actorを後付けlockせず、専用leaseとGMの同Scope参加を設計する。コードのAPI/UI・実Schema/暗号/Store/清掃/Restoreは未実装、#233と後続のReady/Doneは承認同期のdevelop統合後に個別評価し、各TaskのReady前に実装を始めない。

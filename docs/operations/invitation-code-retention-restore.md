@@ -1,6 +1,6 @@
-# 招待コードの清掃・削除・Restore運用案
+# 招待コードの清掃・削除・Restore運用設計
 
-Knowledge State: **Proposed / 未実装**。[ADR案](../adr/invitation-code-lifecycle-and-protected-storage.md)と[設計契約R5](../security/invitation-code-lifecycle.md#r5-保持削除復旧公開)に対応する。[認証の既存Runbook](authentication-retention-restore.md)と[GMの保護・保持ADR](../adr/snapshot-revision-security-and-retention.md)を緩和しない。
+Knowledge State: **Accepted（運用設計。実装・本番Capabilityの実証は別Gate）**。[ADR](../adr/invitation-code-lifecycle-and-protected-storage.md)と[設計契約R5](../security/invitation-code-lifecycle.md#r5-保持削除復旧公開)に対応する。[認証の既存Runbook](authentication-retention-restore.md)と[GMの保護・保持ADR](../adr/snapshot-revision-security-and-retention.md)を緩和しない。
 
 ## 清掃
 
@@ -27,7 +27,7 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 3. 認証とGMの独立Ledger/Witnessを最新headで検証し、削除Prepared/Complete、GMの削除/保持整合を再適用する。古いprefixやfork、不足Evidenceでは隔離を維持する。
 4. 復旧した全recipient-code行を、状態/期限に関係なく破棄する。消費済み行をIssuedへ戻さず、旧コードを再Hashして救済しない。Record破損/MAC鍵破棄済みでも「検証できないから残す」としない。信頼済みscope inventoryに束縛して全MAC鍵世代/0-rowを確認する。これは既存全Attempt/Session破棄に追加する手順。
 5. DB Backupと独立した外部制御へ新epochを所有run/revision CASで公開し、旧epoch Writerをfenceする。発行/検索/消費は現行epochに一致する場合だけ受け付ける。epoch/MAC鍵をBackupから戻さない。
-6. GMの保持Invitation/operation/locator/鍵世代の整合を検査する。コード消費の成否を新しいInvitation作成/取消で補償しない。共通commit済み結果の保持/rollbackを既存Checkpointで証明できない場合は、本案を根拠に開通せず本番復旧設計Taskへ戻す。
+6. GMの保持Invitation/operation/locator/鍵世代の整合を検査する。コード消費の成否を新しいInvitation作成/取消で補償しない。共通commit済み結果の保持/rollbackを既存Checkpointで証明できない場合は、本設計だけを根拠に開通せず本番復旧設計Taskへ戻す。
 7. 新Checkpoint/Witness、削除/全コード破棄証拠、現在epoch/鍵/Writer fence、旧コードのHTTP拒否、新コード発行から本人受諾までを確認してから開通する。開通応答喪失/監視故障は同runで再閉鎖し、不明状態を成功扱いしない。
 
 新epochだけで既存Invitation/operationの一貫性を証明したとは扱わない。API全体と外部Providerの同時侵害、全DB整合rollbackをMACで防げると主張しない。Restore訓練と実配置のEvidenceなしにProduction wiringを許可しない。
@@ -43,4 +43,4 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | 公開経路 | CSRF/Origin/Rate、secret非保存/no-store、旧code拒否、新発行・Invitation作成・本人受諾の実HTTP/Browser |
 | 監視 | overdue/pending/破損/epoch不一致の実配信と封鎖、秘密/直接IDの非収集 |
 
-本Taskは手順案であり、上表を実行済みとは扱わない。B4の合成Provider成功も本番Capabilityの証拠ではない。既知の期限未達、外部票不足、MAC/鍵不整合、未知Schema、旧Writer共存、片側復旧のいずれかがあれば成功/開通を停止する。
+本Taskは採用済みの運用設計の文書化であり、上表を実行済みとは扱わない。B4の合成Provider成功も本番Capabilityの証拠ではない。既知の期限未達、外部票不足、MAC/鍵不整合、未知Schema、旧Writer共存、片側復旧のいずれかがあれば成功/開通を停止する。

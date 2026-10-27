@@ -1,12 +1,13 @@
 # 招待コードのLifecycle・保護保存・原子的消費
 
-- Status: **Proposed**。Owner承認は未取得。コード/保存の実装Readyではない。
+- Status: **Accepted（詳細設計。実装・個別Ready・Production有効化は別Gate）**。
 - Proposed Date: 2026-10-27（Asia/Tokyo）
+- Accepted Date: 2026-10-27（Asia/Tokyo）
 - Decision Owner: Project Owner
 - Decision / Design Task: [#233](https://github.com/takeshi-arihori/kakei_app/issues/233)
 - Epic: [#202](https://github.com/takeshi-arihori/kakei_app/issues/202)
 - Decision Check: 方針変更あり
-- Supplements / proposed partial amendments: [登録済み宛先への招待](google-login-and-registered-recipient-invitation.md)の未決詳細を補完。[A2](authentication-protected-storage.md)の認証技術Record/Lock/清掃/Restore対象、[Group operation契約](group-operation-locator-and-group-id-contract.md)の新Command fingerprint検証を拡張する提案。既存ADR本文/Statusは変更しない。
+- Supplements / Amends: [登録済み宛先への招待](google-login-and-registered-recipient-invitation.md)の未決詳細を補完。[A2](authentication-protected-storage.md)の認証技術Record/Lock/清掃/Restore対象、[Group operation契約](group-operation-locator-and-group-id-contract.md)の新Command fingerprint検証を拡張する。既存ADR本文/Statusの履歴は変更しない。
 - 詳細: [設計・操作契約・検証表](../security/invitation-code-lifecycle.md)、[運用案](../operations/invitation-code-retention-restore.md)
 
 ## Problem / Context
@@ -15,9 +16,9 @@
 
 最新develop `3b2f148b2c5483db825d5dab1cab8090370d8ee7`を確認した。既存Group Commandはtrusted targetSubjectを直接受け、Group Repositoryは自分でBEGINする。認証のwithSessionは既にcaller Actor/Sessionをlockするため、その後に宛先Actorを追加lockすると既存Actor昇順に反し得る。両方を既存のまま順番に呼ぶ実装では原子的消費を満たさない。
 
-## Decision proposal A
+## Decision（案A、Accepted）
 
-以下はすべてOwnerへ提示する**案**であり、Confirmedな実装Ruleではない。
+Project Ownerは2026-10-27、提示済み案Aの次の7項目を採用した。承認証跡は[#233](https://github.com/takeshi-arihori/kakei_app/issues/233)に記録する。設計の採用は実装・本番保証を意味しない。
 
 1. コードは32-byte CSPRNG秘密値のcanonical Base64url（paddingなし43文字）とし、有効期限は発行判断点から**10分**、延長なし。期限等値は無効。短い数字PINやURLリンクにしない。
 2. 本人ActorあたりIssued recordは一つ。本人の明示的な発行/再発行は旧Issuedを失効させ、新秘密値を一度だけ返す。再表示/秘密値の成功再送復元は提供しない。取消は当該本人だけ。Session logout/idle満了だけではコードを失効させず、Actor無効化・Restoreでは無効化する。
@@ -29,9 +30,9 @@
 
 ## Alternatives
 
-| 選択肢 | 利点 | 制約/採否案 |
+| 選択肢 | 利点 | 制約/判断 |
 | --- | --- | --- |
-| A: 10分・一つ・再発行で置換・不可逆検索値 | 共有時間を絞り、古いコードを本人が止められる。漏出/再送の保存を最小化 | コピー共有が必要。紛失/応答喪失は再発行。本案 |
+| A: 10分・一つ・再発行で置換・不可逆検索値（Accepted） | 共有時間を絞り、古いコードを本人が止められる。漏出/再送の保存を最小化 | コピー共有が必要。紛失/応答喪失は再発行。本案 |
 | 24時間/複数有効コード | 非同期の共有が容易 | 漏出/悪用可能期間と管理対象を増やすため初期案では不採用 |
 | 6桁PIN | 手入力が容易 | 推測耐性をRate limitへ大きく依存し、短命でも全体攻撃面を増やすため不採用 |
 | 原コードの暗号化保存/再表示 | 端末移動や応答喪失から復元できる | 復号権限と秘密値の再送保存が増えるため不採用 |
@@ -39,7 +40,7 @@
 | コードを先に消費、Invitationを別commit | 既存Storeをそのまま使える | 片側だけ成功するため不採用。補償や非同期配送では一回限りの共通確定を代替しない |
 | logoutで本人の全コードを失効 | 端末離脱と失効を連動できる | 別端末のlogoutで共有済みコードが止まる。本人取消/Actor無効化を失効手段とする本案とは異なる |
 
-10分/一つ/24時間という値はProjectのUX・保護方針の提案であり、OWASP等が指定した値ではない。
+10分/一つ/24時間という値はProjectの採用したUX・保護方針であり、OWASP等が指定した値ではない。
 
 ## Consequences / Residual risk
 
@@ -49,14 +50,20 @@ DB内のランダムActor参照・コード件数/時刻・状態、同一コー
 
 ## Implementation / Approval gate
 
-本TaskはD2のProposal文書だけ。調査と案の作成を許可した「続きを実装してください」を、未提示だった10分や保存所有等へのOwner承認と扱わない。#233はBacklog / Blocked Yesを維持し、Ownerの明示Decision、必要なReview、文書統合と個別Ready評価前にコード/SQL/公開APIを追加しない。
+本Taskは詳細設計の文書化である。初回の「続きを実装してください」は調査・Proposal作成の許可として扱い、具体方式の承認を先取りしなかった。その後、提示済み案Aの採用確認にOwnerが「はいお願いします。」と明示回答したため、2026-10-27にAcceptedへ同期する。承認同期のdevelop統合と各後続Taskの個別Ready評価前にコード/SQL/公開APIを追加しない。
 
-独立ReviewはProposed文書の完全性/安全性を評価し、採用そのものを承認しない。Ownerへ本案を提示し、明示判断を#233に記録してからADR Status、仕様、Epic/Taskを同期する。PR Ready化/Merge、本番有効化、後続Task一括Readyは別。
+PR #234の独立ReviewはProposed文書の完全性/安全性を評価したもので、採用判断は今回のOwnerの明示回答を根拠とする。会話証跡を親Agentが#233へ転記し、ADR Statusと仕様・参照Gateを同期する。Owner本人のGitHub Comment/Review承認操作を主張しない。今回の承認に、今後のPR Ready化/Merge、本番有効化、後続Task一括Readyは含まれない。
 
-[後続候補の依存表](../security/invitation-code-lifecycle.md#後続deliverableとready)は候補であり、正式Issueは設計確定後のPlanning評価で作る。未Merge Codeに依存せずStackなし。
+[後続候補の依存表](../security/invitation-code-lifecycle.md#後続deliverableとready)は候補であり、正式Issueは承認同期のdevelop統合後のPlanning評価で作る。未Merge Codeに依存せずStackなし。
 
 ## Rollback / Review trigger / Owner decision
 
-現時点はData変更なし。Proposalが不採用なら文書案を取り下げ、Accepted ADRを維持する。将来の適用済みDataは追加Migration/Forward-fixで扱い、古い秘密値・epoch・破棄鍵を復活させない。
+現時点はData変更なし。本Decisionを見直す場合は新ADRで履歴と互換性を記録し、Accepted履歴を消す形で上書きしない。将来の適用済みDataは追加Migration/Forward-fixで扱い、古い秘密値・epoch・破棄鍵を復活させない。
 
-TTL、発行数、logout連動、表示/再送、Data Owner、Record保護、Lock/共通commit、入力証明鍵の保持、Actor削除、Restore、公開経路/Rate limitの変更は再Review対象。Owner Decision: **未取得**（2026-10-27）。
+TTL、発行数、logout連動、表示/再送、Data Owner、Record保護、Lock/共通commit、入力証明鍵の保持、Actor削除、Restore、公開経路/Rate limitの変更は再Review対象。Owner Decision: **案AをAccepted**（2026-10-27）。
+
+### Owner Decision / History
+
+- 2026-10-27: PR #234をProposed文書として作成し、4専門ReviewとCIはpass。Ownerが同PRをdevelopへMergeした（Commit `72bc0d2f250fd079706677daedd9840fb100448c`）。文書だけの統合であり、本番機能は有効化していない。
+- 同日、親Agentが提示した「ADRの案Aを採用し、設計確定へ進めてよいですか？」にProject Ownerが「はいお願いします。」と明示回答した。上記7項目の詳細設計への承認として#233に記録する。
+- Proposal PRを先にMergeしたため、最新developから承認同期だけの文書追補PRを作る。設計値・操作契約・検証計画は変更しない。親Agentによる会話証跡の転記であり、Owner本人のGitHub上の承認操作ではない。
