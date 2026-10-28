@@ -60,3 +60,36 @@ APIのUnit Testと型検査、依存方向、既存Group／Settlement vectorを�
 ## 認証保守の証跡境界
 
 `authentication-ledger-evidence.ts`は専用256-bit HMAC、application／用途／namespace付きCanonical TLV、SHA256 chain、全page連続性、freshな両latest head／attestation、Prepared→Complete版とManifest hash所属を検証する。検証済みhead／intentは所有registryに登録し、構造だけの証拠を受理しない。retired MAC鍵は検証専用で新規appendを拒否する。全鍵破棄／外部fenceの保証は専用Port提供者が所有し、Test-only合成実装をProductionへimportしない。詳細と未実装本番Capabilityは[保守契約](../../../../../../docs/security/authentication-maintenance.md)と[Runbook](../../../../../../docs/operations/authentication-retention-restore.md)を参照する。
+
+## 招待コード専用暗号（#238）
+
+[Accepted R3〜R5](../../../../../../docs/security/invitation-code-lifecycle.md)に従い、`recipient-code-crypto.ts`が検索・コード別状態MAC・Audit仮名を所有する。Port/Brandは`shared/application/authentication/recipient-code-crypto-ports.ts`、GMの証明Portは`group-management/application/recipient-code-request-proof.ts`、Node Adapterは同Contextの`infrastructure/recipient-code-request-proof.ts`。共有認証からGMへ依存しない。既存A2/Group Envelope・vector・Purpose集合を変更しない。
+
+| 用途 | ProviderのScope / epoch | Canonical TLV入力（記載順） |
+| --- | --- | --- |
+| `auth-recipient-code-lookup/v1` | authentication / null | app / purpose / canonical decoded 32-byte code |
+| `auth-recipient-code-state/v1` | codeId UUIDv4 / null | app / purpose / codeId / recipientActorId / recordVersion / Record epoch / lookupKeyVersion / binary lookupDigest / createdAt / expiresAt / status / nullable terminalAt / macKeyVersion |
+| `auth-audit-recipient-code/v1` | authentication / null | app / purpose / codeId |
+| `gm-recipient-code-request/v1` | group-management / null | app / purpose / canonical decoded 32-byte code |
+
+appは`kakei_app`。各Fieldはtag 1開始・記載順、presence 0/1、uint32 BE長、UTF-8またはbinary。absenceは状態MACのterminalAtだけ。状態MAC形式は`canonical-recipient-code.ts`でencode/decodeし、全Metadataの構造、TTL600000ms、UUIDv4、正のsafe integer、非負のUTC milliseconds、ASCII鍵世代1〜255文字、負のzero拒否を検査する。未知/欠落/余剰/重複/逆順tag、UTF-8不正、空Field、非Canonical数値は拒否する。自己MACは入力に含めず、Epochの現在有効性・時刻/Actor/Session認可は後続lease/Policyが判断する。
+
+各用途は独立ランダム256-bit鍵を使い、状態MACはさらにcodeId別。Providerの返却purpose/version/epoch/scope/32-byteを照合する。同じMaterialへ用途文字列だけを追加して鍵を共用したり、IDから再導出したりしない。Import関数はCopy/形式検証であり、Materialの独立乱数性を検証した証拠ではない。コードRecordにAEAD/Nonceを追加しない。Lookup/Audit出力は用途/世代/Scope付きWrapperと既存用途別Byte Brand、GM proofには別のGM-owned鍵/値Brandを使う。保存Byte列を再構成するAdapterも選択した用途/世代/Scopeを検証し、構造だけで認証済みと扱わない。
+
+`recordMac`はMAC自身を除いたMetadataを受け、`verifyRecord`は保存MAC付き行全体を検証する。MAC不一致・形式/鍵障害は固定`RecipientCodeUnavailable`と固定分類Alert、入力/ID/鍵/元例外を含めない。Lookupの正規値不一致だけはfalse、GM proofの正規入力不一致だけはfalseとし、後続Use Caseが存在非開示/Mismatchへ写像する。GMは新規proofの`create`だけに選択current世代を渡し、`verify`には保存proofだけを渡す。保存世代で計算し、現在世代の指定/コード行/認証鍵を要求しない。GM operationの既存Envelopeへ証明と世代を保存する接続は#242。
+
+鍵取得前にCallerのMetadata/入力/保存Byte列を同期Copyし、Provider返却MaterialもCopyして操作終了時にzero化する。Providerの元Bufferや返却値へ依存を残さない。比較は固定32-byteを検証した上でNode `timingSafeEqual`を使う。通知失敗を汎用失敗へ置換せず、JavaScript heap/crypto内部Copyの完全消去や経路全体の時間差非開示は保証しない。Node primitiveの根拠は[公式Crypto](https://nodejs.org/docs/latest-v24.x/api/crypto.html#cryptotimingsafeequala-b)。
+
+### 鍵寿命の分離
+
+- Record別MACの通常rotationは旧MACを検証して再MACし、必要な旧世代を読取保持する。ただし最早の終端/期限/Actor無効化+24hまでの**全世代破棄をBackup読取保持より優先**する。
+- `recipient-code-key-lifecycle.ts`のinventory/closure PortはreadKeyとは別能力。全current/旧/廃棄済み世代と認証済みInventory版、同operationの永久Scope封鎖、全世代破棄、closure真正性/所属の照合を要求する。証拠参照の文字列だけでは完了にしない。#244/#245がdurable ticket/DB削除/0-row/復旧時の信頼済みInventory照合へ接続する。
+- Lookup鍵は全参照0件かつ関連Backupの35日window終了後に退役する。GM proof鍵は参照するGM operationが0件かつ同Backup window終了まで保持し、コード行/Record MAC鍵清掃やActor Identity鍵破棄に巻き込まない。Audit仮名鍵の保持は参照Auditの既存90日保持/Backupと整合させ、Record清掃へ混在させない。
+
+本TaskはProviderの読取/保守契約とNode暗号部品だけ。具体Provider・全世代の外部durability/永久封鎖/closure真正性・24h運用・35日Backup・Session lease・SQL/Audit原子性・清掃/Restore・公開経路・本番Compositionを実証したとは扱わない。
+
+### 検証
+
+`test/generate-recipient-code-vectors.py`はProduction TypeScriptを参照せず、Python標準hmac/hashlib/structで公開合成鍵・decoded byte列から5つのTLV/HMAC vectorを計算する。`test/recipient-code-golden-vectors.json`はlookup/issued/consumed/audit/proofを固定し、原コードの43文字表現はFixtureへ保存しない。再計算はこのDirectoryから `python3 test/generate-recipient-code-vectors.py`。既存A2/Group vectorを上書きしない。
+
+Unit Testは全MAC Fieldの差替え、別Record/用途/Scope、鍵不在/廃棄/例外/誤Descriptor、型の誤用、旧proof世代、Caller変更、固定長比較の境界、通知失敗を確認する。Lifecycle Portは契約だけで、合成Providerの成功を本番鍵破棄の証拠としない。DB/HTTP/UI変更がないため新PG/Browser検証は行わず、既存暗号/Architecture/API全体とroot checkを回帰する。

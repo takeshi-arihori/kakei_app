@@ -147,6 +147,8 @@ Restoreは[運用設計](../operations/invitation-code-retention-restore.md)に�
 
 実装Trace: [#236](https://github.com/takeshi-arihori/kakei_app/issues/236)は[共有認証Application README](../../apps/api/src/shared/application/authentication/README.md)の入力値・最小Record構造検証・純粋Policy・内部Port/opaque型だけを対象とする。V01/V02/V03/V07/V11のPolicy/型の検証を、以下の実PG/暗号/HTTP/復旧の受入計画と区別する。実Session lease/registryは#239、原子的なGM統合は#243で実証する。
 
+実装Trace追補: [#238](https://github.com/takeshi-arihori/kakei_app/issues/238)は[暗号README](../../apps/api/src/shared/infrastructure/authentication/README.md#招待コード専用暗号238)の認証3用途とGM-owned再送proof、Canonical TLV/独立参照vector、用途別Provider/全世代inventory/closure契約を提供する。V09/V10/V11の暗号・型・旧proof世代・非同期CopyのUnit範囲を対象とし、DB検索/世代切替/GM保存/両Audit原子性/清掃/Restore/公開経路の実証は後続Taskに残る。既存A2/Group形式は変更しない。
+
 すべて**後続の受入計画**。本Taskの文書検証を実DB/暗号/Browser実証と扱わない。契約IDからTestを導出し、合成Actor/秘密値だけをその場で生成する。
 
 | ID / Trace | Scenario | 期待結果 | Level / 後続担当 |
