@@ -79,7 +79,7 @@ COMMIT送信前の確認済みrollbackと結果不明を区別する。COMMIT送
 
 ## R4 保存Inventory・鍵・原子性
 
-以下は**採用済みの将来Migrationの論理設計**で、SQL追加/適用は本Taskでは行わない。既存PostgreSQL 17/raw pg/番号付き追加Migrationを使い、他Store/ORMを追加しない。
+以下は**採用済みのMigrationの論理設計**。設計Task #233ではSQLを追加/適用せず、後続[#237](https://github.com/takeshi-arihori/kakei_app/issues/237)の[version 8とInventory/適用手順](../../apps/api/migrations/authentication/README.md)でコードRecordと認証側鍵用途Metadataを追加する。既存PostgreSQL 17/raw pg/番号付き追加Migrationを使い、他Store/ORMを追加しない。GM保存/Audit・実lease・清掃/Restore・公開接続の実装や本番保証をSchema追加で完了扱いにしない。
 
 | Record / Owner | 平文許可・認証 | 保存しないもの / 制約 |
 | --- | --- | --- |
