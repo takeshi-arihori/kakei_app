@@ -145,6 +145,8 @@ Restoreは[運用設計](../operations/invitation-code-retention-restore.md)に�
 
 ## Threat / Verification matrix
 
+実装Trace追補: [#239](https://github.com/takeshi-arihori/kakei_app/issues/239)は[専用Session lease/Scope契約](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md#239-コード専用session-lease)を提供する。V02/V07/V13/V15のActor先行Lock、Session/コード参照再照合、最終期限、opaque消費/保存証跡/確定Response、未await/握り潰し/受付終了拒否、実PG2接続/rollback/commit不明/timeout/cancelを対象とする。登録GM準備/業務保存/コード消費Writerの正例は合成参加者であり、実GM Adapterとコード消費/Invitation/両Auditの業務atomicityは#242/#243で実証する。発行/取消Store本文#240、GM Command#241、清掃/Restore#244/#245、公開契約#246と本番Gateは残る。
+
 実装Trace: [#236](https://github.com/takeshi-arihori/kakei_app/issues/236)は[共有認証Application README](../../apps/api/src/shared/application/authentication/README.md)の入力値・最小Record構造検証・純粋Policy・内部Port/opaque型だけを対象とする。V01/V02/V03/V07/V11のPolicy/型の検証を、以下の実PG/暗号/HTTP/復旧の受入計画と区別する。実Session lease/registryは#239、原子的なGM統合は#243で実証する。
 
 実装Trace追補: [#238](https://github.com/takeshi-arihori/kakei_app/issues/238)は[暗号README](../../apps/api/src/shared/infrastructure/authentication/README.md#招待コード専用暗号238)の認証3用途とGM-owned再送proof、Canonical TLV/独立参照vector、用途別Provider/全世代inventory/closure契約を提供する。V09/V10/V11の暗号・型・旧proof世代・非同期CopyのUnit範囲を対象とし、DB検索/世代切替/GM保存/両Audit原子性/清掃/Restore/公開経路の実証は後続Taskに残る。既存A2/Group形式は変更しない。

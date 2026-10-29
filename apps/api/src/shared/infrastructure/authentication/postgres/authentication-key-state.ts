@@ -57,7 +57,13 @@ const known = new Set([
 const readState = async (
   connection: AuthenticationQueryConnection,
   statuses: readonly string[],
-): Promise<AuthenticationStoreKeyState> => {
+  additionalPurposes: readonly string[] = [],
+): Promise<
+  AuthenticationStoreKeyState & {
+    codeLookup: readonly string[];
+    codeMac: readonly string[];
+  }
+> => {
   const stateResult = await connection.query(
     'SELECT state_id, status, generation_version, epoch FROM authentication.key_state WHERE state_id = 1 FOR SHARE',
   );
@@ -87,7 +93,7 @@ const readState = async (
     const version = authenticationKeyVersion(row.key_version);
     if (
       typeof row.purpose !== 'string' ||
-      !known.has(row.purpose) ||
+      (!known.has(row.purpose) && !additionalPurposes.includes(row.purpose)) ||
       typeof row.searchable !== 'boolean' ||
       typeof row.write_required !== 'boolean'
     )
@@ -131,6 +137,7 @@ const readState = async (
     return set.write[0];
   };
   const identity = requireSet('google-identity-search');
+  for (const purpose of additionalPurposes) singleWrite(purpose);
   const auditVersion = singleWrite('audit-actor');
   if (
     singleWrite('audit-attempt') !== auditVersion ||
@@ -149,8 +156,38 @@ const readState = async (
     actorRead: Object.freeze(requireSet('actor-state-mac').search),
     actorWrite: singleWrite('actor-state-mac'),
     auditVersion,
+    codeLookup: Object.freeze(
+      additionalPurposes.length
+        ? requireSet('recipient-code-lookup').search
+        : [],
+    ),
+    codeMac: Object.freeze(
+      additionalPurposes.length
+        ? requireSet('recipient-code-state-mac').search
+        : [],
+    ),
   });
 };
+
+/**
+ * 新用途を明示した専用leaseだけがコード世代を受理する。旧Writerのfail closedを維持する。
+ * @param connection 所有者の同一Transaction。Actorより前にkey_stateを共有Lockする。
+ * @returns 既存認証世代と、全保持コードを覆うlookup/MACの読取世代。
+ * @throws AuthenticationCryptoUnavailable 未初期化・隔離・未知用途・不正/不足世代。
+ */
+export const readRecipientCodeKeyState = (
+  connection: AuthenticationQueryConnection,
+): Promise<
+  AuthenticationStoreKeyState & {
+    /** 全searchable lookup世代。current以外の旧コードも検索する。 */ readonly codeLookup: readonly string[];
+    /** 保持コードMACの公開読取世代。Record別の鍵取得とは別契約。 */ readonly codeMac: readonly string[];
+  }
+> =>
+  readState(
+    connection,
+    ['active', 'rotating'],
+    ['recipient-code-lookup', 'recipient-code-state-mac'],
+  );
 
 /**
  * 通常認証Writerはactive/rotatingだけを許可する。
