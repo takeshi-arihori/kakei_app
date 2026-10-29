@@ -1,3 +1,32 @@
+/** 読取とは別のRecord鍵発行能力。鍵MaterialをStoreへ返さない。 */
+export interface RecipientCodeStateKeyAllocationPort {
+  /**
+   * codeId/世代ごとに独立した256bit鍵を生成し、全世代inventoryへ先に登録する。
+   * 同一Descriptorが既存なら再生成せずcreated=falseで再確認する。上書き/破棄Scope復活は拒否する。
+   * DB rollbackは鍵を巻き戻さない。新Recordではcreated=trueだけを受理する。
+   * 孤立Scopeも期限を保持し、期限/終端/Actor無効化の最早時点+24h以内の全世代破棄へ引き継ぐ。
+   * @param input 新規Scopeまたは旧Record再MAC用の未発行世代と、延長しないコード期限。
+   * @returns 完全一致する固定Ackだけ。成功後は読取Portから同じ独立鍵を取得できる。
+   * @throws Error Provider障害。不明結果でもStoreは業務処理を自動retryしない。
+   */
+  allocate(input: {
+    /** Server生成UUIDv4。 */ readonly codeId: string;
+    /** key-state Lock下の唯一のwrite世代。 */ readonly keyVersion: string;
+    /** UTC期限。既存Recordの再MACでも延長しない。 */ readonly expiresAt: number;
+  }): Promise<
+    | {
+        /** 秘密Materialを含まない発行確認。 */ readonly status: 'allocated';
+        /** 今回の新規作成か、完全一致する既存鍵の再確認か。 */ readonly created: boolean;
+        /** 要求への完全束縛。 */ readonly codeId: string;
+        /** 要求への完全束縛。 */ readonly keyVersion: string;
+        /** 有限の孤立Scope inventoryにも保持する期限。 */ readonly expiresAt: number;
+      }
+    | {
+        /** 廃棄/Descriptor不一致/不明を復元しない。 */ readonly status: 'unavailable';
+      }
+  >;
+}
+
 /** Record別MACの全世代一覧。読取可能集合だけでは清掃完了を判定できない。 */
 export interface RecipientCodeMacKeyInventory {
   /** 永久封鎖する対象のcodeId UUIDv4。 */ readonly codeId: string;

@@ -35,6 +35,7 @@ const names = [
   '0006_authentication_inventory',
   '0007_authentication_http_rate',
   '0008_recipient_code_schema',
+  '0009_recipient_code_audit',
 ];
 const migration = async (version: number): Promise<SqlMigration> => {
   const name = names[version - 1];
@@ -532,5 +533,170 @@ describe('招待コードSchemaの実PostgreSQL17 Migration #237', () => {
       (await client.query('SELECT * FROM authentication.recipient_code'))
         .rowCount,
     ).toBe(1);
+  });
+
+  it('#240: 監査列追加は既存行を保ち、再適用とchecksumを検証する', async () => {
+    await apply();
+    await client.query(
+      "INSERT INTO authentication.audit_event(event_id,request_id,occurred_at_ms,action,decision,reason,audit_key_version) VALUES($1,$2,1000,'inspect','allow','success','v1')",
+      [randomUUID(), randomUUID()],
+    );
+    const before = await inventory();
+    const next = await migration(9);
+    expect(await applySqlMigrations(client, [next])).toEqual({
+      appliedVersions: [9],
+      skippedVersions: [],
+    });
+    expect(await inventory()).toEqual(before);
+    expect(
+      (
+        await client.query(
+          'SELECT code_digest_key_version,code_digest FROM authentication.audit_event',
+        )
+      ).rows,
+    ).toEqual([{ code_digest_key_version: null, code_digest: null }]);
+    expect(await applySqlMigrations(client, [next])).toEqual({
+      appliedVersions: [],
+      skippedVersions: [9],
+    });
+    await expect(
+      applySqlMigrations(client, [{ ...next, sql: next.sql + '\n-- changed' }]),
+    ).rejects.toBeInstanceOf(MigrationChecksumMismatch);
+  });
+
+  it('#240: 新しいコード監査用途と仮名の一対/32byte/操作制約を強制する', async () => {
+    await apply();
+    await applySqlMigrations(client, [await migration(9)]);
+    const audit = (
+      action: string,
+      version: string | null,
+      digest: Buffer | null,
+    ) =>
+      client.query(
+        "INSERT INTO authentication.audit_event(event_id,request_id,occurred_at_ms,action,decision,reason,audit_key_version,code_digest_key_version,code_digest) VALUES($1,$2,1000,$3,'allow','success','v1',$4,$5)",
+        [randomUUID(), randomUUID(), action, version, digest],
+      );
+    for (const action of [
+      'recipient-code-issue',
+      'recipient-code-revoke',
+      'recipient-code-inspect',
+    ])
+      await audit(action, 'v1', randomBytes(32));
+    for (const [action, version, digest] of [
+      ['inspect', 'v1', randomBytes(32)],
+      ['recipient-code-issue', null, randomBytes(32)],
+      ['recipient-code-issue', 'v1', null],
+      ['recipient-code-issue', 'v1', randomBytes(31)],
+      ['recipient-code-issue', 'bad space', randomBytes(32)],
+    ] as const)
+      await expect(audit(action, version, digest)).rejects.toThrow();
+  });
+
+  it('#240: DDL/台帳失敗を全rollbackし、9のDownを拒否する', async () => {
+    await apply();
+    const next = await migration(9);
+    await expect(
+      applySqlMigrations(client, [
+        { ...next, sql: next.sql + '\nSELECT synthetic_missing_column;' },
+      ]),
+    ).rejects.toThrow();
+    expect(
+      (
+        await client.query(
+          "SELECT 1 FROM information_schema.columns WHERE table_schema='authentication' AND table_name='audit_event' AND column_name='code_digest'",
+        )
+      ).rowCount,
+    ).toBe(0);
+    expect(
+      (
+        await client.query(
+          'SELECT version FROM app_schema_migrations WHERE version=9',
+        )
+      ).rowCount,
+    ).toBe(0);
+    await applySqlMigrations(client, [next]);
+    await expect(
+      client.query(
+        await readFile(
+          new URL(
+            '../migrations/authentication/0009_recipient_code_audit.down.sql',
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      ),
+    ).rejects.toThrow('forward-only');
+    expect(
+      (
+        await client.query(
+          'SELECT version FROM app_schema_migrations WHERE version=9',
+        )
+      ).rowCount,
+    ).toBe(1);
+  });
+
+  it('#240: 空DBへ1〜9を同時適用でき、code Auditの鍵や行を初期化しない', async () => {
+    expect(
+      (
+        await applySqlMigrations(
+          client,
+          await Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9].map(migration)),
+        )
+      ).appliedVersions,
+    ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(
+      (await client.query('SELECT * FROM authentication.audit_event')).rowCount,
+    ).toBe(0);
+    expect(
+      (await client.query('SELECT * FROM authentication.key_generation'))
+        .rowCount,
+    ).toBe(0);
+    const columns = (
+      await client.query(
+        "SELECT column_name,is_nullable,column_default FROM information_schema.columns WHERE table_schema='authentication' AND table_name='audit_event' AND column_name LIKE 'code_%' ORDER BY column_name",
+      )
+    ).rows;
+    expect(columns).toEqual([
+      { column_name: 'code_digest', is_nullable: 'YES', column_default: null },
+      {
+        column_name: 'code_digest_key_version',
+        is_nullable: 'YES',
+        column_default: null,
+      },
+    ]);
+  });
+
+  it('#240: 台帳追記故障も新Enum/列ごとrollbackする', async () => {
+    await apply();
+    await client.query(
+      "CREATE FUNCTION reject_code_audit_migration() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.version=9 THEN RAISE EXCEPTION 'synthetic ledger failure'; END IF; RETURN NEW; END $$",
+    );
+    await client.query(
+      'CREATE TRIGGER synthetic_reject9 BEFORE INSERT ON app_schema_migrations FOR EACH ROW EXECUTE FUNCTION reject_code_audit_migration()',
+    );
+    await expect(
+      applySqlMigrations(client, [await migration(9)]),
+    ).rejects.toThrow('synthetic ledger failure');
+    expect(
+      (
+        await client.query(
+          "SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname='authentication' AND t.typname='audit_action' AND e.enumlabel LIKE 'recipient-code-%'",
+        )
+      ).rowCount,
+    ).toBe(0);
+    expect(
+      (
+        await client.query(
+          "SELECT 1 FROM information_schema.columns WHERE table_schema='authentication' AND table_name='audit_event' AND column_name='code_digest'",
+        )
+      ).rowCount,
+    ).toBe(0);
+    expect(
+      (
+        await client.query(
+          'SELECT version FROM app_schema_migrations WHERE version=9',
+        )
+      ).rowCount,
+    ).toBe(0);
   });
 });

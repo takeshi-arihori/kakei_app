@@ -61,7 +61,7 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 
 `createRecipientCodeTransactionScopes(base)`は既存認証と同じ基礎registryを使う。Compositionだけが最初のlease前に`registerGroupParticipant({ prepare })`を一度呼び、その返却能力を信頼済みGM Adapterへ渡す。`prepare`はGM所有のkey-stateを同じquery限定能力で固定する登録Portで、共有認証はGM型・Table・SQLをimportしない。GMにはquery/attestだけを渡し、registryのopen/終了・Pool・commit能力や認証Writerを渡さない。
 
-`createPostgresRecipientCodeLeases({ pool, scopes, codec, digests, crypto, limits, consume })`が`RecipientCodeSessionLeasePort`を実装する。`withActor`は発行/取消保存用に本人Actorを最初からFOR UPDATEで固定する管理leaseであり、状態照会用のidle非更新入口ではない。発行/再発行/取消/状態照会のStore本文は#240に残る。`use`は次の順序を守る。
+`createPostgresRecipientCodeLeases({ pool, scopes, codec, digests, crypto, limits, consume })`が`RecipientCodeSessionLeasePort`を実装する。`withActor`は発行/取消保存用に本人Actorを最初からFOR UPDATEで固定する管理leaseであり、状態照会用のidle非更新入口ではない。発行/再発行/取消/状態照会のStore本文は後述の#240が所有する。`use`は次の順序を守る。
 
 1. caller-only leaseで認証key-state→登録GM key-state→caller Actor→Sessionを固定し、GM共通operationを照合する。成功再送はコード行/宛先Actor/コードMAC鍵を読まず、GMが検証した保存結果handleを返す。missは内部NoReplay本文だけを確定して終了する。
 2. 別の新規leaseで認証key-state→登録GM key-state→非locking Session/code hint→Actor UUID昇順FOR SHARE→Session FOR UPDATEの順で固定し、再lookupでFK/参照/epoch/検索束縛を照合する。追加Actorが必要なら後付けLockせずrollbackする。同じScopeでoperationを再照合して並行成功へ収束させてから、コードFOR UPDATEとMAC/lookup/公開読取世代/宛先active/期限を検証する。
@@ -75,3 +75,21 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 専用`readRecipientCodeKeyState`だけがSchema8のコード2用途を受理する。旧通常Writer/保守/Restoreの未知用途拒否は維持する。新しい鍵世代の初期化、旧Writer/Restoreとの公開切替、実GM Adapter、実コード消費/両Audit、清掃/Restore、HTTP/Dev/mainへの接続を今回の内部leaseで完成扱いにしない。
 
 `recipient-code-transaction-scopes.spec.ts`は偽証跡/参照差/二重消費/未await/別本文/受付終了を検証する。`recipient-code-leases.integration.spec.ts`は専用PG17のSuite所有Schemaで実Actor/Session/コードMAC/Lock/2接続競合/期限/SQL故障/rollback/COMMIT応答喪失/cancelを検証する。GM key-state/Table/業務保存、コード消費WriterとコードAuditはTest-onlyの合成参加者で、実GM保存は#242、コード消費とInvitation作成/両Auditの共通業務atomicityは#243のEvidenceが必要。公開契約・Provider・保守/復旧・Production Gateを解除しない。
+
+## #240 コードの発行・取消・状態確認
+
+`createPostgresRecipientCodeStore`は`issue/revoke/inspect`だけを実装する。本人Sessionから得たActorを使い、Client指定のActorを受け付けない。同じregistryのlease・query参加能力・guardをCompositionで渡す。Pool/BEGIN/COMMIT/releaseはlease ownerだけが所有する。管理Callbackは先頭で共有Lock済みのkey-stateを`readRecipientCodeManagementKeyState`で再取得し、後付けLockを取らない。新しいlookup/MACは唯一のwrite世代、旧Recordは公開read世代で検証する。
+
+- 発行/再発行: Actor FOR UPDATE→Session FOR UPDATE→本人の旧IssuedをcodeId昇順FOR UPDATE。CSPRNG32byteと独立UUIDv4を生成し、全searchable lookup世代の衝突/複数hitを拒否する。Lock/検索後の判断点+600000msを固定し、旧IssuedのReplaced/CAS/現行MAC、新Issued、用途別コード監査、Session idleと認証監査を同commitする。旧コードが期限超過でも先に終端化する。鍵/SQL/監査/serialize/最終期限失敗は全rollbackする。
+- 取消: 本人Actorを排他Lockし、codeIdと本人Actorの両方で対象を選ぶ。他人/不存在/清掃済みは同じAlreadyInactiveとコード仮名NULLの同じ監査形。本人の終端/期限等値もAlreadyInactive、有効IssuedだけRevoked/CAS/現行MAC。取消判断後の期限跨ぎも最終guardでrollbackする。GM/Invitationは参照・変更しない。
+- 状態確認: `inspectActor`は本人Actor FOR SHARE→Session FOR UPDATEを検証するがidleを更新せず、GM準備を行わない。コードをUUID昇順FOR SHAREで固定し、Issued優先、なければcreatedAt/codeId降順の最新終端を選ぶ。MAC/epoch/世代/所有者を検証し、codeId/state/expiresAtだけを返す。不在はno-code。ExpiredはClockから導出し、期限は延長しない。
+
+秘密値はDB/operation/確定serialize本文へ入れず、Callbackの一時候補だけで保持し、leaseのcommit確認後に一回返す。COMMIT送信後の障害は確定済みの可能性を残したunavailableで、復元・再発行・業務Callback retryを行わない。状態確認後の本人の明示再発行だけを許す。元Sessionのlogoutはコードを変更しない。
+
+失敗時の業務Transactionは全rollback/結果不明とし、その後の別`inspectActor`で固定deny/restart-requiredと本人仮名だけを一度記録する。これは業務再試行や失敗確定の証明ではなく、応答を許可できなかった記録である。コード存在は照会せず、秘密値/候補codeIdを復元しない。拒否Auditも失敗すればunavailableのまま、固定Alertだけを通知する。認証拒否は既存leaseの拒否Auditへ委譲する。拒否監査の保存と部分業務commitを混同しない。
+
+コード監査は[Migration9](../../../../../migrations/authentication/README.md#version-9-コード管理監査240)の固定actionと独立コード仮名を使う。Actor仮名とは独立鍵、Audit共通世代ラベルを用いる。codeId/lookup/state MAC/原値はAuditへ保存しない。旧認証actionでは従来列のINSERTを維持するため、Schema5/6の既存経路を変更しない。新鍵の明示発行と孤立Scopeの扱いは[暗号契約](../README.md#コードrecord鍵の明示発行240)に従う。
+
+`recipient-code-management.integration.spec.ts`は実PG17の2端末/取消/Actor無効化競合、最小状態/idle非更新、全世代衝突/複数hit/旧MAC再書込、期限等値/改竄/鍵Ack/各DML/監査/COMMIT前後故障、raw非保存、同backend/xminを検証する。Providerは明示発行する合成Mapであり、耐久性・全世代破棄は未実証。具体Pool所有者はPool errorも受け止め、Error/Client全体をLogへ出さない。Test Poolはrelease(true)したClientへの遅延25P04だけを期待通知とし、その他のPool errorは検証失敗にする。
+
+実GM消費/Invitation/両ContextのAuditは#242/#243、清掃/Restore/鍵退役は#244/#245、公開契約は#246以降。通常main/Dev/HTTPとProduction Gateは未接続のままとする。

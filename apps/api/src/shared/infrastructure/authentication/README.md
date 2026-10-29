@@ -93,3 +93,11 @@ appは`kakei_app`。各Fieldはtag 1開始・記載順、presence 0/1、uint32 B
 `test/generate-recipient-code-vectors.py`はProduction TypeScriptを参照せず、Python標準hmac/hashlib/structで公開合成鍵・decoded byte列から5つのTLV/HMAC vectorを計算する。`test/recipient-code-golden-vectors.json`はlookup/issued/consumed/audit/proofを固定し、原コードの43文字表現はFixtureへ保存しない。再計算はこのDirectoryから `python3 test/generate-recipient-code-vectors.py`。既存A2/Group vectorを上書きしない。
 
 Unit Testは全MAC Fieldの差替え、別Record/用途/Scope、鍵不在/廃棄/例外/誤Descriptor、型の誤用、旧proof世代、Caller変更、固定長比較の境界、通知失敗を確認する。Lifecycle Portは契約だけで、合成Providerの成功を本番鍵破棄の証拠としない。DB/HTTP/UI変更がないため新PG/Browser検証は行わず、既存暗号/Architecture/API全体とroot checkを回帰する。
+
+## コードRecord鍵の明示発行（#240）
+
+`RecipientCodeStateKeyAllocationPort.allocate`は読取`RecipientCodeKeyPort`と別能力である。codeId/現行MAC世代ごとに独立256bit鍵をProviderが生成し、DB外の全世代inventoryへ登録してから、codeId/keyVersion/expiresAt/createdの固定Ackだけを返す。StoreはDescriptorを完全照合し、秘密Materialを受け取らない。`readKey`で未知Scopeを暗黙生成しない。
+
+新Recordではcreated=trueを必須とする。旧Recordを現行世代で再MACする際、同一Descriptorの鍵が既にある場合だけcreated=falseで再確認し、既存Materialを変えない。これにより鍵確保後のDB rollbackから本人が明示再発行しても、旧Recordの鍵を上書きしない。Descriptor不一致、破棄済みScope/世代、全世代closure済みScopeはunavailable。発行結果不明からProvider鍵やコード原値を復元しない。
+
+Provider割当はDB rollbackで消えない。新コードの保存失敗/結果不明で孤立したScopeもexpiryを持つinventoryに保持し、終端/期限/Actor無効化の最早時点+24h以内の全世代破棄へ含める。旧Record再MACでも期限を延長しない。#244/#245のdurable ticket/closure/Restore照合と具体Providerのdurability・上限・監視が未実証であり、合成Mapの成功では本番を有効化しない。コード監査鍵はlookup/状態MAC/Actor監査と独立し、既存認証Audit共通世代ラベルに対応する`auth-audit-recipient-code/v1`のauthentication Scopeを使う。

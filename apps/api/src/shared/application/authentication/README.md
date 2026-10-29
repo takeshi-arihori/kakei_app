@@ -35,4 +35,10 @@ Testは合成入力のみ。`recipient-code-policy.spec.ts`は純粋判断、`re
 
 `RecipientCodeSessionLeasePort`は発行/取消向け本人Actor排他leaseと、caller-only再送照会→新規caller/recipient共有leaseを分ける内部入口である。Callbackへ渡すActorはSessionから解決し、宛先facts/消費handleはLock/MAC/epoch/lookup検証後にだけ発行する。Sessionとコード期限を全blocking Lock後と本文確定/commit前に再検証する。GroupのOwner/版/人数/本人受諾を共有認証へ移さない。
 
-GM key-state準備/保存証跡と認証の消費WriterはInfrastructure/Compositionの登録能力で接続する。[Store/Scope契約](../../infrastructure/authentication/postgres/README.md#239-コード専用session-lease)に能力分離と失敗契約を記載する。実GM Adapterなしの正例は合成参加者であり、#240のStore本文、#241のGM Command、#242の実Adapter、#243のコード消費/両Audit原子性を代替しない。状態照会のidle非更新入口、清掃/Restore/公開接続もそれぞれの後続Taskに残す。
+GM key-state準備/保存証跡と認証の消費WriterはInfrastructure/Compositionの登録能力で接続する。[Store/Scope契約](../../infrastructure/authentication/postgres/README.md#239-コード専用session-lease)に能力分離と失敗契約を記載する。実GM Adapterなしの正例は合成参加者であり、#240のStore本文、#241のGM Command、#242の実Adapter、#243のコード消費/両Audit原子性を代替しない。状態照会のidle非更新入口と管理Storeは#240で追加する。清掃/Restore/公開接続は後続Taskに残す。
+
+## コード管理契約（#240）
+
+[管理Store](../../infrastructure/authentication/postgres/README.md#240-コードの発行取消状態確認)が発行/再発行/取消/状態確認を実装する。`inspectActor`は本人Actorの共有Lockと有効Sessionを検証し、idleを更新しない専用入口。`withActor`の管理排他/idle更新と分け、状態照会のためGM登録を要求しない。発行の秘密値はcommit確認後だけ、状態照会はcodeId/state/expiresAtだけ。COMMIT結果不明を失敗確定とせず、自動再発行/原値復元は行わない。
+
+`RecipientCodeStateKeyAllocationPort`は読取Cryptoと独立した明示発行能力。codeId/世代/期限に一致する固定Ackを要求し、新Recordはcreated=trueだけを受理する。旧Record再MAC用の既存鍵はcreated=falseで再確認できるが、再生成/上書き/破棄Scope復活は認めない。孤立Scopeも有限期限の全世代inventoryに残し、#244/#245の清掃/Restoreと本番ProviderのEvidenceへ引き継ぐ。共有認証からGMの型/Domain/SQLを参照しない。

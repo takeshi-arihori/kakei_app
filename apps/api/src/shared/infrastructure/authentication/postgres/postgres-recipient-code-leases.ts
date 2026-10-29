@@ -162,7 +162,7 @@ export const createPostgresRecipientCodeLeases = (options: {
   const execute = async <R>(
     secret: string,
     clock: AuthenticationClock,
-    mode: 'manage' | 'replay' | 'create',
+    mode: 'manage' | 'inspect' | 'replay' | 'create',
     signal: AbortSignal | undefined,
     code: RecipientCodeSecret | undefined,
     callback: (context: Context) => Promise<{
@@ -174,7 +174,8 @@ export const createPostgresRecipientCodeLeases = (options: {
     const result = await transactions.run<R | Unauthenticated>(
       async (connection, lease) => {
         const state = await readRecipientCodeKeyState(connection);
-        if (mode !== 'manage') await scopes.prepare(lease.scope);
+        if (mode === 'replay' || mode === 'create')
+          await scopes.prepare(lease.scope);
         const hint = asSession(
           await findAuthenticationCookie(
             connection,
@@ -325,6 +326,28 @@ export const createPostgresRecipientCodeLeases = (options: {
     return result.status === 'committed' ? result.value : failure();
   };
   return Object.freeze({
+    async inspectActor(sessionSecret, clock, callback, signal) {
+      try {
+        parseAuthenticationSecret(sessionSecret);
+        return await execute(
+          sessionSecret,
+          clock,
+          'inspect',
+          signal,
+          undefined,
+          async (ctx) => {
+            const value = await callback(ctx.caller, ctx.lease.scope);
+            return {
+              result: { status: 'authenticated' as const, value },
+              value,
+              usage: 'inspect',
+            };
+          },
+        );
+      } catch {
+        return failure();
+      }
+    },
     async withActor(sessionSecret, clock, callback, signal) {
       try {
         parseAuthenticationSecret(sessionSecret);
