@@ -202,3 +202,40 @@ export interface RecipientCodeSessionPort {
     callbacks: RecipientCodeUseCallbacks<T>,
   ): Promise<AuthenticatedActorResult<T> | RecipientCodeUnavailableToActor>;
 }
+
+/** #239の本人性lease基盤。発行/取消Store本文と実消費Writerは後続Taskが所有する。 */
+export interface RecipientCodeSessionLeasePort {
+  /**
+   * 本人Actorを最初から排他Lockする管理用入口。別Actorを後付けLockしない。
+   * @param sessionSecret 現在のcanonical Session。
+   * @param clock Lock後と本文確定時に再確認するServer Clock。
+   * @param callback 本人factsとquery参加可能なScope。発行/取消の保存本文は#240。
+   * @param signal 任意の中断要求。中断時は本文を返さず全Transactionをabortする。
+   * @returns commit確認後の本文、未認証、または結果不明を含む障害。
+   */
+  withActor<T extends AuthenticationSerializedValue>(
+    sessionSecret: string,
+    clock: AuthenticationClock,
+    callback: (
+      caller: AuthenticatedActor,
+      scope: AuthenticationTransactionScope,
+    ) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<AuthenticatedActorResult<T>>;
+  /**
+   * caller-only成功再送後のmissだけ専用複合leaseへ進む。Callbackを自動retryしない。
+   * @param sessionSecret 現在のcanonical Session。
+   * @param code await前に独立Copyするコード入力。
+   * @param clock 全blocking Lock後/serialize前の期限判断。
+   * @param callbacks GM-owned成功再送と新規作成計画。実Adapterは#242。
+   * @param signal 任意の中断要求。COMMIT送信後は結果不明として扱う。
+   * @returns commit済み本文、未認証、存在非開示の拒否、または障害。
+   */
+  use<T extends AuthenticationSerializedValue>(
+    sessionSecret: string,
+    code: RecipientCodeSecret,
+    clock: AuthenticationClock,
+    callbacks: RecipientCodeUseCallbacks<T>,
+    signal?: AbortSignal,
+  ): Promise<AuthenticatedActorResult<T> | RecipientCodeUnavailableToActor>;
+}

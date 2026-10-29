@@ -4,7 +4,7 @@
 
 ## 招待コードのPolicyと契約（#236）
 
-[Accepted設計](../../../../../../docs/security/invitation-code-lifecycle.md)のR1〜R4に対応する内部部品。公開API、SQL、暗号処理、実Session認証、専用leaseはまだ実装していない。
+[Accepted設計](../../../../../../docs/security/invitation-code-lifecycle.md)のR1〜R4に対応する内部部品。#236自身はPolicy/型だけを対象とする。暗号は#238、専用leaseは#239の実装Traceを参照し、公開APIや実GM統合の完成とは区別する。
 
 | 部品 | 責務と限界 |
 | --- | --- |
@@ -30,3 +30,9 @@
 | V11 / IC-POST-2 | 再送と消費を分けたPort、opaque handleと確定本文の型検査 | GM共通namespace・保存proof世代・原子的な成功再送は#241〜#243 |
 
 Testは合成入力のみ。`recipient-code-policy.spec.ts`は純粋判断、`recipient-code-ports.spec.ts`は型契約、既存`architecture-dependencies.spec.ts`は依存方向を検証する。SQL/Schema/既存認証Port/Invitationの7日・受諾契約は変更しない。公開契約・清掃/Restore・具体Provider/Production Gate完了前にmain/Dev/HTTPへ接続しない。
+
+## 専用本人性lease（#239）
+
+`RecipientCodeSessionLeasePort`は発行/取消向け本人Actor排他leaseと、caller-only再送照会→新規caller/recipient共有leaseを分ける内部入口である。Callbackへ渡すActorはSessionから解決し、宛先facts/消費handleはLock/MAC/epoch/lookup検証後にだけ発行する。Sessionとコード期限を全blocking Lock後と本文確定/commit前に再検証する。GroupのOwner/版/人数/本人受諾を共有認証へ移さない。
+
+GM key-state準備/保存証跡と認証の消費WriterはInfrastructure/Compositionの登録能力で接続する。[Store/Scope契約](../../infrastructure/authentication/postgres/README.md#239-コード専用session-lease)に能力分離と失敗契約を記載する。実GM Adapterなしの正例は合成参加者であり、#240のStore本文、#241のGM Command、#242の実Adapter、#243のコード消費/両Audit原子性を代替しない。状態照会のidle非更新入口、清掃/Restore/公開接続もそれぞれの後続Taskに残す。

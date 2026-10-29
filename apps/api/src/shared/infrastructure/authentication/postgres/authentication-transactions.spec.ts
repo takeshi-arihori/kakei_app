@@ -35,6 +35,103 @@ const fixture = () => {
 };
 
 describe('認証Transaction Outcome', () => {
+  it('queryがない間のDriver errorも原因を漏らさず中断/破棄する', async () => {
+    const f = fixture();
+    let listener: ((error: unknown) => void) | undefined;
+    const run = createAuthenticationTransactions(
+      {
+        connect: () =>
+          Promise.resolve({
+            query: f.query,
+            release: f.release,
+            on: (_event, handler) => {
+              listener = handler;
+            },
+          }),
+      },
+      f.scopes,
+    );
+    const result = await run.run(() => {
+      listener?.(new Error('合成接続秘密'));
+      return new Promise<never>(() => {});
+    });
+    expect(result).toEqual({ status: 'unavailable' });
+    expect(f.release).toHaveBeenCalledWith(true);
+    expect(f.events).not.toContain('COMMIT');
+  });
+  it('専用上限をDBへ設定し、期限前の成功だけcommitする', async () => {
+    const f = fixture();
+    expect(
+      (
+        await f.runner.run(() => Promise.resolve(1), {
+          lockTimeoutMs: 10,
+          statementTimeoutMs: 20,
+          transactionTimeoutMs: 1000,
+        })
+      ).status,
+    ).toBe('committed');
+    expect(f.query).toHaveBeenCalledWith(
+      expect.stringContaining("set_config('lock_timeout'"),
+      ['10', '20', '1000'],
+    );
+  });
+  it.each(['cancel', 'timeout'] as const)(
+    '%sでCallbackが戻らなくても破棄し、遅延SQLを拒否する',
+    async (kind) => {
+      const f = fixture();
+      const control = new AbortController();
+      let resume!: () => void;
+      let late: Promise<unknown> | undefined;
+      const hold = new Promise<void>((done) => {
+        resume = done;
+      });
+      const result = f.runner.run(
+        async (connection) => {
+          if (kind === 'cancel') control.abort();
+          await hold;
+          late = connection.query('SELECT 99');
+          await late.catch(() => {});
+          return 1;
+        },
+        {
+          lockTimeoutMs: 10,
+          statementTimeoutMs: 20,
+          transactionTimeoutMs: kind === 'timeout' ? 10 : 1000,
+          signal: control.signal,
+        },
+      );
+      expect(await result).toEqual({ status: 'unavailable' });
+      expect(f.release).toHaveBeenCalledWith(true);
+      expect(f.events).not.toContain('COMMIT');
+      resume();
+      await Promise.resolve();
+      await expect(late).rejects.toThrow();
+      expect(f.events).not.toContain('SELECT 99');
+    },
+  );
+  it('事前cancelまたは不正な上限で接続もCallbackも取得しない', async () => {
+    const f = fixture();
+    const control = new AbortController();
+    control.abort();
+    const callback = vi.fn(() => Promise.resolve(1));
+    expect(
+      await f.runner.run(callback, {
+        lockTimeoutMs: 1,
+        statementTimeoutMs: 1,
+        transactionTimeoutMs: 1,
+        signal: control.signal,
+      }),
+    ).toEqual({ status: 'unavailable' });
+    expect(
+      await f.runner.run(callback, {
+        lockTimeoutMs: 0,
+        statementTimeoutMs: 1,
+        transactionTimeoutMs: 1,
+      }),
+    ).toEqual({ status: 'unavailable' });
+    expect(f.pool.connect).not.toHaveBeenCalled();
+    expect(callback).not.toHaveBeenCalled();
+  });
   it.each(['40P01', '40001'] as const)(
     '%sは自動再試行せずrollbackして利用不能にする',
     async (code) => {

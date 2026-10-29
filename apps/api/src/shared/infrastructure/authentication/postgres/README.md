@@ -56,3 +56,22 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 `postgres-authentication-restore`は外部所有fenceの閉鎖確認とkey_state排他Lockを各Transactionへ要求する。初回Manifest版一致と、同runの隔離進行版のDB外durable記録を専用Portへ要求し、未登録版を拒否する。Coordinatorは未完了Actor票の固定snapshot全Page照合をDB削除より先に行い、既知の期限未達は鍵／disable障害に先行して封鎖する。真正な削除証跡から旧Backupの行を再除去し、全Credentialを破棄する。新epoch／全9用途の公開実体に合わせActor MAC／保持Identityの新DEK再Seal／全required Aliasを同Transactionで移行する。所有completionの型付きfingerprintと現DBをactivate時に再照合する。具体外部制御、物理Backupの真正性、Traffic開通自体はPortの責務で、SQL Adapterの成功だけで本番を開けない。
 
 `authentication-maintenance.integration.spec.ts`はPostgreSQL17のSuite所有Schemaで実Lock／CAS／rollback／commit応答喪失、削除20段・Restore18段の故障と旧Backup復旧、35日境界、偽造fence・DB変更・重複Identityを検証する。外部鍵／Ledger／制御はDB巻戻しと独立した合成状態である。[保守仕様](../../../../../../../docs/security/authentication-maintenance.md)と[Runbook](../../../../../../../docs/operations/authentication-retention-restore.md)へTraceし、Schema／Migrationは変更しない。
+
+## #239 コード専用Session lease
+
+`createRecipientCodeTransactionScopes(base)`は既存認証と同じ基礎registryを使う。Compositionだけが最初のlease前に`registerGroupParticipant({ prepare })`を一度呼び、その返却能力を信頼済みGM Adapterへ渡す。`prepare`はGM所有のkey-stateを同じquery限定能力で固定する登録Portで、共有認証はGM型・Table・SQLをimportしない。GMにはquery/attestだけを渡し、registryのopen/終了・Pool・commit能力や認証Writerを渡さない。
+
+`createPostgresRecipientCodeLeases({ pool, scopes, codec, digests, crypto, limits, consume })`が`RecipientCodeSessionLeasePort`を実装する。`withActor`は発行/取消保存用に本人Actorを最初からFOR UPDATEで固定する管理leaseであり、状態照会用のidle非更新入口ではない。発行/再発行/取消/状態照会のStore本文は#240に残る。`use`は次の順序を守る。
+
+1. caller-only leaseで認証key-state→登録GM key-state→caller Actor→Sessionを固定し、GM共通operationを照合する。成功再送はコード行/宛先Actor/コードMAC鍵を読まず、GMが検証した保存結果handleを返す。missは内部NoReplay本文だけを確定して終了する。
+2. 別の新規leaseで認証key-state→登録GM key-state→非locking Session/code hint→Actor UUID昇順FOR SHARE→Session FOR UPDATEの順で固定し、再lookupでFK/参照/epoch/検索束縛を照合する。追加Actorが必要なら後付けLockせずrollbackする。同じScopeでoperationを再照合して並行成功へ収束させてから、コードFOR UPDATEとMAC/lookup/公開読取世代/宛先active/期限を検証する。
+3. GMの新規判断/Group Lock/保存後、GM Adapterが`attest(scope, handle, {codeId, recipientActorId, operationId, value})`で証跡を一度だけ発行する。`value`は同Scopeが発行した最小Response handleであり、同じ本文の別Objectも認めない。登録Adapterは実際の成功計画・共通operation namespace・GM Auditを所有する。registryはGM SQLの業務意味を代替しない。
+4. `scope.consume(handle, evidence)`が登録認証Writerを一回だけ呼ぶ。消費handle/証跡/コード/宛先/operation/Responseを非公開Object identityへ束縛し、証跡なし、別Scope/registry、二重消費、計画差替え、未受領/未完了操作、SQL/serialize失敗の握り潰し、受付終了後queryをcommit不可にする。Session/コード期限は全Lock後、serialize直前、保存後のcommit前に再確認し、Session idleと認証Auditも同一Transactionへ保存する。
+
+基礎registryの所有者限定extension Hookは通常Scopeでは省略される。専用registryのquery/consumeはthenableで結果の受領と完了も追跡し、完了が早かった未await操作を受付停止時に見逃さない。await/成功thenによる受領を追跡し、catch/finallyだけを付けた未await操作は受領とみなさない。未完了/失敗も常に拒否する。返却handleの所有確認と証跡の一致は別に行う。
+
+`limits`はLock/statement/transactionの正のmillisecondsを要求し、PostgreSQL17のSET LOCAL相当とCallbackの実時間上限を設定する。AbortSignalまたはTransaction上限でCallbackが戻らない場合も受付をsealし接続を破棄する。切断時のPG Transaction abortにより途中DMLを残さず、遅延Callbackのqueryを拒否する。PGのerror Eventを持つPool/接続Wrapperは`on/removeListener`も転送し、queryがない間のtransaction_timeout/切断を所有者の中断へ接続する。破棄中のsocket errorも原因を公開せず受け止める。COMMIT送信後は確定済みの可能性を保持してunavailableとし、Callbackを自動再実行しない。接続取得自体の待機上限は注入Pool側の責務であり、本番Pool/Provider応答時間の保証は未実証。固定Alertだけを通知し、通知例外/SQL詳細/入力値を返さない。
+
+専用`readRecipientCodeKeyState`だけがSchema8のコード2用途を受理する。旧通常Writer/保守/Restoreの未知用途拒否は維持する。新しい鍵世代の初期化、旧Writer/Restoreとの公開切替、実GM Adapter、実コード消費/両Audit、清掃/Restore、HTTP/Dev/mainへの接続を今回の内部leaseで完成扱いにしない。
+
+`recipient-code-transaction-scopes.spec.ts`は偽証跡/参照差/二重消費/未await/別本文/受付終了を検証する。`recipient-code-leases.integration.spec.ts`は専用PG17のSuite所有Schemaで実Actor/Session/コードMAC/Lock/2接続競合/期限/SQL故障/rollback/COMMIT応答喪失/cancelを検証する。GM key-state/Table/業務保存、コード消費WriterとコードAuditはTest-onlyの合成参加者で、実GM保存は#242、コード消費とInvitation作成/両Auditの共通業務atomicityは#243のEvidenceが必要。公開契約・Provider・保守/復旧・Production Gateを解除しない。
