@@ -44,3 +44,9 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | 監視 | overdue/pending/破損/epoch不一致の実配信と封鎖、秘密/直接IDの非収集 |
 
 本Taskは採用済みの運用設計の文書化であり、上表を実行済みとは扱わない。B4の合成Provider成功も本番Capabilityの証拠ではない。既知の期限未達、外部票不足、MAC/鍵不整合、未知Schema、旧Writer共存、片側復旧のいずれかがあれば成功/開通を停止する。
+
+## #240 管理Storeから保守へ引き継ぐInventory
+
+[Migration9](../../apps/api/migrations/authentication/README.md#version-9-コード管理監査240)のコードAudit仮名は共有認証Auditの90日保持へ含め、独立コード監査鍵世代の参照/Backup windowを退役条件へ含める。lookup/状態MACと共有せず、直接codeIdや原コードを監査から復元しない。旧保守/Restore Readerのコード用途拒否は維持し、実際の清掃・復旧対応が完了する前に公開接続しない。
+
+Record鍵の明示割当はDB rollbackで取り消せない。保存前/COMMIT結果不明/再MAC途中で孤立したcodeId/世代も、Providerの全世代inventoryへ期限を保持する。新Recordの再利用は拒否し、旧Recordの同一Descriptor既存鍵確認だけで再生成を避ける。孤立Scopeも期限/終端/Actor無効化の最早時点+24h以内に全世代closureへ含め、DB行が0件であることだけを鍵不存在/清掃完了の根拠にしない。#244/#245のdurable ticket/closure照合と具体Providerの訓練Evidenceは未実装/未実証であり、本番Gateを維持する。

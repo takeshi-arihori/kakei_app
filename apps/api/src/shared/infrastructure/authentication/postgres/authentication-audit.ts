@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import type { AuthenticationDigests } from '../../../application/authentication/authentication-digest-ports.js';
+import type { RecipientCodeMacValue } from '../../../application/authentication/recipient-code-crypto-ports.js';
+import { RecipientCodeUnavailable } from '../../../application/authentication/recipient-code-record.js';
 import type { AuthenticationStoreKeyState } from './authentication-key-state.js';
 import type { AuthenticationQueryConnection } from './authentication-transaction-scopes.js';
 
@@ -13,7 +15,10 @@ export type AuthenticationStoreAction =
   | 'activity'
   | 'logout'
   | 'disable'
-  | 'purge';
+  | 'purge'
+  | 'recipient-code-issue'
+  | 'recipient-code-revoke'
+  | 'recipient-code-inspect';
 /** 外部入力や例外自由文を含まない拒否理由。 */
 export type AuthenticationStoreReason =
   | 'success'
@@ -58,6 +63,8 @@ export const insertAuthenticationAudit = async (
     readonly now: number;
     /** 保存前に仮名化する内部参照。 */
     readonly subjects: AuthenticationAuditSubjects;
+    /** コード操作だけの独立Audit仮名。直接ID/lookup/状態MACを渡さない。 */
+    readonly code?: RecipientCodeMacValue<'auth-audit-recipient-code/v1'>;
   },
 ): Promise<void> => {
   const keyVersion = state.auditVersion;
@@ -74,12 +81,23 @@ export const insertAuthenticationAudit = async (
     sessionId === undefined
       ? null
       : await digests.auditSession({ subjectId: sessionId, keyVersion });
+  const codeAction = event.action.startsWith('recipient-code-');
+  if (
+    event.code &&
+    (!codeAction ||
+      event.code.purpose !== 'auth-audit-recipient-code/v1' ||
+      event.code.scopeId !== 'authentication' ||
+      event.code.epoch !== null ||
+      event.code.keyVersion !== keyVersion ||
+      event.code.bytes.length !== 32)
+  )
+    throw new RecipientCodeUnavailable();
   await connection.query(
     `INSERT INTO authentication.audit_event (
     event_id, request_id, occurred_at_ms, action, decision, reason,
     actor_digest_key_version, actor_digest, attempt_digest_key_version, attempt_digest,
-    session_digest_key_version, session_digest, audit_key_version
-  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+    session_digest_key_version, session_digest, audit_key_version${codeAction ? ', code_digest_key_version, code_digest' : ''}
+  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13${codeAction ? ', $14, $15' : ''})`,
     [
       randomUUID(),
       randomUUID(),
@@ -94,6 +112,12 @@ export const insertAuthenticationAudit = async (
       session?.keyVersion ?? null,
       session === null ? null : Buffer.from(session.bytes),
       keyVersion,
+      ...(codeAction
+        ? [
+            event.code?.keyVersion ?? null,
+            event.code ? Buffer.from(event.code.bytes) : null,
+          ]
+        : []),
     ],
   );
 };

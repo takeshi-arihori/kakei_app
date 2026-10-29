@@ -2,7 +2,7 @@ import { authenticationDatabaseRow } from '../src/shared/infrastructure/authenti
 import { randomBytes, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { Client, Pool, type QueryResult } from 'pg';
+import { Client, Pool, type PoolClient, type QueryResult } from 'pg';
 import {
   afterAll,
   beforeAll,
@@ -130,6 +130,14 @@ const deferred = () => {
 describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合成）', () => {
   const observer = new Client({ connectionString: url });
   const pool = new Pool({ connectionString: url, max: 4 });
+  const discardedClients = new WeakSet<PoolClient>();
+  const unexpectedPoolErrors: string[] = [];
+  pool.on('error', (error: Error & { code?: string }, client) => {
+    // release(true)後に届くPG17の終了通知もPool所有者が受け止める。
+    if (error.code !== '25P04' || !discardedClients.has(client)) {
+      unexpectedPoolErrors.push(error.code ?? 'unknown');
+    }
+  });
   let owned = false;
   let schema = '';
   let now = 1_000_000;
@@ -238,7 +246,10 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
         removeListener: connection.removeListener.bind(connection),
         query: (sql: string, values?: unknown[]) =>
           intercept(sql, values, () => connection.query(sql, values), pid),
-        release: (destroy?: boolean) => connection.release(destroy),
+        release: (destroy?: boolean) => {
+          if (destroy) discardedClients.add(connection);
+          connection.release(destroy);
+        },
       };
     },
   });
@@ -447,6 +458,7 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
       await observer.query(`DROP SCHEMA ${schema} CASCADE`);
     }
     await observer.end();
+    expect(unexpectedPoolErrors).toEqual([]);
   });
 
   it.each(['code', 'session'] as const)(
@@ -1002,11 +1014,14 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
       const resume = deferred();
       const control = new AbortController();
       let late: Promise<QueryResult> | undefined;
-      leases = make(pool, {
-        lockTimeoutMs: 500,
-        statementTimeoutMs: 1000,
-        transactionTimeoutMs: kind === 'transaction-timeout' ? 100 : 5000,
-      });
+      leases = make(
+        wrap(async (_sql, _values, run) => run()),
+        {
+          lockTimeoutMs: 500,
+          statementTimeoutMs: 1000,
+          transactionTimeoutMs: kind === 'transaction-timeout' ? 100 : 5000,
+        },
+      );
       const pending = leases.withActor(
         secret(10),
         clock,

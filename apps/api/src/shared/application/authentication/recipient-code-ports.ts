@@ -206,6 +206,23 @@ export interface RecipientCodeSessionPort {
 /** #239の本人性lease基盤。発行/取消Store本文と実消費Writerは後続Taskが所有する。 */
 export interface RecipientCodeSessionLeasePort {
   /**
+   * 本人だけを読む状態確認用lease。Actor共有Lock、Session再検証と監査を行う。
+   * @param sessionSecret 現在のcanonical Session。
+   * @param clock Lock後と確定時に再検証するServer Clock。
+   * @param callback 同registryのScope。コード原値を復元せずidleを更新しない。
+   * @param signal 任意の中断要求。GM準備/業務保存は行わない。
+   * @returns commit確認後の最小本文、未認証または障害。
+   */
+  inspectActor<T extends AuthenticationSerializedValue>(
+    sessionSecret: string,
+    clock: AuthenticationClock,
+    callback: (
+      caller: AuthenticatedActor,
+      scope: AuthenticationTransactionScope,
+    ) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<AuthenticatedActorResult<T>>;
+  /**
    * 本人Actorを最初から排他Lockする管理用入口。別Actorを後付けLockしない。
    * @param sessionSecret 現在のcanonical Session。
    * @param clock Lock後と本文確定時に再確認するServer Clock。

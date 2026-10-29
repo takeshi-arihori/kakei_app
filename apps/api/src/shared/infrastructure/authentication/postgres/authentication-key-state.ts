@@ -51,6 +51,8 @@ const known = new Set([
  * Lock順の先頭で世代を固定し、専用入口が許可したState以外と部分公開を拒否する。
  * @param connection 呼出し元が所有するTransaction接続。
  * @param statuses 各専用入口で固定した許可State。
+ * @param additionalPurposes 専用leaseが明示的に受理するコード2用途。
+ * @param acquireLock 先頭のleaseだけtrue。同じleaseの管理参加者は再Lockしない。
  * @returns commitまで共有Lockで守られた世代集合。
  * @throws 不正State、世代不足、またはDB障害。
  */
@@ -58,14 +60,17 @@ const readState = async (
   connection: AuthenticationQueryConnection,
   statuses: readonly string[],
   additionalPurposes: readonly string[] = [],
+  acquireLock = true,
 ): Promise<
   AuthenticationStoreKeyState & {
     codeLookup: readonly string[];
     codeMac: readonly string[];
+    codeLookupWrite: string;
+    codeMacWrite: string;
   }
 > => {
   const stateResult = await connection.query(
-    'SELECT state_id, status, generation_version, epoch FROM authentication.key_state WHERE state_id = 1 FOR SHARE',
+    `SELECT state_id, status, generation_version, epoch FROM authentication.key_state WHERE state_id = 1${acquireLock ? ' FOR SHARE' : ''}`,
   );
   if (stateResult.rows.length !== 1)
     throw new AuthenticationCryptoUnavailable();
@@ -166,6 +171,12 @@ const readState = async (
         ? requireSet('recipient-code-state-mac').search
         : [],
     ),
+    codeLookupWrite: additionalPurposes.length
+      ? singleWrite('recipient-code-lookup')
+      : '',
+    codeMacWrite: additionalPurposes.length
+      ? singleWrite('recipient-code-state-mac')
+      : '',
   });
 };
 
@@ -187,6 +198,22 @@ export const readRecipientCodeKeyState = (
     connection,
     ['active', 'rotating'],
     ['recipient-code-lookup', 'recipient-code-state-mac'],
+  );
+
+/**
+ * 専用本人leaseが既に先頭でLockした同じ世代を、query参加者から再取得する。
+ * @param connection 同registryの本人Callback内だけのquery能力。後付けLockを取らない。
+ * @returns current writeと公開read世代。Actor/Session認証を代替しない。
+ * @throws AuthenticationCryptoUnavailable 未初期化/不正/不足世代。lease外利用は禁止。
+ */
+export const readRecipientCodeManagementKeyState = (
+  connection: AuthenticationQueryConnection,
+) =>
+  readState(
+    connection,
+    ['active', 'rotating'],
+    ['recipient-code-lookup', 'recipient-code-state-mac'],
+    false,
   );
 
 /**
