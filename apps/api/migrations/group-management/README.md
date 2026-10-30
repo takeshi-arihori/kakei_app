@@ -31,3 +31,19 @@ Task #95のState Writerは呼出し側のPostgreSQL Transactionを受け取り�
 `0001_group_management_storage.down.sql`は、空の開発・Test Schemaでのみ使用できます。Group行が存在すると失敗します。業務Dataの適用後は、破壊的なDownやDropを実行しません。新しい番号のExpand Migrationを追加し、互換性のあるReader／WriterをDeployした上で、旧構造が参照されなくなってからContract MigrationまたはForward-fixを行います。
 
 MigrationはCredential、Connection Pool、Timeout、本番Deploy設定を選びません。#42のTask分割後、Repositoryの`load`／`findOperation`は#94、状態・履歴のCASは#95、Locator／結果CommitとKey-state Lockは#96、固定Access Policy Lockは#97の担当です。#103はGMのGroup削除Transaction、CloseIntent Registryの退役・Purge、同一Transaction内のCanonical GM削除後Receipt Record保存を担当します。Task #118はGM所有Receipt Portと不変Record契約を定義します。#119は型付きの検証済み削除Evidence入力契約を定義し、他の2 ContextのReceipt結果と全3 Contextの鍵破棄確認を1つのPrepared Intentへ束縛します。Coordinator、他Contextの削除・Verifier、Checkpoint／Witness、Backup／Restore、本番接続は後続Gateです。`pnpm --filter @kakei/api test:e2e`はPostgreSQL上でMigrationを検証し、CIも一時的なPostgreSQL 17 Serviceで同じCommandを実行します。本番Migrationは、運用者がv1行数の事前確認、Reader／Writerの互換性、Forward-fix経路を確認してから適用します。本番削除・Trafficは、ADR #55のReceipt・鍵破棄・Checkpoint／Witness・Backup／Restore・Runbook要件を満たすまで保留します。
+
+
+## Version 10: 招待コードからのGM保存参加（#242）
+
+[`0010_recipient_invitation_enlistment.sql`](0010_recipient_invitation_enlistment.sql)はAccepted招待コード設計R4とADR #55のGM所有Inventoryへ、次の最小Metadataだけを追加する。既存version1〜9のChecksum/Envelope/AAD/locatorは変更しない。Migration番号は認証と共通の`app_schema_migrations`全体で10を使用する。
+
+| Table | 平文Inventoryと制約 | 保持/責務 |
+| --- | --- | --- |
+| `group_recipient_code_proof_key_state` | singleton id、nullable current世代、updated_at。初期currentはnull、鍵Material/Actor参照なし | GM所有。新規writerは共有Lock、rotationは同じ行の排他Lock。未設定の新規はfail closed |
+| `group_recipient_invitation_audit_record` | server request UUID、UTC、固定CreateInvitationFromRecipientCode/allow/InvitationCreated、正のPolicy版、独立32-byte Actor/Group/Invitation仮名、32-byte request fingerprint、Audit鍵世代。request ID PKと世代/指紋Unique | Group FK/cascadeなし。90日保持、関連Audit鍵は90日とBackup35日を保持。原コード/proof/直接ID/Profileを保存しない |
+
+新proof世代/値とcodeId/宛先bindingは既存Group Envelope内の新payloadVersion2だけに置く。平文のproof世代参照索引や認証Table FKを追加しない。GM Adapterは保持結果を検証してlive参照数を数え、0件だけでproof鍵を破棄しない。関連Backup35日closureと具体Providerの保持Evidenceが別途必要。
+
+追加DDLは既存RunnerでTransaction適用・Checksum記録・再実行Skipを行う。適用後もcurrentを自動初期化せず、Provider/GM側の明示準備まで新規経路を開かない。[down](0010_recipient_invitation_enlistment.down.sql)は未初期化かつAudit空の環境だけに限定し、Data/制御済み環境はforward-fixする。保存済みAuditを削除して切り戻さず、古いコード/破棄鍵を復活させない。
+
+実PG検証では追加Migrationの再実行/初期null/形式制約/許可Columnと、GM保存・Audit故障の全rollbackを確認する。認証owner/コードWriterは合成であり、実消費/両Context業務atomicityは#243、清掃/Restoreと具体Provider運用・通常起動接続は既存Gateに残す。

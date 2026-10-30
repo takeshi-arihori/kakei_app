@@ -26,6 +26,18 @@ export interface RecipientCodeCommitBinding {
 /** Compositionが実GM Adapterだけへ渡す能力。通常Application Callbackへ公開しない。 */
 export interface RecipientCodeGroupParticipant extends AuthenticationTransactionParticipants {
   /**
+   * 業務writeより前に一回だけ新規計画を束縛する。GM SQL/Domainの意味は保持しない。
+   * @param scope 同registryの準備済み新規Scope。caller-only Scopeは拒否する。
+   * @param handle このScopeに束縛された一回消費権。
+   * @param binding 検証済みコード/宛先/operation/同Scope本文。attest時にも完全一致を要する。
+   * @throws RecipientCodeUnavailable 未束縛/不一致/再受付/失敗/受付終了。握り潰してもcommit不可。
+   */
+  beginPlan(
+    scope: AuthenticationTransactionScope,
+    handle: RecipientCodeConsumptionHandle,
+    binding: RecipientCodeCommitBinding,
+  ): void;
+  /**
    * GM保存成功後だけ、その計画とResponseを不透明な証跡へ束縛する。
    * @param scope 同registryの準備済みScope。
    * @param handle 同Scopeの一回だけの消費権。
@@ -114,6 +126,7 @@ type Frame = {
     consumed: boolean;
     operationId?: string;
     value?: AuthenticationSerializedValue;
+    writePlan?: { operationId: string; value: AuthenticationSerializedValue };
   };
 };
 const reject = (): never => {
@@ -211,6 +224,27 @@ export const createRecipientCodeTransactionScopes = (
           frame.writes += 1;
         return result;
       });
+    },
+  } satisfies AuthenticationTransactionParticipants);
+  // GM業務DMLだけを新規計画へ限定する。認証ownerの管理/消費Writer用queryは変更しない。
+  const groupQuery: AuthenticationTransactionParticipants = Object.freeze({
+    query(scope, sql, values) {
+      try {
+        const frame = openFrame(scope);
+        if (
+          typeof sql === 'string' &&
+          /^\s*(INSERT|UPDATE|DELETE)\s/i.test(sql) &&
+          !frame.binding?.writePlan
+        ) {
+          frame.failed = true;
+          return track(frame, () =>
+            Promise.reject(new RecipientCodeUnavailable()),
+          );
+        }
+        return query.query(scope, sql, values);
+      } catch {
+        return Promise.reject(new RecipientCodeUnavailable());
+      }
     },
   } satisfies AuthenticationTransactionParticipants);
   return Object.freeze({
@@ -319,7 +353,33 @@ export const createRecipientCodeTransactionScopes = (
       if (opened || registration) return reject();
       registration = Object.freeze({ prepare: value.prepare });
       return Object.freeze({
-        ...query,
+        ...groupQuery,
+        beginPlan(scope, handle, binding) {
+          const frame = openFrame(scope);
+          check(frame, () => {
+            const bound = frame.binding;
+            if (
+              !frame.prepared ||
+              frame.failed ||
+              !bound ||
+              bound.handle !== handle ||
+              bound.started ||
+              bound.attested ||
+              bound.writePlan !== undefined ||
+              frame.tasks.some((t) => !t.observed || !t.settled) ||
+              bound.codeId !== binding.codeId ||
+              bound.recipientActorId !== binding.recipientActorId ||
+              !frame.lease.ownsResult(binding.value) ||
+              typeof binding.operationId !== 'string' ||
+              binding.operationId.trim().length === 0
+            )
+              return reject();
+            bound.writePlan = Object.freeze({
+              operationId: binding.operationId,
+              value: binding.value,
+            });
+          });
+        },
         attest(scope, handle, binding) {
           const frame = openFrame(scope);
           return check(frame, () => {
@@ -331,6 +391,9 @@ export const createRecipientCodeTransactionScopes = (
               bound.handle !== handle ||
               bound.started ||
               bound.attested ||
+              !bound.writePlan ||
+              bound.writePlan.operationId !== binding.operationId ||
+              bound.writePlan.value !== binding.value ||
               frame.writes === 0 ||
               frame.tasks.some((t) => !t.observed || !t.settled) ||
               bound.codeId !== binding.codeId ||

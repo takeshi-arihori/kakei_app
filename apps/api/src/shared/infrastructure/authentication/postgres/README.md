@@ -59,13 +59,13 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 
 ## #239 コード専用Session lease
 
-`createRecipientCodeTransactionScopes(base)`は既存認証と同じ基礎registryを使う。Compositionだけが最初のlease前に`registerGroupParticipant({ prepare })`を一度呼び、その返却能力を信頼済みGM Adapterへ渡す。`prepare`はGM所有のkey-stateを同じquery限定能力で固定する登録Portで、共有認証はGM型・Table・SQLをimportしない。GMにはquery/attestだけを渡し、registryのopen/終了・Pool・commit能力や認証Writerを渡さない。
+`createRecipientCodeTransactionScopes(base)`は既存認証と同じ基礎registryを使う。Compositionだけが最初のlease前に`registerGroupParticipant({ prepare })`を一度呼び、その返却能力を信頼済みGM Adapterへ渡す。`prepare`はGM所有のkey-stateを同じquery限定能力で固定する登録Portで、共有認証はGM型・Table・SQLをimportしない。GMにはquery/新規計画受付/attestだけを渡し、registryのopen/終了・Pool・commit能力や認証Writerを渡さない。
 
 `createPostgresRecipientCodeLeases({ pool, scopes, codec, digests, crypto, limits, consume })`が`RecipientCodeSessionLeasePort`を実装する。`withActor`は発行/取消保存用に本人Actorを最初からFOR UPDATEで固定する管理leaseであり、状態照会用のidle非更新入口ではない。発行/再発行/取消/状態照会のStore本文は後述の#240が所有する。`use`は次の順序を守る。
 
 1. caller-only leaseで認証key-state→登録GM key-state→caller Actor→Sessionを固定し、GM共通operationを照合する。成功再送はコード行/宛先Actor/コードMAC鍵を読まず、GMが検証した保存結果handleを返す。missは内部NoReplay本文だけを確定して終了する。
 2. 別の新規leaseで認証key-state→登録GM key-state→非locking Session/code hint→Actor UUID昇順FOR SHARE→Session FOR UPDATEの順で固定し、再lookupでFK/参照/epoch/検索束縛を照合する。追加Actorが必要なら後付けLockせずrollbackする。同じScopeでoperationを再照合して並行成功へ収束させてから、コードFOR UPDATEとMAC/lookup/公開読取世代/宛先active/期限を検証する。
-3. GMの新規判断/Group Lock/保存後、GM Adapterが`attest(scope, handle, {codeId, recipientActorId, operationId, value})`で証跡を一度だけ発行する。`value`は同Scopeが発行した最小Response handleであり、同じ本文の別Objectも認めない。登録Adapterは実際の成功計画・共通operation namespace・GM Auditを所有する。registryはGM SQLの業務意味を代替しない。
+3. GM Adapterは業務DMLより前に`beginPlan(scope, handle, binding)`で新規Scope/code/宛先/operation/同Scope本文を一度だけ固定する。caller-only Scope、偽handle、再受付は握り潰してもcommit不可にし、GM参加queryのDMLも受付済み計画だけへ限定する。認証ownerの管理/消費Writer用queryは変更しない。GMの新規判断/Group Lock/保存後、GM Adapterが`attest(scope, handle, {codeId, recipientActorId, operationId, value})`で証跡を一度だけ発行する。`value`は同Scopeが発行した最小Response handleであり、同じ本文の別Objectも認めない。登録Adapterは実際の成功計画・共通operation namespace・GM Auditを所有する。registryはGM SQLの業務意味を代替しない。
 4. `scope.consume(handle, evidence)`が登録認証Writerを一回だけ呼ぶ。消費handle/証跡/コード/宛先/operation/Responseを非公開Object identityへ束縛し、証跡なし、別Scope/registry、二重消費、計画差替え、未受領/未完了操作、SQL/serialize失敗の握り潰し、受付終了後queryをcommit不可にする。Session/コード期限は全Lock後、serialize直前、保存後のcommit前に再確認し、Session idleと認証Auditも同一Transactionへ保存する。
 
 基礎registryの所有者限定extension Hookは通常Scopeでは省略される。専用registryのquery/consumeはthenableで結果の受領と完了も追跡し、完了が早かった未await操作を受付停止時に見逃さない。await/成功thenによる受領を追跡し、catch/finallyだけを付けた未await操作は受領とみなさない。未完了/失敗も常に拒否する。返却handleの所有確認と証跡の一致は別に行う。
@@ -93,3 +93,6 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 `recipient-code-management.integration.spec.ts`は実PG17の2端末/取消/Actor無効化競合、最小状態/idle非更新、全世代衝突/複数hit/旧MAC再書込、期限等値/改竄/鍵Ack/各DML/監査/COMMIT前後故障、raw非保存、同backend/xminを検証する。Providerは明示発行する合成Mapであり、耐久性・全世代破棄は未実証。具体Pool所有者はPool errorも受け止め、Error/Client全体をLogへ出さない。Test Poolはrelease(true)したClientへの遅延25P04だけを期待通知とし、その他のPool errorは検証失敗にする。
 
 実GM消費/Invitation/両ContextのAuditは#242/#243、清掃/Restore/鍵退役は#244/#245、公開契約は#246以降。通常main/Dev/HTTPとProduction Gateは未接続のままとする。
+
+
+#242の受付補強は、共有認証がGM SQL/Domainを解釈する追加ではない。新規業務write前のopaqueなhandle/計画/本文の一回照合と、保存後の同一binding照合を分ける。これによりcaller-only replay Scopeや非SQL障害の握り潰しから部分GM commitを作れない。実Session/コードWriterと実GMの最終業務統合は#243に残る。

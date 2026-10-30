@@ -2,12 +2,9 @@ import type {
   ProtectedRecordCodec,
   ProtectedRecordHeader,
 } from '../../../shared/infrastructure/protected-record/index.js';
-import { randomUUID } from 'node:crypto';
-import type { Client, Pool, PoolClient, QueryResultRow } from 'pg';
+import type { Client, Pool, PoolClient } from 'pg';
 
 import {
-  operationLocatorDigestInput,
-  operationFingerprintDigestInput,
   type GroupPolicyDigestPort,
   type GroupOperationLocatorKeyPort,
 } from '../../application/group-access-policy.js';
@@ -15,34 +12,41 @@ import type {
   CommitGroupOutcome,
   CommitGroupRequest,
   FindOperationResult,
-  GroupCommandResult,
   GroupRepository,
   LoadedGroup,
-  StoredOperation,
 } from '../../application/group-repository.js';
 import {
   GroupReadUnavailable,
   PostgresGroupReadRepository,
 } from './group-read-repository.js';
-import { encodeOperationResultPayload } from './group-record-payload.js';
+import { PostgresGroupCommitKernel } from './group-commit-kernel.js';
 import { PostgresGroupStateWriter } from './group-state-writer.js';
 
 type Database = Pick<Client, 'query'>;
-const uuidPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const keyVersionPattern = /^[A-Za-z0-9._:-]+$/;
-
+/** standalone Transaction owner。保存の意味は参加Adapterと同じkernelへ委譲する。 */
 export class PostgresGroupRepository implements GroupRepository {
+  /**
+   * @param options 接続所有と共通kernelの依存。参加AdapterへPoolを渡さない。
+   */
   constructor(
     private readonly options: Readonly<{
+      /** standalone ownerだけが所有する接続取得/読取。 */
       pool: Pick<Pool, 'connect' | 'query'>;
+      /** 既存CAS/履歴/索引Writer。 */
       stateWriter: Pick<PostgresGroupStateWriter, 'persist'>;
+      /** 既存GM Envelopeの保護/復号。 */
       codec: Pick<ProtectedRecordCodec, 'seal' | 'open'>;
+      /** 保存形式を変更しないcanonical AAD。 */
       encodeAad: (header: ProtectedRecordHeader) => Uint8Array;
+      /** Actor内・全Command共通の保持/現行世代。 */
       locatorKeys: GroupOperationLocatorKeyPort;
+      /** 用途別の索引/fingerprint。 */
       accessIndexDigests: GroupPolicyDigestPort;
+      /** 入力を含まない固定障害通知。 */
       onUnavailable?: () => void;
+      /** Server生成UUIDの注入。 */
       nextRecordId?: () => string;
+      /** UTC保存時刻の注入。 */
       now?: () => Date;
     }>,
   ) {}
@@ -71,211 +75,60 @@ export class PostgresGroupRepository implements GroupRepository {
     }
   }
 
+  /**
+   * @param request 既存Commandの保存計画。新actionとの衝突も共通namespaceで拒否する。
+   * @returns 確定成功/既存成功、またはConflict/Mismatch/Unavailable。COMMIT不明は成功照会で回復する。
+   */
   async commit(request: CommitGroupRequest): Promise<CommitGroupOutcome> {
     let client: PoolClient | undefined;
     let transactionOpen = false;
+    let commitSent = false;
     try {
       client = await this.options.pool.connect();
       await client.query('BEGIN');
       transactionOpen = true;
-
-      const keyState = await client.query<
-        QueryResultRow & { current_key_version: string | null }
-      >(
-        `SELECT current_key_version
-           FROM group_operation_locator_key_state
-          WHERE id = 1
-          FOR SHARE`,
-      );
-      const currentKeyVersion = keyState.rows[0]?.current_key_version;
-      if (
-        keyState.rowCount !== 1 ||
-        currentKeyVersion === null ||
-        currentKeyVersion === undefined
-      ) {
-        await this.rollback(client);
-        transactionOpen = false;
-        this.reportUnavailable();
-        return { kind: 'Unavailable' };
-      }
-
-      const locatorInput = operationLocatorDigestInput(
-        request.operation.actorSubject,
-        request.operation.operationId,
-      );
-      const [currentDigest, candidates] = await Promise.all([
-        this.options.locatorKeys.currentDigest(locatorInput),
-        this.options.locatorKeys.candidateDigests(locatorInput),
-      ]);
-      if (
-        !this.isValidDigest(currentDigest) ||
-        currentDigest.digestKeyVersion !== currentKeyVersion ||
-        candidates.length === 0 ||
-        !candidates.every((candidate) => this.isValidDigest(candidate)) ||
-        !candidates.some(
-          (candidate) =>
-            candidate.digestKeyVersion === currentKeyVersion &&
-            Buffer.from(candidate.digest).equals(
-              Buffer.from(currentDigest.digest),
-            ),
-        )
-      ) {
-        await this.rollback(client);
-        transactionOpen = false;
-        this.reportUnavailable();
-        return { kind: 'Unavailable' };
-      }
-
-      const transactionLocatorKeys: GroupOperationLocatorKeyPort = {
-        currentDigest: () => Promise.resolve(currentDigest),
-        candidateDigests: () => Promise.resolve(candidates),
-      };
-      const read = this.readRepository(client, transactionLocatorKeys);
-      const existing = await read.findOperation(
-        request.operation.actorSubject,
-        request.operation.operationId,
-      );
-      if (existing.kind === 'Found') {
-        await this.rollback(client);
-        transactionOpen = false;
-        return existing.operation.fingerprint.equals(
-          request.operation.fingerprint,
-        )
-          ? { kind: 'Committed', result: existing.operation.result }
-          : { kind: 'OperationMismatch' };
-      }
-
-      const closeIntentId = request.groupCloseChanges.find(
-        (change) => change.kind === 'ClosingStarted',
-      )?.closeIntentId;
-      if (closeIntentId !== undefined) {
-        const registered = await client.query(
-          `INSERT INTO group_close_intent_registry (close_intent_id, group_id)
-           VALUES ($1, $2)
-           ON CONFLICT (close_intent_id) DO NOTHING
-           RETURNING close_intent_id`,
-          [closeIntentId.value, request.group.id.value],
-        );
-        if (registered.rowCount !== 1) {
-          const replay = await read.findOperation(
-            request.operation.actorSubject,
-            request.operation.operationId,
-          );
-          await this.rollback(client);
-          transactionOpen = false;
-          if (replay.kind === 'Found') {
-            return replay.operation.fingerprint.equals(
-              request.operation.fingerprint,
-            )
-              ? { kind: 'Committed', result: replay.operation.result }
-              : { kind: 'OperationMismatch' };
-          }
-          return { kind: 'CloseIntentAlreadyExists' };
-        }
-      }
-
-      const state = await this.options.stateWriter.persist(client, request);
-      if (state.kind !== 'Committed') {
-        await this.rollback(client);
-        transactionOpen = false;
-        return state;
-      }
-
-      const result = {
-        ...request.result,
-        version: state.version,
-      } as GroupCommandResult;
-      const storedOperation: StoredOperation = {
-        ...request.operation,
-        result,
-      };
-      const recordId = (this.options.nextRecordId ?? randomUUID)();
-      if (!uuidPattern.test(recordId)) {
-        throw new TypeError('Invalid operation-result record ID');
-      }
-      const createdAt = this.options.now?.() ?? new Date();
-      if (Number.isNaN(createdAt.getTime())) {
-        throw new TypeError('Invalid operation-result timestamp');
-      }
-      const envelope = await this.options.codec.seal({
-        header: {
-          envelopeVersion: 1n,
-          algorithmId: 'AES-256-GCM',
-          app: 'kakei_app',
-          contextName: 'group-management',
-          recordKind: 'operation-result',
-          groupId: request.group.id.value,
-          logicalRecordId: recordId,
-          schemaVersion: 1n,
-          aggregateVersion: BigInt(state.version),
-          revisionOrdinal: null,
-        },
-        plaintext: encodeOperationResultPayload(storedOperation),
+      const {
+        stateWriter,
+        codec,
+        encodeAad,
+        locatorKeys,
+        accessIndexDigests,
+        nextRecordId,
+        now,
+      } = this.options;
+      const kernel = new PostgresGroupCommitKernel({
+        stateWriter,
+        codec,
+        encodeAad,
+        locatorKeys,
+        accessIndexDigests,
+        nextRecordId,
+        now,
       });
-      await client.query(
-        `INSERT INTO group_operation_result_record (
-           logical_record_id, group_id, aggregate_version, envelope_version,
-           algorithm_id, schema_version, key_version, ciphertext, nonce,
-           authentication_tag, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [
-          recordId,
-          request.group.id.value,
-          state.version,
-          Number(envelope.header.envelopeVersion),
-          envelope.header.algorithmId,
-          Number(envelope.header.schemaVersion),
-          envelope.header.keyVersion,
-          Buffer.from(envelope.ciphertext),
-          Buffer.from(envelope.nonce),
-          Buffer.from(envelope.authenticationTag),
-          createdAt,
-        ],
-      );
-
-      const fingerprintDigest = await this.options.accessIndexDigests.digest({
-        ...operationFingerprintDigestInput(
-          request.group.id,
-          'command-fingerprint',
-          request.operation.fingerprint.value,
-        ),
-      });
-      if (!this.isValidDigest(fingerprintDigest)) {
-        throw new TypeError('Invalid command fingerprint digest');
-      }
-      const locator = await client.query(
-        `INSERT INTO group_operation_locator_v2 (
-           locator_digest, digest_key_version, command_fingerprint, group_id,
-           operation_result_record_id, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (locator_digest, digest_key_version) DO NOTHING
-         RETURNING locator_digest`,
-        [
-          Buffer.from(currentDigest.digest),
-          currentDigest.digestKeyVersion,
-          Buffer.from(fingerprintDigest.digest),
-          request.group.id.value,
-          recordId,
-          createdAt,
-        ],
-      );
-      if (locator.rowCount !== 1) {
+      const currentKeyVersion = await kernel.prepare(client);
+      const outcome = await kernel.stage(client, request, currentKeyVersion);
+      if (outcome.kind !== 'Staged') {
         await this.rollback(client);
         transactionOpen = false;
-        return this.resolveLocatorRace(request);
+        if (outcome.kind === 'LocatorConflict')
+          return this.resolveLocatorRace(request);
+        if (outcome.kind === 'Replayed')
+          return { kind: 'Committed', result: outcome.result };
+        if (outcome.kind === 'Unavailable') this.reportUnavailable();
+        return outcome;
       }
-
+      commitSent = true;
       await client.query('COMMIT');
       transactionOpen = false;
-      return { kind: 'Committed', result };
+      return { kind: 'Committed', result: outcome.result };
     } catch {
-      if (client !== undefined && transactionOpen) {
+      if (client !== undefined && transactionOpen && !commitSent)
         await this.rollback(client);
-      }
       this.reportUnavailable();
       return { kind: 'Unavailable' };
     } finally {
-      client?.release();
+      // COMMIT送信後の障害は結果不明。rollbackで確定失敗と扱わず接続を破棄する。
+      client?.release(commitSent && transactionOpen);
     }
   }
 
@@ -287,6 +140,8 @@ export class PostgresGroupRepository implements GroupRepository {
         request.operation.actorSubject,
         request.operation.operationId,
       );
+      if (found.kind === 'OperationMismatch')
+        return { kind: 'OperationMismatch' };
       if (found.kind !== 'Found') {
         return { kind: 'Unavailable' };
       }
@@ -308,16 +163,6 @@ export class PostgresGroupRepository implements GroupRepository {
       encodeAad: this.options.encodeAad,
       locatorKeys,
     });
-  }
-
-  private isValidDigest(candidate: {
-    digest: Uint8Array;
-    digestKeyVersion: string;
-  }): boolean {
-    return (
-      candidate.digest.length > 0 &&
-      keyVersionPattern.test(candidate.digestKeyVersion)
-    );
   }
 
   private async rollback(client: PoolClient): Promise<void> {
