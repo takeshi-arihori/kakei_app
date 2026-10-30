@@ -2,7 +2,13 @@ import type {
   ProtectedRecordCodec,
   ProtectedRecordHeader,
 } from '../../../shared/infrastructure/protected-record/index.js';
-import type { Client, QueryResultRow } from 'pg';
+import type { QueryResultRow } from 'pg';
+import { CommandFingerprint } from '../../application/group-repository.js';
+import type { GroupSqlQuery } from './group-storage-contracts.js';
+import {
+  decodeStoredGroupOperation,
+  type StoredGroupOperation,
+} from './group-operation-record.js';
 
 import {
   operationLocatorDigestInput,
@@ -14,10 +20,7 @@ import type {
   OperationId,
 } from '../../application/group-repository.js';
 import type { ActorSubject, GroupId } from '../../domain/group.js';
-import {
-  decodeGroupRecordPayload,
-  decodeOperationResultPayload,
-} from './group-record-payload.js';
+import { decodeGroupRecordPayload } from './group-record-payload.js';
 
 type ProtectedRow = QueryResultRow & {
   group_id: string;
@@ -54,16 +57,26 @@ const safeVersion = (value: string | number): number => {
 };
 
 /**
- * GroupRepositoryの読取専用部分。Task #96が公開Commit境界と組み合わせる。
+ * standalone/参加Adapterで共用するGM読取。新旧operationは同じlocatorから復元する。
  * このModuleに保存処理や本番Key Providerを隠さない。
  */
 export class PostgresGroupReadRepository {
+  /**
+   * @param options 借用query/既存codec/共通locatorと任意の結果行Lock。接続を所有しない。
+   */
   constructor(
     private readonly options: Readonly<{
-      database: Pick<Client, 'query'>;
+      /** ownerから借用したquery能力。 */
+      database: GroupSqlQuery;
+      /** 借用Transactionで結果削除と直列化する。 */
+      operationLock?: 'ForShare';
+      /** 期待Header照合を行う既存AEAD。 */
       codec: Pick<ProtectedRecordCodec, 'open'>;
+      /** 既存Envelopeのcanonical AAD。 */
       encodeAad: (header: ProtectedRecordHeader) => Uint8Array;
+      /** Actor内共通namespaceの保持候補。 */
       locatorKeys: GroupOperationLocatorKeyPort;
+      /** 入力/元例外を含まない障害通知。 */
       onUnavailable?: () => void;
     }>,
   ) {}
@@ -103,16 +116,44 @@ export class PostgresGroupReadRepository {
     }
   }
 
+  /**
+   * 旧Commandから新actionが見つかった場合は明示Mismatchにし、保存本文を偽装しない。
+   * @param actorSubject 共通namespaceのActor。
+   * @param operationId 全Command/全Group共通ID。
+   * @returns 旧保存成功、不在、または異actionのMismatch。
+   * @throws GroupReadUnavailable 保存/復号障害。
+   */
   async findOperation(
     actorSubject: ActorSubject,
     operationId: OperationId,
   ): Promise<FindOperationResult> {
+    const operation = await this.findStoredOperation(actorSubject, operationId);
+    if (operation === null) return { kind: 'Missing' };
+    if (!(operation.fingerprint instanceof CommandFingerprint))
+      return { kind: 'OperationMismatch' };
+    return {
+      kind: 'Found',
+      operation: { ...operation, fingerprint: operation.fingerprint },
+    };
+  }
+
+  /**
+   * 新旧の保護本文を同じlocatorから読む。Group現在認可やコード行を再送条件にしない。
+   * @param actorSubject 現在callerのActor。
+   * @param operationId 共通namespaceのID。
+   * @returns binding検証済みの保存成功、または不在。
+   * @throws GroupReadUnavailable 複数hit/不整合/Scope/復号障害。
+   */
+  async findStoredOperation(
+    actorSubject: ActorSubject,
+    operationId: OperationId,
+  ): Promise<StoredGroupOperation | null> {
     try {
       const candidates = await this.options.locatorKeys.candidateDigests(
         operationLocatorDigestInput(actorSubject, operationId),
       );
       if (candidates.length === 0) {
-        return { kind: 'Missing' };
+        return null;
       }
       const predicates = candidates.map(
         (_, index) =>
@@ -134,12 +175,12 @@ export class PostgresGroupReadRepository {
              ON r.group_id = l.group_id
             AND r.logical_record_id = l.operation_result_record_id
           WHERE ${predicates.join(' OR ')}
-          LIMIT 2`,
+          LIMIT 2${this.options.operationLock === 'ForShare' ? ' FOR SHARE OF r' : ''}`,
         values,
       );
       if (found.rows.length === 0) {
         // Locatorに一致しない場合は、Group Data Keyの取得も復号も行わない。
-        return { kind: 'Missing' };
+        return null;
       }
       if (found.rows.length !== 1) {
         throw new GroupReadUnavailable();
@@ -149,7 +190,7 @@ export class PostgresGroupReadRepository {
         throw new GroupReadUnavailable();
       }
       const plaintext = await this.open(row, 'operation-result', row.group_id);
-      const operation = decodeOperationResultPayload(plaintext);
+      const operation = decodeStoredGroupOperation(plaintext);
       if (
         !operation.actorSubject.equals(actorSubject) ||
         !operation.operationId.equals(operationId) ||
@@ -158,7 +199,48 @@ export class PostgresGroupReadRepository {
       ) {
         throw new GroupReadUnavailable();
       }
-      return { kind: 'Found', operation };
+      return operation;
+    } catch {
+      return this.unavailable();
+    }
+  }
+
+  /**
+   * 保護operation内だけのproof参照を数える。0件だけで鍵破棄を許可しない。
+   * @param keyVersion 検査する保存世代。Backup35日closureはProvider側で別途必須。
+   * @returns live参照件数。コード清掃/Actor削除の行数に依存しない。
+   * @throws GroupReadUnavailable 保存結果の破損/復号障害。未知結果をskipしない。
+   */
+  async countProofReferences(keyVersion: string): Promise<number> {
+    try {
+      if (
+        typeof keyVersion !== 'string' ||
+        keyVersion.length > 255 ||
+        !/^[A-Za-z0-9._:-]+$/.test(keyVersion)
+      )
+        throw new GroupReadUnavailable();
+      const found = await this.options.database.query<ProtectedRow>(
+        `SELECT group_id, logical_record_id, aggregate_version, envelope_version,
+                algorithm_id, schema_version, key_version, ciphertext, nonce, authentication_tag
+           FROM group_operation_result_record FOR SHARE`,
+      );
+      let count = 0;
+      for (const row of found.rows) {
+        const operation = decodeStoredGroupOperation(
+          await this.open(row, 'operation-result', row.group_id),
+        );
+        if (
+          operation.result.groupId.value !== row.group_id ||
+          operation.result.version !== safeVersion(row.aggregate_version)
+        )
+          throw new GroupReadUnavailable();
+        if (
+          !(operation.fingerprint instanceof CommandFingerprint) &&
+          operation.fingerprint.proof.keyVersion === keyVersion
+        )
+          count += 1;
+      }
+      return count;
     } catch {
       return this.unavailable();
     }

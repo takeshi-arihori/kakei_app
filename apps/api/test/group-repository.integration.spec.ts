@@ -558,6 +558,7 @@ describe('PostgresGroupRepository', () => {
   });
 
   it('COMMIT後に応答が失われても再送で保存済み結果を回復する', async () => {
+    let discarded = false;
     const lostResponsePool = {
       query: pool.query.bind(pool),
       async connect() {
@@ -570,7 +571,10 @@ describe('PostgresGroupRepository', () => {
             }
             return result;
           },
-          release: connection.release.bind(connection),
+          release(error?: Error | boolean) {
+            discarded = error === true;
+            connection.release(error);
+          },
         } as unknown as PoolClient;
       },
     } as unknown as Pick<Pool, 'connect' | 'query'>;
@@ -607,6 +611,7 @@ describe('PostgresGroupRepository', () => {
     await expect(lostResponseRepository.commit(request)).resolves.toEqual({
       kind: 'Unavailable',
     });
+    expect(discarded).toBe(true);
     await expect(repository.commit(request)).resolves.toMatchObject({
       kind: 'Committed',
       result: { kind: 'GroupCreated', version: 1 },

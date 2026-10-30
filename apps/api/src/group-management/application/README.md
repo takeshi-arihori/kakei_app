@@ -23,7 +23,7 @@
 
 proofはGM独立用途`gm-recipient-code-request/v1`の保存世代で照合し、lookup Digest/状態MACや原コードを既存JSON `CommandFingerprint`へ入れない。proof/byte列は同期Copyする。再送は保存世代でverifyし、current世代で作り直さない。新規のcodeId/宛先bindingは保護operation内だけへ保存する。
 
-`RecipientInvitationRepository.findOperation`はlegacy `StoredOperation`も同じnamespaceから返す契約で、新Commandは異actionをMismatchにする。新しいコード用locator/Table/namespaceを作らない。新recordをlegacy readerへ無理に渡さず、既存codec/旧Command側を含む相互の異action拒否と同一保存kernelへの物理接続は#242の責務とする。#241では既存Repository/SQL codecを変更せず、新しいrecordを実保存しない。
+`RecipientInvitationRepository.findOperation`はlegacy `StoredOperation`も同じnamespaceから返す契約で、新Commandは異actionをMismatchにする。新しいコード用locator/Table/namespaceを作らない。新recordをlegacy readerへ無理に渡さず、既存codec/旧Command側を含む相互の異action拒否と同一保存kernelへの物理接続は[#242の保存Adapter](../infrastructure/postgres/README.md)で実装する。#241時点では既存Repository/SQL codecを変更せず、新しいrecordを実保存しなかった。現在の#242は共通kernelと新旧codecの相互Mismatchを実PGで検証する。
 
 ### 能力と未接続の境界
 
@@ -35,3 +35,10 @@ proofはGM独立用途`gm-recipient-code-request/v1`の保存世代で照合し�
 `registered-recipient-invitation-service.spec.ts`はfake lease/参加Portで入力・順序・Group判断・再送・結果不明・障害・snapshot/本文非漏出を検証する。proofの計算は合成鍵を使う既存暗号Adapterを使用し、`recipient-code-invitation-fingerprint.spec.ts`は独立encoder/byte Copy/用途/形式と旧locatorの不変を照合する。fakeのscope/証跡/commit/競合は実認証・SQL・registry・atomicityの証明ではない。
 
 実GM Adapter/相互codec/namespace/復号0/保存証跡は#242、コード消費と両Context共通commitは#243、清掃/Restoreは#244/#245、公開契約/UIは#246以降へ残す。通常main/Dev/HTTPへのwiring、新Provider/Production有効化は行わない。
+
+
+## #242の保存Adapter
+
+[GM-owned認証Scope参加](../infrastructure/postgres/README.md)が本Portを実装する。共有認証の登録関数から得たquery/attestだけを非公開保持し、key-stateをActorより前に固定する。認可load/期待Root/履歴/最小結果/本文を照合し、共通保存kernelと実GM Auditの成功後だけ証跡を返す。code行/宛先Actor/current proof鍵を読まない保存世代replayと、旧Commandとの共通namespaceを維持する。
+
+この接続の実PG検証は、認証owner/コード消費Writerを合成したGM参加境界である。#241のfake検証や#242の成功から、#243の実Session本人性・実コード消費・両Context業務atomicityを推論しない。公開API/UIと通常main/Dev/Productionは未接続のまま。
