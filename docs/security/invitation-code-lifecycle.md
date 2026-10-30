@@ -145,7 +145,7 @@ Restoreは[運用設計](../operations/invitation-code-retention-restore.md)に�
 
 ## Threat / Verification matrix
 
-実装Trace追補: [#239](https://github.com/takeshi-arihori/kakei_app/issues/239)は[専用Session lease/Scope契約](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md#239-コード専用session-lease)を提供する。V02/V07/V13/V15のActor先行Lock、Session/コード参照再照合、最終期限、opaque消費/保存証跡/確定Response、未await/握り潰し/受付終了拒否、実PG2接続/rollback/commit不明/timeout/cancelを対象とする。登録GM準備/業務保存/コード消費Writerの正例は合成参加者であり、実GM Adapterとコード消費/Invitation/両Auditの業務atomicityは#242/#243で実証する。発行/取消Store本文は下記#240の追補に示す。GM Command#241、清掃/Restore#244/#245、公開契約#246と本番Gateは残る。
+実装Trace追補: [#239](https://github.com/takeshi-arihori/kakei_app/issues/239)は[専用Session lease/Scope契約](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md#239-コード専用session-lease)を提供する。V02/V07/V13/V15のActor先行Lock、Session/コード参照再照合、最終期限、opaque消費/保存証跡/確定Response、未await/握り潰し/受付終了拒否、実PG2接続/rollback/commit不明/timeout/cancelを対象とする。登録GM準備/業務保存/コード消費Writerの正例は合成参加者であり、実GM Adapterとコード消費/Invitation/両Auditの業務atomicityは#242/#243で実証する。発行/取消Store本文は下記#240の追補に示す。#241のApplication契約は下記追補に示す。実GM保存/消費#242/#243、清掃/Restore#244/#245、公開契約#246と本番Gateは残る。
 
 実装Trace: [#236](https://github.com/takeshi-arihori/kakei_app/issues/236)は[共有認証Application README](../../apps/api/src/shared/application/authentication/README.md)の入力値・最小Record構造検証・純粋Policy・内部Port/opaque型だけを対象とする。V01/V02/V03/V07/V11のPolicy/型の検証を、以下の実PG/暗号/HTTP/復旧の受入計画と区別する。実Session lease/registryは#239、原子的なGM統合は#243で実証する。
 
@@ -205,3 +205,9 @@ Ownerは2026-10-27、提示済みADR案Aの7点（10分/一Actor一つ/再表示
 [管理Store/lease](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md#240-コードの発行取消状態確認)と[Migration9 Inventory](../../apps/api/migrations/authentication/README.md#version-9-コード管理監査240)が、R1/R4とV01〜V04/V07/V09/V10/V13/V14の発行・再発行・取消・状態確認部分を実装する。管理は本人Actor排他、読取は共有Lock/idle非更新。全searchable世代の衝突/複数hitを拒否し、旧Issued終端化・新Issued・コード用途監査・Session更新を共通commitする。状態確認は最小Metadataだけで、原値のserialize/永続化/復元を行わない。COMMIT結果不明ではunavailableとし、自動再発行を行わない。拒否Auditは部分業務commitを許さず、失敗後の独立した本人読取leaseで固定denyだけを記録する。結果不明のdenyは元の業務失敗確定を意味しない。
 
 [明示Record鍵発行契約](../../apps/api/src/shared/infrastructure/authentication/README.md#コードrecord鍵の明示発行240)は新Recordの独立鍵生成と、旧Record再MAC時の同一Descriptor既存鍵確認を分ける。DB rollback後も孤立Scopeを有限期限の全世代inventoryへ残し、清掃/closure/Restoreへ引き継ぐ。合成Providerの実PG検証では具体Providerのdurability・全世代破棄・Backup/Restoreを保証しない。GM消費/Invitation/両Context Auditの業務原子性は#242/#243、清掃/Restoreは#244/#245、公開契約とUIは#246以降のまま。
+
+### #241 GM Application契約の実装Trace
+
+[RegisteredRecipientInvitationServiceと参加Port](../../apps/api/src/group-management/application/README.md)が、B1とV04/V05/V08/V11/V12/V20の内部Application部分を実装する。Client入力と有効leaseのfactsを分け、既存Group判断で7日Pendingを計画し、同scopeのstage/証跡/consumeを調整する。新fingerprintはGM canonical TLVのaction/version・Group・期待版・独立proof世代/値に束縛し、原コードを文字列fingerprint/保護operation/結果へ残さない。caller-only replayと新規lease内の再照合は保存proof世代を使い、現在Owner/宛先/code行に依存しない。
+
+入力Copy、未知申告拒否、Domain拒否/版/人数/本人受諾/譲渡/Left再参加、異Actor/action/Group/版/codeのMismatch、preflight後の並行成功、応答喪失後の明示再送、Port障害と本文非漏出をfakeで検証する。独立TLV vectorと既存GM回帰も確認する。fakeの本人性・scope/証跡・commitは実認証/SQL/競合/原子的消費の実証ではなく、実Adapterと既存codec相互対応/共通namespace/decrypt0は#242、両Contextの共通業務commitは#243のEvidenceが必要。Domain Rule/公開API/Schema/Runtimeは変更せず、清掃/Restore/Production Gateを維持する。
