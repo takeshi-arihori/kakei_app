@@ -41,6 +41,7 @@ describe('GM参加Adapterの能力境界', () => {
       'connect',
       'open',
       'query',
+      'run',
       'attest',
       'prepare',
       'commit',

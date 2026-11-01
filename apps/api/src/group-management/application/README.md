@@ -39,6 +39,6 @@ proofはGM独立用途`gm-recipient-code-request/v1`の保存世代で照合し�
 
 ## #242の保存Adapter
 
-[GM-owned認証Scope参加](../infrastructure/postgres/README.md)が本Portを実装する。共有認証の登録関数から得たquery/attestだけを非公開保持し、key-stateをActorより前に固定する。認可load/期待Root/履歴/最小結果/本文を照合し、共通保存kernelと実GM Auditの成功後だけ証跡を返す。code行/宛先Actor/current proof鍵を読まない保存世代replayと、旧Commandとの共通namespaceを維持する。
+[GM-owned認証Scope参加](../infrastructure/postgres/README.md)が本Portを実装する。共有認証の登録関数から得たquery/run/beginPlan/attestの限定能力を非公開保持し、key-stateをActorより前に固定する。操作全体の受領/完了/失敗を追跡し、認可load/期待Root/履歴/最小結果/本文を照合して、共通保存kernelと実GM Auditの成功後だけ証跡を返す。code行/宛先Actor/current proof鍵を読まない保存世代replayと、旧Commandとの共通namespaceを維持する。
 
 この接続の実PG検証は、認証owner/コード消費Writerを合成したGM参加境界である。#241のfake検証や#242の成功から、#243の実Session本人性・実コード消費・両Context業務atomicityを推論しない。公開API/UIと通常main/Dev/Productionは未接続のまま。

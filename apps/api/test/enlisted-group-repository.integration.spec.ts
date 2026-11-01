@@ -86,6 +86,8 @@ describe('GM実保存の認証Scope参加（認証owner/コードWriterだけ合
   let opened: AuthenticationTransactionScope | undefined;
   let decrypts: Mock<ReturnType<typeof createProtectedRecordCodec>['open']>;
   let afterState: (() => Promise<void>) | undefined;
+  let beforeAccessDigest: (() => Promise<void>) | undefined;
+  let beforeLocatorCandidates: (() => Promise<void>) | undefined;
   let lastClient: PoolClient | undefined;
   let loseCommitResponse: boolean;
   beforeAll(async () => {
@@ -135,6 +137,8 @@ describe('GM実保存の認証Scope参加（認証owner/コードWriterだけ合
     sqls = [];
     opened = undefined;
     afterState = undefined;
+    beforeAccessDigest = undefined;
+    beforeLocatorCandidates = undefined;
     loseCommitResponse = false;
     const groupKeys = new Map<
       string,
@@ -178,7 +182,8 @@ describe('GM実保存の認証Scope参加（認証owner/コードWriterだけ合
     const digestMaterial = randomBytes(32),
       locatorMaterial = randomBytes(32);
     const digests: GroupPolicyDigestPort = {
-      digest(input) {
+      async digest(input) {
+        await beforeAccessDigest?.();
         return Promise.resolve({
           digest: importPurposeSeparatedDigest(
             createHmac('sha256', digestMaterial)
@@ -203,6 +208,7 @@ describe('GM実保存の認証Scope参加（認証owner/コードWriterだけ合
         });
       },
       async candidateDigests(input) {
+        await beforeLocatorCandidates?.();
         return [await this.currentDigest(input)];
       },
     };
@@ -1028,6 +1034,89 @@ describe('GM実保存の認証Scope参加（認証owner/コードWriterだけ合
     throw new Error('Expected PostgreSQL lock wait was not observed');
   };
 
+  const enlistmentDown = () =>
+    readFile(
+      new URL(
+        '../migrations/group-management/0010_recipient_invitation_enlistment.down.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+  it.each(['recipient', 'legacy'] as const)(
+    'current未設定かつAudit清掃後でも保持中の%s operationがあればDownを拒否する',
+    async (kind) => {
+      await seed();
+      if (kind === 'recipient') await create();
+      await pool.query(
+        'UPDATE group_recipient_code_proof_key_state SET current_key_version = NULL WHERE id = 1',
+      );
+      await pool.query('DELETE FROM group_recipient_invitation_audit_record');
+      const before = await counts();
+      expect(before.operations).toBe(kind === 'recipient' ? '2' : '1');
+      expect(before.audit).toBe('0');
+      await expect(pool.query(await enlistmentDown())).rejects.toThrow(
+        'requires forward-fix',
+      );
+      expect(await counts()).toEqual(before);
+      await owner(async (scope) => {
+        const saved = await repository.findOperation(
+          scope,
+          ownerActor,
+          OperationId.from(
+            kind === 'recipient' ? 'create-from-code' : `seed-${groupId.value}`,
+          ),
+        );
+        expect(saved?.result.version).toBe(kind === 'recipient' ? 2 : 1);
+        expect(saved?.fingerprint instanceof CommandFingerprint).toBe(
+          kind === 'legacy',
+        );
+        return scope.serialize({ checked: true });
+      });
+    },
+  );
+
+  it('Downは進行中のGM準備Lockの終了を待ち、保持結果を確認して拒否する', async () => {
+    await seed();
+    await create();
+    await pool.query(
+      'UPDATE group_recipient_code_proof_key_state SET current_key_version = NULL WHERE id = 1',
+    );
+    await pool.query('DELETE FROM group_recipient_invitation_audit_record');
+    const entered = deferred(),
+      finish = deferred();
+    let pid = 0;
+    const reading = owner(async (scope) => {
+      const saved = await repository.findOperation(
+        scope,
+        ownerActor,
+        OperationId.from('create-from-code'),
+      );
+      expect(saved?.result.version).toBe(2);
+      pid = (
+        await lastClient!.query<{ pid: number }>(
+          'SELECT pg_backend_pid() AS pid',
+        )
+      ).rows[0].pid;
+      entered.resolve();
+      await finish.promise;
+      return scope.serialize({ version: saved!.result.version });
+    });
+    await entered.promise;
+    const down = pool.query(await enlistmentDown());
+    void down.catch(() => {});
+    try {
+      await waitForBlock(pid);
+    } finally {
+      finish.resolve();
+      await reading.catch(() => {});
+      await down.catch(() => {});
+    }
+    expect(await reading).toBe('{"version":2}');
+    await expect(down).rejects.toThrow('requires forward-fix');
+    expect((await counts()).operations).toBe('2');
+  });
+
   it('成功再送の結果行LockがGroup削除をScope終了まで待機させる', async () => {
     await seed();
     await create();
@@ -1363,6 +1452,178 @@ describe('GM実保存の認証Scope参加（認証owner/コードWriterだけ合
       consumed: '0',
     });
   });
+  it('完了済みでも未awaitの公開GM読取は先行stage/consumeを全rollbackする', async () => {
+    await seed();
+    const done = deferred();
+    let pending: Promise<unknown> | undefined;
+    let readCompleted = false,
+      readRejected = false;
+    const attempt = owner(
+      async (scope, bound) => {
+        const p = await plan(scope);
+        const witness = await repository.stage(scope, bound!.handle, p);
+        await bound!.scope.consume(bound!.handle, witness);
+        pending = repository.findOperation(
+          scope,
+          ownerActor,
+          p.operation.operationId,
+        );
+        void pending
+          .catch(() => {
+            readRejected = true;
+          })
+          .finally(() => {
+            readCompleted = true;
+            done.resolve();
+          });
+        await done.promise;
+        return p.value;
+      },
+      { codeId, recipientActorId },
+    );
+    const outcome = await attempt.then(
+      () => 'committed',
+      () => 'rejected',
+    );
+    expect(pending).toBeDefined();
+    expect(readCompleted).toBe(true);
+    expect(readRejected).toBe(false);
+    expect(outcome).toBe('rejected');
+    await pending!.catch(() => {});
+    expect(await counts()).toEqual({
+      version: '1',
+      invitations: '0',
+      history: '0',
+      operations: '1',
+      locators: '1',
+      audit: '0',
+      consumed: '0',
+    });
+  });
+
+  it.each(['load', 'replay'] as const)(
+    'SQL前のProvider待機中の未await GM %s操作を全rollbackし、遅延完了でもSQLを実行しない',
+    async (kind) => {
+      await seed();
+      const entered = deferred(),
+        finish = deferred();
+      let pending: Promise<unknown> | undefined;
+      const hold = () => {
+        entered.resolve();
+        return finish.promise;
+      };
+      const attempt = owner(
+        async (scope, bound) => {
+          const first = await plan(scope);
+          const witness = await repository.stage(scope, bound!.handle, first);
+          await bound!.scope.consume(bound!.handle, witness);
+          if (kind === 'load') {
+            beforeAccessDigest = hold;
+            pending = repository.loadForInvitation(scope, groupId, ownerActor);
+          } else {
+            beforeLocatorCandidates = hold;
+            pending = repository.findOperation(
+              scope,
+              ownerActor,
+              first.operation.operationId,
+            );
+          }
+          void pending.catch(() => {});
+          await entered.promise;
+          return first.value;
+        },
+        { codeId, recipientActorId },
+      );
+      const outcome = attempt.then(
+        () => 'committed',
+        () => 'rejected',
+      );
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const result = await Promise.race([
+          outcome,
+          new Promise<string>((resolve) => {
+            timeout = setTimeout(
+              () => resolve('provider-wait-blocked-rollback'),
+              2000,
+            );
+          }),
+        ]);
+        expect(result).toBe('rejected');
+        expect(await counts()).toEqual({
+          version: '1',
+          invitations: '0',
+          history: '0',
+          operations: '1',
+          locators: '1',
+          audit: '0',
+          consumed: '0',
+        });
+      } finally {
+        if (timeout !== undefined) clearTimeout(timeout);
+        const queryCount = sqls.length;
+        finish.resolve();
+        await pending?.catch(() => {});
+        await outcome;
+        expect(sqls).toHaveLength(queryCount);
+        beforeAccessDigest = undefined;
+        beforeLocatorCandidates = undefined;
+      }
+    },
+  );
+
+  it.each(['root', 'operation', 'body'] as const)(
+    'beginPlan前の%s検証失敗を握り潰しても先行証跡でcommitできない',
+    async (invalid) => {
+      await seed();
+      await expect(
+        owner(
+          async (scope, bound) => {
+            const first = await plan(
+              scope,
+              OperationId.from('valid-first-stage'),
+            );
+            const witness = await repository.stage(scope, bound!.handle, first);
+            let bad = first;
+            if (invalid === 'root') {
+              Reflect.set(
+                first.group,
+                'accessPolicyVersion',
+                first.group.accessPolicyVersion + 1,
+              );
+            } else if (invalid === 'operation') {
+              first.operation.fingerprint.canonicalInput.fill(0);
+            } else {
+              bad = {
+                ...first,
+                value: Object.freeze({
+                  body: '{"kind":"Invalid"}',
+                }) as AuthenticationSerializedValue,
+              };
+            }
+            try {
+              await repository.stage(scope, bound!.handle, bad);
+            } catch {
+              /* 受付前の検証失敗を握り潰してもScopeの失敗を取り消せない。 */
+            }
+            await bound!.scope.consume(bound!.handle, witness);
+            return first.value;
+          },
+          { codeId, recipientActorId },
+        ),
+      ).rejects.toThrow();
+      expect(await counts()).toEqual({
+        version: '1',
+        invitations: '0',
+        history: '0',
+        operations: '1',
+        locators: '1',
+        audit: '0',
+        consumed: '0',
+      });
+    },
+  );
+
   it('二度目のstage失敗を握り潰して先行証跡だけを消費してもcommitできない', async () => {
     await seed();
     await expect(

@@ -11,7 +11,7 @@
 
 ## 認証Scopeへの参加
 
-[createEnlistedGroupRepository](enlisted-group-repository.ts)は、Compositionから`registerGroupParticipant`関数と必要なWriter/暗号/鍵Portだけを受ける。owner registry、Pool、接続取得、BEGIN/COMMIT/ROLLBACK/releaseを保持・公開しない。登録で返るquery/beginPlan/attestを非公開にし、Applicationへは[#241のPort](../../application/recipient-invitation-repository.ts)と保守診断だけを返す。
+[createEnlistedGroupRepository](enlisted-group-repository.ts)は、Compositionから`registerGroupParticipant`関数と必要なWriter/暗号/鍵Portだけを受ける。owner registry、Pool、接続取得、BEGIN/COMMIT/ROLLBACK/releaseを保持・公開しない。登録で返るquery/run/beginPlan/attestを非公開にし、Applicationへは[#241のPort](../../application/recipient-invitation-repository.ts)と保守診断だけを返す。
 
 prepareは同registryのqueryでlocator→proof key-stateをFOR SHAREし、世代をScope identityへ固定する。Actor/Session/codeより前に実行し、Group Lock後にkey-stateへ戻らない。rotationは同じ行の排他Lockを必要とする。current proofが未設定/利用不能でも保持済み成功の読取は可能で、新規時だけcurrentを要求する。
 
@@ -19,7 +19,7 @@ prepareは同registryのqueryでlocator→proof key-stateをFOR SHAREし、世�
 
 `loadForInvitation`は在籍索引→Group FOR UPDATE→索引再照合→復号の順とし、非在籍はdecrypt0で存在非開示のnullを返す。Groupを複数扱う場合もID昇順を要求する。認可済みRootは呼出し側へ返すGroupと参照を共有しない非公開payloadとして固定し、stage時に独立復元する。返却GroupのOwner/Policy/内部状態を書き換えても認可根拠を変更できない。stageは認可loadしたActor/版と、単一Created履歴/期待Root/Policy/結果/最小本文を照合する。既存の純粋Group遷移と一致したRootだけを共通kernelへ渡す前にregistryの`beginPlan`で新規handle/計画/本文を一回受付し、実GM Audit成功後だけ同handle/codeId/宛先/operation/本文をattestする。
 
-偽Scope、他Scopeの本文、異binding、失敗計画、CAS/Unique/SQL/暗号/Audit障害から新規証跡を返さない。未await/握り潰しSQL/受付終了/consumeと本文の一致は実registryにも検証させ、ownerが全rollbackする。保存済みoperationを新規消費証跡へ変換したり、新規業務を自動再実行したりしない。
+偽Scope、他Scopeの本文、異binding、失敗計画、CAS/Unique/SQL/暗号/Audit障害から新規証跡を返さない。各GM操作は登録GM専用の`run`で開始時から受領/完了/失敗を追跡する。入力Copyは同期開始し、SQLや`beginPlan`前のProvider待機も未完了として登録する。GM操作を重ねて受け付けず、先行stageの証跡や消費があっても未await/未完了/失敗からcommitできない。検証失敗の記録は不可逆で、例外を握り潰しても解除できない。未await/握り潰しSQL/受付終了/consumeと本文の一致は実registryにも検証させ、ownerが全rollbackする。seal後の遅延Provider完了は新規SQLを実行できず、rollbackのdrainは既に開始したSQLだけを待ち、未応答Providerを待たない。保存済みoperationを新規消費証跡へ変換したり、新規業務を自動再実行したりしない。
 
 ## Auditと保持
 
@@ -47,8 +47,8 @@ Knowledge State: Confirmed。根拠はAccepted R4/IC-FAIL-2と#242 Done Criteria
 | GM-POST-1 / Persistence | 同queryのGroup/履歴/operation/locator/GM Auditが成功後だけattestする。stageはcommit結果ではない | 各write/Audit故障、Audit guard除去Mutation |
 | GM-POST-2 / Coordination | attestは受付時のoperation/本文handleと一致する。GM業務DMLは受付済み計画だけ | operation/value差替え、未受付DML、二度目の受付 |
 | GM-INV-1 / Domain | 既存GroupのActive Owner/在籍人数等の業務不変条件を維持し、7日Pending/枠予約なしを変更しない | 既存Domain回帰、実Group遷移再照合 |
-| GM-FAIL-1 / Infrastructure | 不正受付/再受付はScopeを失敗済みにする。例外を握り潰してもcommit不可 | caller-only+非SQL障害、二度目stageからの先行証跡消費拒否 |
-| GM-FAIL-2 / Infrastructure | 新規ScopeのSQL/非SQL障害は未完成計画を確定せず全rollbackする | fault injection、未await/握り潰し、非SQL障害 |
+| GM-FAIL-1 / Infrastructure | 受付前の検証失敗を含むGM操作失敗/不正受付/再受付はScopeを失敗済みにする。例外を握り潰してもcommit不可 | caller-only+非SQL障害、二度目stageのRoot/operation/本文検証失敗からの先行証跡消費拒否 |
+| GM-FAIL-2 / Infrastructure | 新規ScopeのSQL/非SQL障害、SQL前の未await/未完了GM操作は未完成計画を確定せず全rollbackする | fault injection、Provider待機中の未await load/replay、遅延完了のSQL拒否、握り潰し、非SQL障害 |
 | GM-FAIL-3 / Concurrency | Unique/CAS敗者は全rollback後の照会、COMMIT不明は同operation明示照会。業務自動再実行なし | 2接続/応答喪失/保存世代再送 |
 
 この受付は認証ownerの管理用queryを制限せず、SQL TransactionのBEGIN/COMMIT/ROLLBACK能力をGMへ渡さない。共有認証はGMの業務意味を持たず、実GM Adapterだけが成功計画とAuditを証明する。

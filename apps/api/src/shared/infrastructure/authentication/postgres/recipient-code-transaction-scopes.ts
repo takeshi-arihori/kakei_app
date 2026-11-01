@@ -26,6 +26,17 @@ export interface RecipientCodeCommitBinding {
 /** Compositionが実GM Adapterだけへ渡す能力。通常Application Callbackへ公開しない。 */
 export interface RecipientCodeGroupParticipant extends AuthenticationTransactionParticipants {
   /**
+   * SQL前のProvider待機を含むGM操作全体の受領/完了/失敗をScopeへ登録する。
+   * @param scope 同registryの準備済みopen Scope。
+   * @param work 入力固定を同期開始し、操作全体の完了を返す信頼済みGM処理。
+   * @returns await/成功thenによる受領も追跡するPromise。未await/失敗はcommit不可。
+   * @throws RecipientCodeUnavailable 偽Scope/受付終了/未完了操作への重複受付。
+   */
+  run<T>(
+    scope: AuthenticationTransactionScope,
+    work: () => Promise<T>,
+  ): Promise<T>;
+  /**
    * 業務writeより前に一回だけ新規計画を束縛する。GM SQL/Domainの意味は保持しない。
    * @param scope 同registryの準備済み新規Scope。caller-only Scopeは拒否する。
    * @param handle このScopeに束縛された一回消費権。
@@ -58,7 +69,7 @@ export interface RecipientCodeTransactionScopes {
   /**
    * 最初のlease開始前に一つの信頼済みGM Adapterを登録する。
    * @param registration Actor Lock前にGMが所有するkey-stateを固定する能力。
-   * @returns queryと証跡発行だけのGM能力。Transaction制御はない。
+   * @returns query/操作追跡/計画受付/証跡発行だけのGM能力。Transaction制御はない。
    * @throws RecipientCodeUnavailable 二重登録またはlease開始後の登録。
    */
   registerGroupParticipant(registration: {
@@ -112,6 +123,7 @@ type Frame = {
   prepared: boolean;
   preparing: boolean;
   tasks: Task[];
+  operations: Task[];
   guards: (() => void)[];
   writes: number;
   lease: AuthenticationTransactionLease;
@@ -134,15 +146,27 @@ const reject = (): never => {
 };
 
 // thenableでawait/thenによる受領も追跡する。完了が早い未await操作をseal時に見逃さない。
-const track = <T>(frame: Frame, start: () => Promise<T>): Promise<T> => {
+const track = <T>(
+  frame: Frame,
+  start: () => Promise<T>,
+  operation?: { readonly tasks: Task[]; readonly startImmediately: true },
+): Promise<T> => {
   const task: Task = {
     observed: false,
     settled: false,
     promise: Promise.resolve(),
   };
-  const promise = Promise.resolve().then(start);
+  (operation?.tasks ?? frame.tasks).push(task);
+  let promise: Promise<T>;
+  try {
+    // GMの入力Copyを最初のawaitより後へ遅延させず、開始前に未完了として登録する。
+    promise = operation?.startImmediately
+      ? Promise.resolve(start())
+      : Promise.resolve().then(start);
+  } catch {
+    promise = Promise.reject(new RecipientCodeUnavailable());
+  }
   task.promise = promise;
-  frame.tasks.push(task);
   void promise.then(
     () => {
       task.settled = true;
@@ -259,6 +283,7 @@ export const createRecipientCodeTransactionScopes = (
           prepared: false,
           preparing: false,
           tasks: [],
+          operations: [],
           guards: [],
           writes: 0,
         });
@@ -316,7 +341,11 @@ export const createRecipientCodeTransactionScopes = (
             });
           },
           seal() {
-            if (frame.tasks.some((t) => !t.observed || !t.settled))
+            if (
+              [...frame.tasks, ...frame.operations].some(
+                (t) => !t.observed || !t.settled,
+              )
+            )
               frame.failed = true;
             frame.phase = 'sealed';
           },
@@ -330,7 +359,9 @@ export const createRecipientCodeTransactionScopes = (
               if (
                 frame.failed ||
                 frame.phase !== 'sealed' ||
-                frame.tasks.some((t) => !t.observed || !t.settled) ||
+                [...frame.tasks, ...frame.operations].some(
+                  (t) => !t.observed || !t.settled,
+                ) ||
                 (frame.binding &&
                   (!frame.binding.consumed || !frame.binding.operationId))
               )
@@ -339,6 +370,7 @@ export const createRecipientCodeTransactionScopes = (
             });
           },
           async drain() {
+            // seal後は新規SQLを受け付けない。未応答Providerを待ってrollbackを止めない。
             await Promise.allSettled(frame.tasks.map((t) => t.promise));
           },
           close() {
@@ -354,6 +386,28 @@ export const createRecipientCodeTransactionScopes = (
       registration = Object.freeze({ prepare: value.prepare });
       return Object.freeze({
         ...groupQuery,
+        run<T>(scope: AuthenticationTransactionScope, work: () => Promise<T>) {
+          let frame: Frame | undefined;
+          try {
+            frame = openFrame(scope);
+            if (
+              !frame.prepared ||
+              frame.failed ||
+              typeof work !== 'function' ||
+              frame.operations.some((t) => !t.observed || !t.settled)
+            ) {
+              frame.failed = true;
+              return Promise.reject(new RecipientCodeUnavailable());
+            }
+            return track(frame, work, {
+              tasks: frame.operations,
+              startImmediately: true,
+            });
+          } catch {
+            if (frame) frame.failed = true;
+            return Promise.reject(new RecipientCodeUnavailable());
+          }
+        },
         beginPlan(scope, handle, binding) {
           const frame = openFrame(scope);
           check(frame, () => {

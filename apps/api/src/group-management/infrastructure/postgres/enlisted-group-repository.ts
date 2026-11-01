@@ -48,7 +48,7 @@ export interface EnlistedGroupRepository extends RecipientInvitationRepository {
 }
 /** GM登録関数と必要な保存能力だけ。owner registry/Poolは受けない。 */
 export interface EnlistedGroupRepositoryOptions extends GroupCommitKernelOptions {
-  /** Compositionが一度だけ実GMへ渡す登録関数。返却能力はquery/attestだけ。 */ readonly registerGroupParticipant: RecipientCodeTransactionScopes['registerGroupParticipant'];
+  /** Compositionが一度だけ実GMへ渡す登録関数。query/操作追跡/計画受付/証跡の限定能力。 */ readonly registerGroupParticipant: RecipientCodeTransactionScopes['registerGroupParticipant'];
   /** 同ScopeのGM Audit成功前にattestしない。 */ readonly auditWriter: Pick<
     PostgresGroupInvitationAuditWriter,
     'write'
@@ -127,13 +127,10 @@ export const createEnlistedGroupRepository = (
     }
     return fail();
   };
-  const safe = async <T>(work: () => Promise<T>): Promise<T> => {
-    try {
-      return await work();
-    } catch {
-      return report();
-    }
-  };
+  const safe = <T>(
+    scope: AuthenticationTransactionScope,
+    work: () => Promise<T>,
+  ): Promise<T> => participant.run(scope, work).catch(report);
   const participant = registerGroupParticipant({
     async prepare(scope, query) {
       const db = database(scope, query);
@@ -160,21 +157,21 @@ export const createEnlistedGroupRepository = (
   });
   return Object.freeze({
     findOperation: (scope, actor, operationId) =>
-      safe(async () => {
+      safe(scope, async () => {
         frameFor(scope);
         return await kernel
           .reader(database(scope, participant))
           .findStoredOperation(actor, operationId);
       }),
     currentProofKeyVersion: (scope) =>
-      safe(async () => {
+      safe(scope, async () => {
         const frame = frameFor(scope);
         // 保存値を返すだけでも受付終了/別registryを拒否する。key-stateへ後付けLockは取らない。
         await participant.query(scope, 'SELECT 1');
         return frame.proofVersion ?? fail();
       }),
     loadForInvitation: (scope, groupId, actor) =>
-      safe(async () => {
+      safe(scope, async () => {
         const frame = frameFor(scope);
         if (
           !(groupId instanceof GroupId) ||
@@ -234,7 +231,7 @@ export const createEnlistedGroupRepository = (
         return snapshot;
       }),
     stage: (scope, handle, plan) =>
-      safe(async () => {
+      safe(scope, async () => {
         const frame = frameFor(scope);
         // 最初のawaitより前に入力本文/配列/VOを固定する。
         const operation = decodeStoredGroupOperation(
@@ -352,7 +349,7 @@ export const createEnlistedGroupRepository = (
         return participant.attest(scope, handle, binding);
       }),
     countProofReferences: (scope, keyVersion) =>
-      safe(async () => {
+      safe(scope, async () => {
         frameFor(scope);
         return await kernel
           .reader(database(scope, participant))

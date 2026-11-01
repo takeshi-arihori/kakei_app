@@ -59,6 +59,99 @@ const fixture = async (plannedOperationId = operationId) => {
 };
 
 describe('招待コードleaseの登録参加者と消費証跡', () => {
+  it.each(['before-consume', 'after-consume'] as const)(
+    '%sの登録GMの検証失敗はScopeを不可逆にcommit不可にする',
+    async (when) => {
+      const f = await fixture();
+      const evidence = f.evidence;
+      if (when === 'after-consume') {
+        await f.bound.scope.consume(f.bound.handle, evidence);
+      }
+      await expect(
+        f.gm.run(f.lease.scope, () =>
+          Promise.reject(new Error('synthetic GM validation failure')),
+        ),
+      ).rejects.toThrow();
+      if (when === 'before-consume') {
+        await expect(
+          f.bound.scope.consume(f.bound.handle, evidence),
+        ).rejects.toThrow();
+        expect(f.consume).not.toHaveBeenCalled();
+      }
+      f.lease.seal();
+      expect(() => f.lease.assertCommittable()).toThrow();
+    },
+  );
+
+  it('SQL前の未完了GM操作をsealで拒否し、Providerを待たずにdrainできる', async () => {
+    const f = await fixture();
+    await f.bound.scope.consume(f.bound.handle, f.evidence);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const calls = f.connection.query.mock.calls.length;
+    const pending = f.gm.run(f.lease.scope, async () => {
+      await gate;
+      await f.gm.query(f.lease.scope, 'SELECT 1');
+    });
+    void pending.catch(() => {});
+    f.lease.seal();
+    expect(() => f.lease.assertCommittable()).toThrow();
+    await f.lease.drain();
+    f.lease.close();
+    release();
+    await expect(pending).rejects.toThrow();
+    expect(f.connection.query).toHaveBeenCalledTimes(calls);
+  });
+
+  it('完了済みでも未awaitのGM操作をcommit済みと扱わない', async () => {
+    const f = await fixture();
+    const evidence = f.evidence;
+    void f.gm.run(f.lease.scope, () => Promise.resolve('synthetic result'));
+    await Promise.resolve();
+    await Promise.resolve();
+    await f.bound.scope.consume(f.bound.handle, evidence);
+    f.lease.seal();
+    expect(() => f.lease.assertCommittable()).toThrow();
+  });
+
+  it('GM操作の入力固定を最初のawaitより後へ遅延させない', async () => {
+    const f = await fixture();
+    const input = { value: 'original' };
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const running = f.gm.run(f.lease.scope, async () => {
+      const fixed = input.value;
+      await gate;
+      return fixed;
+    });
+    input.value = 'changed';
+    release();
+    expect(await running).toBe('original');
+    await f.bound.scope.consume(f.bound.handle, f.evidence);
+    f.lease.seal();
+    expect(() => f.lease.assertCommittable()).not.toThrow();
+  });
+
+  it('未完了GM操作に重ねた操作受付はScopeを失敗済みにする', async () => {
+    const f = await fixture();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = f.gm.run(f.lease.scope, () => gate);
+    await expect(
+      f.gm.run(f.lease.scope, () => Promise.resolve()),
+    ).rejects.toThrow();
+    release();
+    await first;
+    f.lease.seal();
+    expect(() => f.lease.assertCommittable()).toThrow();
+  });
+
   it('同registryでも別ScopeのGM証跡は消費に使えない', async () => {
     const f = await fixture();
     const other = f.registry.scopes.open({
