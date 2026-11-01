@@ -206,16 +206,22 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
     (): RecipientCodeUseCallbacks<AuthenticationSerializedValue> => ({
       replay: () => Promise.resolve({ status: 'no-replay' }),
       create: async (facts, handle, scope) => {
-        await gm.query(
-          scope,
-          `INSERT INTO ${schema}.synthetic_write (label) VALUES ($1)`,
-          ['synthetic-gm'],
-        );
         const value = scope.serialize({
           groupId: 'synthetic-group',
           invitationId: 'synthetic-invitation',
           version: 2,
         });
+        gm.beginPlan(scope, handle, {
+          codeId: facts.codeId,
+          recipientActorId: facts.recipientActorId,
+          operationId,
+          value,
+        });
+        await gm.query(
+          scope,
+          `INSERT INTO ${schema}.synthetic_write (label) VALUES ($1)`,
+          ['synthetic-gm'],
+        );
         const evidence = gm.attest(scope, handle, {
           codeId: facts.codeId,
           recipientActorId: facts.recipientActorId,
@@ -496,7 +502,7 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
       } else {
         expect(
           await leases.withActor(secret(10), clock, async (_actor, scope) => {
-            await gm.query(
+            await scopes.scopes.participants.query(
               scope,
               `INSERT INTO ${schema}.synthetic_write (label) VALUES ($1)`,
               ['synthetic-manage-write'],
@@ -526,12 +532,14 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
     });
     expect(
       await leases.withActor(secret(10), clock, async (_caller, scope) => {
-        await gm.query(
+        await scopes.scopes.participants.query(
           scope,
           `INSERT INTO ${schema}.synthetic_write (label) VALUES ($1)`,
           ['synthetic-before-timeout'],
         );
-        await gm.query(scope, 'SELECT pg_sleep($1)', [0.2]).catch(() => {});
+        await scopes.scopes.participants
+          .query(scope, 'SELECT pg_sleep($1)', [0.2])
+          .catch(() => {});
         return scope.serialize(null);
       }),
     ).toEqual({ status: 'unavailable' });
@@ -547,7 +555,7 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
   it('serialize時のSession期限等値は管理Callbackの途中SQLもrollbackする', async () => {
     expect(
       await leases.withActor(secret(10), clock, async (_actor, scope) => {
-        await gm.query(
+        await scopes.scopes.participants.query(
           scope,
           `INSERT INTO ${schema}.synthetic_write (label) VALUES ($1)`,
           ['synthetic-before-expiry'],
@@ -558,10 +566,10 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
     ).toEqual({ status: 'unavailable' });
     await unchanged();
   });
-  it('未awaitのGM queryとserialization失敗の握り潰しを実PGでもcommitしない', async () => {
+  it('未awaitの管理queryとserialization失敗の握り潰しを実PGでもcommitしない', async () => {
     expect(
       await leases.withActor(secret(10), clock, async (_actor, scope) => {
-        void gm.query(
+        void scopes.scopes.participants.query(
           scope,
           `INSERT INTO ${schema}.synthetic_write (label) VALUES ($1)`,
           ['synthetic-unawaited'],
@@ -1026,14 +1034,14 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
         secret(10),
         clock,
         async (_actor, scope) => {
-          await gm.query(
+          await scopes.scopes.participants.query(
             scope,
             `INSERT INTO ${schema}.synthetic_write (label) VALUES ($1)`,
             ['before-cancel'],
           );
           entered.resolve();
           await resume.promise;
-          late = gm.query(scope, 'SELECT 1');
+          late = scopes.scopes.participants.query(scope, 'SELECT 1');
           await late.catch(() => {});
           return scope.serialize(null);
         },

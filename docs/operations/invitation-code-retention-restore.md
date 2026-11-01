@@ -50,3 +50,10 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 [Migration9](../../apps/api/migrations/authentication/README.md#version-9-コード管理監査240)のコードAudit仮名は共有認証Auditの90日保持へ含め、独立コード監査鍵世代の参照/Backup windowを退役条件へ含める。lookup/状態MACと共有せず、直接codeIdや原コードを監査から復元しない。旧保守/Restore Readerのコード用途拒否は維持し、実際の清掃・復旧対応が完了する前に公開接続しない。
 
 Record鍵の明示割当はDB rollbackで取り消せない。保存前/COMMIT結果不明/再MAC途中で孤立したcodeId/世代も、Providerの全世代inventoryへ期限を保持する。新Recordの再利用は拒否し、旧Recordの同一Descriptor既存鍵確認だけで再生成を避ける。孤立Scopeも期限/終端/Actor無効化の最早時点+24h以内に全世代closureへ含め、DB行が0件であることだけを鍵不存在/清掃完了の根拠にしない。#244/#245のdurable ticket/closure照合と具体Providerの訓練Evidenceは未実装/未実証であり、本番Gateを維持する。
+
+
+## GM保存参加の実装Trace（#242）
+
+[GM Adapter](../../apps/api/src/group-management/infrastructure/postgres/README.md)はproof current世代をGM-owned singletonへ置き、保存proof世代/値と内部bindingは既存Envelope内だけに保持する。保持結果の検証付き参照検査が0件でも鍵破棄の許可にはならず、関連Backup35日window closureが別途必須。破損/鍵喪失を未参照と扱わない。コード清掃/Actor削除へGM proof鍵を巻き込まず、鍵破棄能力をAdapterへ公開しない。
+
+新GM Auditは独立GM/Group用途の仮名とrequest fingerprintだけを保存し、Group削除でcascadeしない。90日保持と関連Audit鍵/Backup35日windowを維持する。成功Auditの同Scope保存を実PGで確認したが、90日清掃/拒否Audit接続、具体Providerの保持/破棄/Backup、全Context Restoreと本番監視は既存Gateのまま。合成認証owner/コードWriterの成功を#243の実消費・両Context業務atomicityへ読み替えない。

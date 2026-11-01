@@ -211,3 +211,15 @@ Ownerは2026-10-27、提示済みADR案Aの7点（10分/一Actor一つ/再表示
 [RegisteredRecipientInvitationServiceと参加Port](../../apps/api/src/group-management/application/README.md)が、B1とV04/V05/V08/V11/V12/V20の内部Application部分を実装する。Client入力と有効leaseのfactsを分け、既存Group判断で7日Pendingを計画し、同scopeのstage/証跡/consumeを調整する。新fingerprintはGM canonical TLVのaction/version・Group・期待版・独立proof世代/値に束縛し、原コードを文字列fingerprint/保護operation/結果へ残さない。caller-only replayと新規lease内の再照合は保存proof世代を使い、現在Owner/宛先/code行に依存しない。
 
 入力Copy、未知申告拒否、Domain拒否/版/人数/本人受諾/譲渡/Left再参加、異Actor/action/Group/版/codeのMismatch、preflight後の並行成功、応答喪失後の明示再送、Port障害と本文非漏出をfakeで検証する。独立TLV vectorと既存GM回帰も確認する。fakeの本人性・scope/証跡・commitは実認証/SQL/競合/原子的消費の実証ではなく、実Adapterと既存codec相互対応/共通namespace/decrypt0は#242、両Contextの共通業務commitは#243のEvidenceが必要。Domain Rule/公開API/Schema/Runtimeは変更せず、清掃/Restore/Production Gateを維持する。
+
+
+### #242: GM保存と成功再送の認証Scope参加
+
+[GM保存Adapter/共通kernel/同Scope Audit](../../apps/api/src/group-management/infrastructure/postgres/README.md)と[Migration10 Inventory](../../apps/api/migrations/group-management/README.md#version-10-招待コードからのgm保存参加242)が、B3とV08/V10〜V15のGM保存部分を実装する。prepareでGM locator/proof key-stateをActor前に固定し、借用queryだけで認可Group/Policy/Invitation履歴/保護operation/共通locator/GM Auditをstageして実registryへattestする。standaloneは同kernelへ委譲し、Unique敗者の全rollback後の照会を維持する。新旧payload/actionは同じnamespaceで相互Mismatchにし、既存Envelope/AADを変更しない。
+
+実PGでは、コード行なし・現在Owner喪失・current proof鍵未設定でも保存proof世代で再送し、非在籍decrypt0、各write/Audit障害の全rollback、偽計画/他Scope本文/未await/SQL握り潰し拒否、同Actor/op別Group競合、key-state rotation/timeoutとGroup CASの2接続裁定、結果不明後の明示照会を確認する。proof参照は保護結果内に保持し、破損をskipして0件としない。0件でも関連Backup35日closureが必須で、Adapterに破棄能力を持たせない。GM Auditは直接IDなし・Group削除cascadeなし・独立用途/要求semanticに束縛する。
+
+この検証の認証ownerとコード消費Writerは合成であり、実Session本人性、実コード消費とInvitation/両Context Auditの業務atomicityを実証しない。#243の最終統合、#244/#245の清掃/Restore、#246以降の公開契約と既存Production Gateを維持する。Audit成功Writerの追加は、汎用Snapshot Audit/拒否記録/90日清掃や具体Provider運用の完成を意味しない。
+
+
+#242の境界補強: 新規業務write前の`beginPlan`がscope/handle/code/宛先/operation/本文を一回受付し、GM DMLをその計画だけへ限定する。保存後のattestも同じoperation/本文を再照合する。caller-only Scopeでstageし非SQL障害を握り潰すケースを実PGでRedにし、受付前拒否/Scope失敗記録と未完成計画の全rollbackを確認した。これはAcceptedの部分確定禁止を実装へ写像した技術的受付であり、新しい業務InvariantやData Ownerの変更ではない。認証owner用query、共有認証からGM SQL/Domainをimportしない境界、#243以降のGateは維持する。

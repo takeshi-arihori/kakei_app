@@ -361,8 +361,14 @@ export type CommitGroupOutcome =
   | Readonly<{ kind: 'Unavailable' }>;
 
 export type FindOperationResult =
-  | Readonly<{ kind: 'Found'; operation: StoredOperation }>
-  | Readonly<{ kind: 'Missing' }>;
+  | Readonly<{
+      /** 既存Commandの検証済み保存成功。 */ kind: 'Found';
+      /** Actor/opを照合した旧形式結果。 */ operation: StoredOperation;
+    }>
+  | Readonly<{ /** 共通namespaceに保存成功なし。 */ kind: 'Missing' }>
+  | Readonly<{
+      /** 異actionの保存成功を旧Commandへ返さない。 */ kind: 'OperationMismatch';
+    }>;
 
 export interface GroupRepository {
   load(groupId: GroupId): Promise<LoadedGroup | null>;
