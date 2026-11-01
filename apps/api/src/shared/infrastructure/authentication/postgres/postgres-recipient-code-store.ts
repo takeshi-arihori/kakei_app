@@ -37,6 +37,10 @@ import { authenticationDatabaseInteger } from './authentication-database-values.
 import { readRecipientCodeManagementKeyState } from './authentication-key-state.js';
 import type { AuthenticationTransactionParticipants } from './authentication-transaction-scopes.js';
 import {
+  allocateRecipientCodeStateKey,
+  writeRecipientCodeTransition,
+} from './recipient-code-transition-writer.js';
+import {
   findRecipientCode,
   readRecipientCode,
 } from './recipient-code-selection.js';
@@ -129,20 +133,13 @@ export const createPostgresRecipientCodeStore = (options: {
     expiresAt: number,
     requireNew = true,
   ) => {
-    const answer = await options.stateKeys.allocate({
+    await allocateRecipientCodeStateKey(
+      options.stateKeys,
       codeId,
       keyVersion,
       expiresAt,
-    });
-    if (
-      answer.status !== 'allocated' ||
-      answer.codeId !== codeId ||
-      answer.keyVersion !== keyVersion ||
-      answer.expiresAt !== expiresAt ||
-      typeof answer.created !== 'boolean' ||
-      (requireNew && !answer.created)
-    )
-      reject();
+      requireNew,
+    );
   };
   const audit = async (
     ctx: Context,
@@ -177,37 +174,14 @@ export const createPostgresRecipientCodeStore = (options: {
     previous: RecipientCodeRecord,
     plan: RecipientCodeTransition,
   ) => {
-    if (previous.macKeyVersion !== ctx.state.codeMacWrite)
-      await allocate(
-        previous.codeId,
-        ctx.state.codeMacWrite,
-        previous.expiresAt,
-        false,
-      );
-    const { mac: ignored, ...fields } = previous;
-    void ignored;
-    const updated = {
-      ...fields,
-      recordVersion: plan.recordVersion,
-      status: plan.status,
-      terminalAt: plan.terminalAt,
-      macKeyVersion: ctx.state.codeMacWrite,
-    };
-    const mac = await options.crypto.recordMac(updated);
-    const result = await query(ctx.scope).query(
-      "UPDATE authentication.recipient_code SET record_version=$1,state=$2,terminal_at_ms=$3,mac_key_version=$4,state_mac=$5 WHERE code_id=$6 AND recipient_actor_id=$7 AND record_version=$8 AND state='issued' RETURNING code_id",
-      [
-        updated.recordVersion,
-        updated.status,
-        updated.terminalAt,
-        updated.macKeyVersion,
-        Buffer.from(mac.bytes),
-        previous.codeId,
-        ctx.caller.actorSubject,
-        plan.expectedRecordVersion,
-      ],
-    );
-    if (result.rows.length !== 1) reject();
+    await writeRecipientCodeTransition({
+      connection: query(ctx.scope),
+      previous,
+      plan,
+      keyVersion: ctx.state.codeMacWrite,
+      crypto: options.crypto,
+      stateKeys: options.stateKeys,
+    });
   };
   const failure = () => {
     try {

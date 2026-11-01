@@ -18,7 +18,8 @@ export type AuthenticationStoreAction =
   | 'purge'
   | 'recipient-code-issue'
   | 'recipient-code-revoke'
-  | 'recipient-code-inspect';
+  | 'recipient-code-inspect'
+  | 'recipient-code-consume';
 /** 外部入力や例外自由文を含まない拒否理由。 */
 export type AuthenticationStoreReason =
   | 'success'
@@ -50,7 +51,10 @@ export interface AuthenticationAuditSubjects {
  */
 export const insertAuthenticationAudit = async (
   connection: AuthenticationQueryConnection,
-  digests: AuthenticationDigests,
+  digests: Pick<
+    AuthenticationDigests,
+    'auditActor' | 'auditAttempt' | 'auditSession'
+  >,
   state: AuthenticationStoreKeyState,
   event: {
     /** Store内で選択した固定操作。 */

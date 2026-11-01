@@ -13,7 +13,7 @@
 1. caller-only preflightでGMのActor内・全Command/全Group共通operation namespaceを照会する。成功は保存action/version、Group/要求版、保存proof世代/値、元Actor/operation、最小結果を照合して返す。現在Owner/現在Group版/宛先有効性/code行/current proof鍵を条件にしない。
 2. missはNoReplayだけで終え、新規専用lease内でもownerがoperationを再照合する。並行成功があればcreateせず再送へ収束する。二つのleaseは別Transactionであり、preflightで業務保存しない。
 3. createだけ認可付きGroup load/純粋判断/current proof作成を行う。`RecipientInvitationCommitPlan`は新Group/期待版、Invitation Created履歴、空のmembership/Closing変更、typed fingerprintと最小成功結果、codeId/recipient binding、同scopeの確定本文handleを持つ。
-4. GM-owned `stage(scope, handle, plan)`が保存とGM Auditをstageして同scopeの登録Adapterによる証跡を返し、Applicationが`scope.consume(handle, evidence)`を一度だけ要求する。standalone commit/別Poolへfallbackしない。実コードWriter/Invitation/両Context Auditの原子性は#243で実証する。
+4. GM-owned `stage(scope, handle, plan)`が保存とGM Auditをstageして同scopeの登録Adapterによる証跡を返し、Applicationが`scope.consume(handle, evidence)`を一度だけ要求する。standalone commit/別Poolへfallbackしない。実コードWriter/Invitation/両Context Auditの原子性は下記#243の内部統合で検証する。
 
 失敗/Conflict/Mismatchでは成功operationを保存せず、業務状態の部分commitを認めない。Callback障害/結果不明はlease ownerのrollback/unavailableへ委譲する。新operationや新規処理の自動retryは行わず、明示再送で保存成功を再照会する。Responseはkind/groupId/invitationId/versionだけで、codeId/宛先/Profile/原コード/proofを展開しない。
 
@@ -34,7 +34,7 @@ proofはGM独立用途`gm-recipient-code-request/v1`の保存世代で照合し�
 
 `registered-recipient-invitation-service.spec.ts`はfake lease/参加Portで入力・順序・Group判断・再送・結果不明・障害・snapshot/本文非漏出を検証する。proofの計算は合成鍵を使う既存暗号Adapterを使用し、`recipient-code-invitation-fingerprint.spec.ts`は独立encoder/byte Copy/用途/形式と旧locatorの不変を照合する。fakeのscope/証跡/commit/競合は実認証・SQL・registry・atomicityの証明ではない。
 
-実GM Adapter/相互codec/namespace/復号0/保存証跡は#242、コード消費と両Context共通commitは#243、清掃/Restoreは#244/#245、公開契約/UIは#246以降へ残す。通常main/Dev/HTTPへのwiring、新Provider/Production有効化は行わない。
+実GM Adapter/相互codec/namespace/復号0/保存証跡は#242、コード消費と両Context共通commitは下記#243で検証し、清掃/Restoreは#244/#245、公開契約/UIは#246以降へ残す。通常main/Dev/HTTPへのwiring、新Provider/Production有効化は行わない。
 
 
 ## #242の保存Adapter
@@ -42,3 +42,10 @@ proofはGM独立用途`gm-recipient-code-request/v1`の保存世代で照合し�
 [GM-owned認証Scope参加](../infrastructure/postgres/README.md)が本Portを実装する。共有認証の登録関数から得たquery/run/beginPlan/attestの限定能力を非公開保持し、key-stateをActorより前に固定する。操作全体の受領/完了/失敗を追跡し、認可load/期待Root/履歴/最小結果/本文を照合して、共通保存kernelと実GM Auditの成功後だけ証跡を返す。code行/宛先Actor/current proof鍵を読まない保存世代replayと、旧Commandとの共通namespaceを維持する。
 
 この接続の実PG検証は、認証owner/コード消費Writerを合成したGM参加境界である。#241のfake検証や#242の成功から、#243の実Session本人性・実コード消費・両Context業務atomicityを推論しない。公開API/UIと通常main/Dev/Productionは未接続のまま。
+
+
+## #243の実内部統合
+
+[内部Composition](../../recipient-invitation-runtime.ts)は本Serviceへ実lease/実GM Adapter/proofを注入し、同じregistryで実コード消費と両Auditまでを共通commitする。`create(command, signal?)`の中断要求はPortを通してlease ownerへ渡す。ServiceはSQL/接続所有/コードRecordを持たず、Groupの既存Domain判断を維持する。
+
+caller-only missと専用lease内の再照合、コードLock待機後の再照合により、並行成功を消費済み/期限理由で誤拒否しない。保存障害/結果不明後の一回照合はlease ownerが行い、Serviceの新規Callbackを自動retryしない。確定本文だけを返し、照会missで結果不明を確定失敗へ読み替えない。実検証と未実証の運用境界は[認証保存README](../../shared/infrastructure/authentication/postgres/README.md#243-実コード消費と内部composition)に記載する。

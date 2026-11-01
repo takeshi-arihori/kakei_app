@@ -129,11 +129,13 @@ export const createPostgresRecipientCodeLeases = (options: {
    * @param scope 現在の同じScope。接続所有権は含まない。
    * @param record Lock/MAC/lookup/epochを検証したコード。
    * @param time 全blocking Lock後の消費判断点。
+   * @param caller 同じSessionから検証したcaller。コードAuditの行為者。
    */
   readonly consume: (
     scope: AuthenticationTransactionScope,
     record: RecipientCodeRecord,
     time: number,
+    caller: AuthenticatedActor,
   ) => Promise<void>;
   /**
    * 原因/入力/直接IDなしの固定通知。通知例外も秘密を返さない。
@@ -387,133 +389,148 @@ export const createPostgresRecipientCodeLeases = (options: {
         if (!copied) return reject();
         const replay = callbacks.replay.bind(callbacks);
         const create = callbacks.create.bind(callbacks);
-        const preflight = await execute<Success<T> | { status: 'no-replay' }>(
-          sessionSecret,
-          clock,
-          'replay',
-          signal,
-          undefined,
-          async (ctx) => {
-            const result = await replay(ctx.caller, ctx.lease.scope);
-            if (result.status === 'replayed')
-              return {
-                result: {
-                  status: 'authenticated' as const,
+        const checkReplay = () =>
+          execute<Success<T> | { status: 'no-replay' }>(
+            sessionSecret,
+            clock,
+            'replay',
+            signal,
+            undefined,
+            async (ctx) => {
+              const result = await replay(ctx.caller, ctx.lease.scope);
+              if (result.status === 'replayed')
+                return {
+                  result: {
+                    status: 'authenticated' as const,
+                    value: result.value,
+                  },
                   value: result.value,
-                },
-                value: result.value,
-                usage: 'inspect' as const,
-              };
-            if (result.status !== 'no-replay') return reject();
-            const value = ctx.lease.scope.serialize({ status: 'no-replay' });
-            return {
-              result: { status: 'no-replay' as const },
-              value,
-              usage: 'inspect' as const,
-            };
-          },
-        );
-        if (preflight.status !== 'no-replay') return preflight;
-        return await execute<Success<T> | RecipientCodeUnavailableToActor>(
-          sessionSecret,
-          clock,
-          'create',
-          signal,
-          copied,
-          async (ctx) => {
-            // 並行成功はコード/宛先の現在有効性を要求する前に再照合する。
-            const replayed = await replay(ctx.caller, ctx.lease.scope);
-            if (replayed.status === 'replayed')
+                  usage: 'inspect' as const,
+                };
+              if (result.status !== 'no-replay') return reject();
+              const value = ctx.lease.scope.serialize({ status: 'no-replay' });
               return {
-                result: {
-                  status: 'authenticated' as const,
-                  value: replayed.value,
-                },
-                value: replayed.value,
-                usage: 'inspect' as const,
-              };
-            if (replayed.status !== 'no-replay') return reject();
-            const selected = await findRecipientCode(
-              ctx.connection,
-              crypto,
-              ctx.state.codeLookup,
-              copied,
-            );
-            if (
-              (ctx.hint === null) !== (selected === null) ||
-              (ctx.hint && selected && !sameCode(ctx.hint, selected))
-            )
-              return reject();
-            const denied = () => {
-              const value = ctx.lease.scope.serialize({
-                status: 'unavailable-to-actor',
-              });
-              return {
-                result: { status: 'unavailable-to-actor' as const },
+                result: { status: 'no-replay' as const },
                 value,
                 usage: 'inspect' as const,
               };
-            };
-            if (!ctx.hint) return denied();
-            const rows = await ctx.connection.query(
-              'SELECT * FROM authentication.recipient_code WHERE code_id = $1 FOR UPDATE',
-              [ctx.hint.codeId],
-            );
-            if (!rows.rows.length) return denied();
-            if (rows.rows.length !== 1) return reject();
-            const record = readRecipientCode(rows.rows[0]);
-            if (
-              !sameCode(ctx.hint, record) ||
-              record.epoch !== ctx.state.epoch ||
-              !ctx.actors.has(record.recipientActorId) ||
-              !ctx.state.codeMac.includes(record.macKeyVersion) ||
-              !(await crypto.verifyRecord(record)) ||
-              !(await crypto.verifyLookup({
-                secret: copied,
-                expected: {
-                  purpose: 'auth-recipient-code-lookup/v1',
-                  keyVersion: record.lookupKeyVersion,
-                  epoch: null,
-                  scopeId: 'authentication',
-                  bytes: record.lookupDigest,
-                },
-              }))
-            )
-              return reject();
-            const usable = () =>
-              recipientCodeState(record, {
-                actorId: record.recipientActorId,
-                active:
-                  ctx.actors.get(record.recipientActorId)?.state === 'active',
-                epoch: ctx.state.epoch,
-                now: now(clock),
-              }) === 'issued';
-            if (!usable()) return denied();
-            const guard = () => {
-              if (!usable()) reject();
-            };
-            const bound = scopes.bind(
-              ctx.lease.scope,
-              record,
-              () => options.consume(ctx.lease.scope, record, now(clock)),
-              guard,
-            );
-            const value = await create(
-              Object.freeze({
-                caller: ctx.caller,
-                recipientActorId: record.recipientActorId,
-                codeId: record.codeId,
-              }),
-              bound.handle,
-              bound.scope,
-            );
+            },
+          );
+        const preflight = await checkReplay();
+        if (preflight.status !== 'no-replay') return preflight;
+        const created = await execute<
+          Success<T> | RecipientCodeUnavailableToActor
+        >(sessionSecret, clock, 'create', signal, copied, async (ctx) => {
+          // 並行成功はコード/宛先の現在有効性を要求する前に再照合する。
+          const replayed = await replay(ctx.caller, ctx.lease.scope);
+          if (replayed.status === 'replayed')
             return {
-              result: { status: 'authenticated' as const, value },
-              value,
-              usage: 'activity' as const,
+              result: {
+                status: 'authenticated' as const,
+                value: replayed.value,
+              },
+              value: replayed.value,
+              usage: 'inspect' as const,
             };
-          },
-        );
+          if (replayed.status !== 'no-replay') return reject();
+          const selected = await findRecipientCode(
+            ctx.connection,
+            crypto,
+            ctx.state.codeLookup,
+            copied,
+          );
+          if (
+            (ctx.hint === null) !== (selected === null) ||
+            (ctx.hint && selected && !sameCode(ctx.hint, selected))
+          )
+            return reject();
+          const denied = async () => {
+            // コードLock待機中に並行成功した同operationを、終端/不在理由で誤拒否しない。
+            const saved = await replay(ctx.caller, ctx.lease.scope);
+            if (saved.status === 'replayed')
+              return {
+                result: {
+                  status: 'authenticated' as const,
+                  value: saved.value,
+                },
+                value: saved.value,
+                usage: 'inspect' as const,
+              };
+            if (saved.status !== 'no-replay') return reject();
+            const value = ctx.lease.scope.serialize({
+              status: 'unavailable-to-actor',
+            });
+            return {
+              result: { status: 'unavailable-to-actor' as const },
+              value,
+              usage: 'inspect' as const,
+            };
+          };
+          if (!ctx.hint) return denied();
+          const rows = await ctx.connection.query(
+            'SELECT * FROM authentication.recipient_code WHERE code_id = $1 FOR UPDATE',
+            [ctx.hint.codeId],
+          );
+          if (!rows.rows.length) return denied();
+          if (rows.rows.length !== 1) return reject();
+          const record = readRecipientCode(rows.rows[0]);
+          if (
+            !sameCode(ctx.hint, record) ||
+            record.epoch !== ctx.state.epoch ||
+            !ctx.actors.has(record.recipientActorId) ||
+            !ctx.state.codeMac.includes(record.macKeyVersion) ||
+            !(await crypto.verifyRecord(record)) ||
+            !(await crypto.verifyLookup({
+              secret: copied,
+              expected: {
+                purpose: 'auth-recipient-code-lookup/v1',
+                keyVersion: record.lookupKeyVersion,
+                epoch: null,
+                scopeId: 'authentication',
+                bytes: record.lookupDigest,
+              },
+            }))
+          )
+            return reject();
+          const usable = () =>
+            recipientCodeState(record, {
+              actorId: record.recipientActorId,
+              active:
+                ctx.actors.get(record.recipientActorId)?.state === 'active',
+              epoch: ctx.state.epoch,
+              now: now(clock),
+            }) === 'issued';
+          if (!usable()) return denied();
+          const guard = () => {
+            if (!usable()) reject();
+          };
+          const bound = scopes.bind(
+            ctx.lease.scope,
+            record,
+            () =>
+              options.consume(ctx.lease.scope, record, now(clock), ctx.caller),
+            guard,
+          );
+          const value = await create(
+            Object.freeze({
+              caller: ctx.caller,
+              recipientActorId: record.recipientActorId,
+              codeId: record.codeId,
+            }),
+            bound.handle,
+            bound.scope,
+          );
+          return {
+            result: { status: 'authenticated' as const, value },
+            value,
+            usage: 'activity' as const,
+          };
+        });
+        if (created.status !== 'unavailable') return created;
+        // 確実rollback/結果不明の後は一度の読取だけ。新規Callbackや消費を再実行しない。
+        const recovered = await checkReplay();
+        // 回復時の失効/照合不能も元の結果不明を上書きしない。
+        return recovered.status === 'authenticated' ? recovered : created;
       } catch {
         return failure();
       }

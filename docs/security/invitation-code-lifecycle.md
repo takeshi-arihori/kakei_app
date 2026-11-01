@@ -223,3 +223,12 @@ Ownerは2026-10-27、提示済みADR案Aの7点（10分/一Actor一つ/再表示
 
 
 #242の境界補強: 新規業務write前の`beginPlan`がscope/handle/code/宛先/operation/本文を一回受付し、GM DMLをその計画だけへ限定する。保存後のattestも同じoperation/本文を再照合する。caller-only Scopeでstageし非SQL障害を握り潰すケースを実PGでRedにし、受付前拒否/Scope失敗記録と未完成計画の全rollbackを確認した。これはAcceptedの部分確定禁止を実装へ写像した技術的受付であり、新しい業務InvariantやData Ownerの変更ではない。認証owner用query、共有認証からGM SQL/Domainをimportしない境界、#243以降のGateは維持する。
+
+
+## 実内部共通commitのTrace（#243）
+
+[内部Composition](../../apps/api/src/recipient-invitation-runtime.ts)は、#239の実lease、#240の管理Store、#241のGM Application、#242の実GM参加保存と、#243の実コード消費Writerを一つのregistryへ接続する。[Migration11](../../apps/api/migrations/authentication/README.md#version-11-コード消費監査243)で消費成功のコードAuditを追加し、同ScopeでGM Audit/コードConsumed/状態・履歴・版/共通operation/locator/Session更新を確定する。R1〜R4とIC-PRE/POST/INV/FAILの採用内容を変更しない。
+
+実PG17の`recipient-invitation-atomicity.integration.spec.ts`はV02/V04〜V15の統合Evidenceを持つ。実Session/Record MAC/GM Domain/両Auditを使い、合成境界はProvider/Clock/IDと通信障害/Lock barrierに限定する。caller-only再送はコード行/宛先/current proof鍵を読まず、コードLock待機後とrollback/結果不明後も同operation照合だけで収束する。後者は新規処理の自動retryではなく、照会missで結果不明を失敗確定へ読み替えない。
+
+公開HTTP/UI・通常main/Dev/Productionには接続しない。V16〜V18の清掃/全世代closure/Restoreは#244/#245、V19/V20の公開接続/本人受諾journeyは#246以降と既存Gateへ残す。具体Provider耐久性/鍵退役・破棄、Backup/監視・退会業務を実証済みとは扱わない。

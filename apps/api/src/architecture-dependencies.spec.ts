@@ -59,7 +59,11 @@ const classifyModule = (path: string): ModuleRole => {
   if (relativePath.startsWith('../dev/'))
     return { kind: 'development-composition' };
 
-  if (relativePath === 'app.ts' || relativePath === 'main.ts') {
+  if (
+    relativePath === 'app.ts' ||
+    relativePath === 'main.ts' ||
+    relativePath === 'recipient-invitation-runtime.ts'
+  ) {
     return { kind: 'composition' };
   }
 
@@ -395,6 +399,26 @@ const fixturePath = (relativePath: string): string =>
   resolve(sourceRoot, relativePath);
 
 describe('API architecture dependencies', () => {
+  it('招待コード内部FactoryだけをCompositionとして許可しContext/共有からの逆依存を拒否する', () => {
+    const root = fixturePath('recipient-invitation-runtime.ts');
+    const adapter = fixturePath(
+      'shared/infrastructure/authentication/postgres/postgres-recipient-code-consumer.ts',
+    );
+    expect(validateDependency(root, './adapter.js', adapter)).toBeNull();
+    for (const source of [
+      'shared/application/authentication/recipient-code-ports.ts',
+      'shared/infrastructure/authentication/postgres/postgres-recipient-code-leases.ts',
+      'group-management/application/use-cases/registered-recipient-invitation-service.ts',
+      'group-management/infrastructure/postgres/enlisted-group-repository.ts',
+    ]) {
+      expect(
+        validateDependency(fixturePath(source), './runtime.js', root),
+      ).not.toBeNull();
+    }
+    expect(
+      validateProductionModuleLocation(fixturePath('other-runtime.ts')),
+    ).not.toBeNull();
+  });
   it('Group ManagementをContext単位に配置し、依存方向を守る', () => {
     expect(existsSync(fixturePath('group-management/domain/group.ts'))).toBe(
       true,

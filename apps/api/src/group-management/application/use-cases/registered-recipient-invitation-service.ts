@@ -138,11 +138,13 @@ export class RegisteredRecipientInvitationService {
   ) {}
   /**
    * @param command Client入力をfactsと区別して同期固定する。原値/Role/Actorを成功結果へ入れない。
+   * @param signal 任意の中断。専用leaseが受付終了と接続破棄を所有する。
    * @returns commit確認後の最小本文、未認証/存在非開示の拒否/結果不明を含む障害。
    * @throws GroupCommandApplicationError 入力形/期待版不正。Callbackの業務拒否/障害はlease ownerへ委譲する。
    */
   async create(
     command: CreateInvitationFromRecipientCodeCommand,
+    signal?: AbortSignal,
   ): Promise<
     | AuthenticatedActorResult<AuthenticationSerializedValue>
     | RecipientCodeUnavailableToActor
@@ -194,81 +196,87 @@ export class RegisteredRecipientInvitationService {
         value: scope.serialize(minimal(result)),
       };
     };
-    return this.options.sessions.use(input.sessionSecret, input.code, clock, {
-      replay,
-      create: async (facts, handle, scope) => {
-        const actor = ActorSubject.from(facts.caller.actorSubject);
-        const binding = Object.freeze({
-          codeId: facts.codeId,
-          recipientActorId: facts.recipientActorId,
-        });
-        const recipient = ActorSubject.from(binding.recipientActorId);
-        const loaded = await repository.loadForInvitation(
-          scope,
-          input.groupId,
-          actor,
-        );
-        if (!loaded) return unavailable();
-        if (
-          !loaded.group.id.equals(input.groupId) ||
-          loaded.version !== input.expectedVersion
-        )
-          throw new GroupCommandApplicationError(
-            'CONFLICT',
-            'Group version changed',
+    return this.options.sessions.use(
+      input.sessionSecret,
+      input.code,
+      clock,
+      {
+        replay,
+        create: async (facts, handle, scope) => {
+          const actor = ActorSubject.from(facts.caller.actorSubject);
+          const binding = Object.freeze({
+            codeId: facts.codeId,
+            recipientActorId: facts.recipientActorId,
+          });
+          const recipient = ActorSubject.from(binding.recipientActorId);
+          const loaded = await repository.loadForInvitation(
+            scope,
+            input.groupId,
+            actor,
           );
-        const now = clock.now();
-        if (!Number.isSafeInteger(now) || now < 0) return unavailable();
-        const invitationId = this.options.nextInvitationId();
-        const createdAt = UtcInstant.from(new Date(now));
-        const invited = loaded.group.inviteParticipant({
-          actorSubject: actor,
-          invitationId,
-          targetSubject: recipient,
-          createdAt,
-        });
-        const keyVersion = await repository.currentProofKeyVersion(scope);
-        const fp = recipientCodeInvitationFingerprint(
-          input.groupId,
-          input.expectedVersion,
-          await proof.create({ secret: input.code, keyVersion }),
-        );
-        const result: InvitationCreatedResult = Object.freeze({
-          kind: 'InvitationCreated',
-          groupId: input.groupId,
-          invitationId,
-          version: input.expectedVersion + 1,
-        });
-        const value = scope.serialize(minimal(result));
-        const operation: StoredRecipientInvitationOperation = Object.freeze({
-          actorSubject: actor,
-          operationId: input.operationId,
-          fingerprint: fp,
-          result,
-          binding,
-        });
-        const evidence = await repository.stage(scope, handle, {
-          group: invited.group,
-          expectedVersion: input.expectedVersion,
-          stateChanged: true,
-          membershipChanges: [],
-          invitationChanges: [
-            {
-              kind: 'Created',
-              invitationId,
-              targetSubject: recipient,
-              issuerParticipantId: invited.invitation.issuerParticipantId,
-              createdAt,
-              expiryAt: invited.invitation.expiryAt,
-            },
-          ],
-          groupCloseChanges: [],
-          operation,
-          value,
-        });
-        await scope.consume(handle, evidence);
-        return value;
+          if (!loaded) return unavailable();
+          if (
+            !loaded.group.id.equals(input.groupId) ||
+            loaded.version !== input.expectedVersion
+          )
+            throw new GroupCommandApplicationError(
+              'CONFLICT',
+              'Group version changed',
+            );
+          const now = clock.now();
+          if (!Number.isSafeInteger(now) || now < 0) return unavailable();
+          const invitationId = this.options.nextInvitationId();
+          const createdAt = UtcInstant.from(new Date(now));
+          const invited = loaded.group.inviteParticipant({
+            actorSubject: actor,
+            invitationId,
+            targetSubject: recipient,
+            createdAt,
+          });
+          const keyVersion = await repository.currentProofKeyVersion(scope);
+          const fp = recipientCodeInvitationFingerprint(
+            input.groupId,
+            input.expectedVersion,
+            await proof.create({ secret: input.code, keyVersion }),
+          );
+          const result: InvitationCreatedResult = Object.freeze({
+            kind: 'InvitationCreated',
+            groupId: input.groupId,
+            invitationId,
+            version: input.expectedVersion + 1,
+          });
+          const value = scope.serialize(minimal(result));
+          const operation: StoredRecipientInvitationOperation = Object.freeze({
+            actorSubject: actor,
+            operationId: input.operationId,
+            fingerprint: fp,
+            result,
+            binding,
+          });
+          const evidence = await repository.stage(scope, handle, {
+            group: invited.group,
+            expectedVersion: input.expectedVersion,
+            stateChanged: true,
+            membershipChanges: [],
+            invitationChanges: [
+              {
+                kind: 'Created',
+                invitationId,
+                targetSubject: recipient,
+                issuerParticipantId: invited.invitation.issuerParticipantId,
+                createdAt,
+                expiryAt: invited.invitation.expiryAt,
+              },
+            ],
+            groupCloseChanges: [],
+            operation,
+            value,
+          });
+          await scope.consume(handle, evidence);
+          return value;
+        },
       },
-    });
+      signal,
+    );
   }
 }
