@@ -514,14 +514,17 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
         ).toEqual({ status: 'unavailable' });
       }
       expect(callbackDone).toBe(true);
-      expect(commits).toBe(kind === 'code' ? 1 : 0);
+      // code分岐はpreflightとrollback後のcaller-only照合だけがcommitする。
+      expect(commits).toBe(kind === 'code' ? 2 : 0);
       await unchanged();
       const audits = (
         await observer.query<{ action: string }>(
           'SELECT action FROM authentication.audit_event',
         )
       ).rows;
-      expect(audits).toEqual(kind === 'code' ? [{ action: 'inspect' }] : []);
+      expect(audits).toEqual(
+        kind === 'code' ? [{ action: 'inspect' }, { action: 'inspect' }] : [],
+      );
     },
   );
   it('statement timeoutで途中writeを残さず、握り潰してもcommit不可', async () => {
@@ -838,7 +841,7 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
   });
   it('COMMIT応答喪失はunavailableで接続破棄、Callbackを再実行しない', async () => {
     let commits = 0;
-    let destroyed = false;
+    const releases: boolean[] = [];
     const wrapped = wrap(async (sql, _values, run) => {
       const value = await run();
       if (sql === 'COMMIT' && ++commits === 2)
@@ -851,7 +854,7 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
         return {
           ...c,
           release: (destroy?: boolean) => {
-            destroyed = !!destroy;
+            releases.push(!!destroy);
             c.release(destroy);
           },
         };
@@ -863,7 +866,8 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
     expect(await leases.use(secret(10), code(), clock, cb)).toEqual({
       status: 'unavailable',
     });
-    expect(destroyed).toBe(true);
+    // 新しい照合接続を正常返却しても、結果不明だった元接続の破棄を保持する。
+    expect(releases).toEqual([false, true, false]);
     expect(create).toHaveBeenCalledOnce();
     expect(
       (
@@ -1012,7 +1016,8 @@ describe('コード専用Session leaseの実PG17境界（GM/消費Writerは合�
     expect(await leases.use(secret(10), code(), clock, callbacks())).toEqual({
       status: 'unavailable',
     });
-    expect(actors).toEqual([caller, recipient, caller]);
+    // preflight / 複合leaseの昇順Actor / rollback後caller-only照合。
+    expect(actors).toEqual([caller, recipient, caller, caller]);
     await unchanged();
   });
   it.each(['cancel', 'transaction-timeout'] as const)(

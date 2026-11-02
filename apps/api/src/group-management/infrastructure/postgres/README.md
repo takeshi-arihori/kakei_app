@@ -33,7 +33,7 @@ proof世代/値とcodeId/宛先bindingは保護operation内だけに置き、平
 
 Unitは旧byte互換、新形式/未知field/版/用途/結果binding、Audit独立参照vectorと非同期Copy、偽Scope/能力非公開を確認する。実PGは実GM/既存AEAD/実registryを使い、保存/故障全rollback、非在籍decrypt0、現在Owner喪失・code行なし・旧proof再送、共通namespace/Unique/CAS、2接続のkey-state/Group Lock、結果不明後の明示照会、参照検査/削除を検証する。
 
-実PGでの認証ownerとコード消費Writerは合成であり、実Session本人性・実コード消費・両Context Auditの業務atomicityを保証しない。これらの最終統合は#243、清掃/Restoreは#244/#245、公開契約は#246以降。具体鍵Provider、90日清掃、Backup/Restore、Ledger/Witness、退会、Ingress/監視と既存Production Gateは別途必要であり、通常main/Devへwireしない。
+実PGでの認証ownerとコード消費Writerは合成であり、実Session本人性・実コード消費・両Context Auditの業務atomicityを保証しない。この#242 Suiteの境界と別に、[#243の内部Composition](../../../recipient-invitation-runtime.ts)と実Session/コード消費の統合Suiteを追加した。清掃/Restoreは#244/#245、公開契約は#246以降。具体鍵Provider、90日清掃、Backup/Restore、Ledger/Witness、退会、Ingress/監視と既存Production Gateは別途必要であり、通常main/Devへwireしない。
 
 
 ## 新規計画受付の契約Trace（#242）
@@ -52,3 +52,8 @@ Knowledge State: Confirmed。根拠はAccepted R4/IC-FAIL-2と#242 Done Criteria
 | GM-FAIL-3 / Concurrency | Unique/CAS敗者は全rollback後の照会、COMMIT不明は同operation明示照会。業務自動再実行なし | 2接続/応答喪失/保存世代再送 |
 
 この受付は認証ownerの管理用queryを制限せず、SQL TransactionのBEGIN/COMMIT/ROLLBACK能力をGMへ渡さない。共有認証はGMの業務意味を持たず、実GM Adapterだけが成功計画とAuditを証明する。
+
+
+## #243での接続
+
+内部Compositionが本Adapterの登録関数と、実認証lease/消費Writerを一つのregistryへ束縛する。`recipient-invitation-atomicity.integration.spec.ts`は#242の合成owner/Writerを使わず、実Session/Record MAC/一回消費/両Auditと実Group Command競合を検証する。Adapterへ認証SQL・接続・commit所有権は追加しない。GroupのOwner/版/人数/本人受諾/7日Pending/枠予約なし、保存proof世代replay、GM Auditの90日保持は維持する。

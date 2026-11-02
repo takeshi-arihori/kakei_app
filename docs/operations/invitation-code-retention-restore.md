@@ -57,3 +57,15 @@ Record鍵の明示割当はDB rollbackで取り消せない。保存前/COMMIT�
 [GM Adapter](../../apps/api/src/group-management/infrastructure/postgres/README.md)はproof current世代をGM-owned singletonへ置き、保存proof世代/値と内部bindingは既存Envelope内だけに保持する。保持結果の検証付き参照検査が0件でも鍵破棄の許可にはならず、関連Backup35日window closureが別途必須。破損/鍵喪失を未参照と扱わない。コード清掃/Actor削除へGM proof鍵を巻き込まず、鍵破棄能力をAdapterへ公開しない。
 
 新GM Auditは独立GM/Group用途の仮名とrequest fingerprintだけを保存し、Group削除でcascadeしない。90日保持と関連Audit鍵/Backup35日windowを維持する。成功Auditの同Scope保存を実PGで確認したが、90日清掃/拒否Audit接続、具体Providerの保持/破棄/Backup、全Context Restoreと本番監視は既存Gateのまま。合成認証owner/コードWriterの成功を#243の実消費・両Context業務atomicityへ読み替えない。
+
+
+## 内部共通commitからの診断・引継ぎ（#243）
+
+[内部Factory](../../apps/api/src/recipient-invitation-runtime.ts)は実Session/コード消費/GM/両Auditを同じTransactionへ参加させる。`recipient-code-consume`の最小認証Auditは[Migration11](../../apps/api/migrations/authentication/README.md#version-11-コード消費監査243)で追加し、caller/コード用途仮名だけを90日保持する。Group削除やコード清掃へAuditをcascadeせず、GM Auditの独立用途を維持する。
+
+- commit確認済み: 固定された最小本文だけを返す。元コード/宛先/秘密値を再serializationしない。
+- commit前の障害: 全rollbackを試みる。確実rollback後もcreate/消費を再実行せず、caller-onlyで同operationを一度照合する。
+- COMMIT送信後の切断/応答喪失: 結果不明として接続破棄。新Transactionの同operation照合で保存成功が確認できれば同じ本文を返す。miss/照会障害/回復時のSession失効は元のunavailableのままとし、失敗確定/再発行/取消補償/別operation作成へ変換しない。
+- timeout/cancel/Scope不正: 受付を閉じ、開始済みSQLを収束または接続破棄でabortする。遅延Provider完了からSQLを追加しない。固定Alertだけを通知する。
+
+コード終端の新MAC世代確保やGroupのNonce割当は外部Providerの副作用であり、DB rollbackで取り消したと扱わない。孤立Record鍵も#244/#245の全世代inventory/期限/closure対象へ含める。実PG・合成Providerでの内部atomicity検証から、24h清掃、鍵耐久性/破棄、35日物理Backup、全Context Restore、公開/本番運用の成功を推論しない。

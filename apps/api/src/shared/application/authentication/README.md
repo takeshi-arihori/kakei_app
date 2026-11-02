@@ -42,3 +42,8 @@ GM key-state準備/保存証跡と認証の消費WriterはInfrastructure/Composi
 [管理Store](../../infrastructure/authentication/postgres/README.md#240-コードの発行取消状態確認)が発行/再発行/取消/状態確認を実装する。`inspectActor`は本人Actorの共有Lockと有効Sessionを検証し、idleを更新しない専用入口。`withActor`の管理排他/idle更新と分け、状態照会のためGM登録を要求しない。発行の秘密値はcommit確認後だけ、状態照会はcodeId/state/expiresAtだけ。COMMIT結果不明を失敗確定とせず、自動再発行/原値復元は行わない。
 
 `RecipientCodeStateKeyAllocationPort`は読取Cryptoと独立した明示発行能力。codeId/世代/期限に一致する固定Ackを要求し、新Recordはcreated=trueだけを受理する。旧Record再MAC用の既存鍵はcreated=falseで再確認できるが、再生成/上書き/破棄Scope復活は認めない。孤立Scopeも有限期限の全世代inventoryに残し、#244/#245の清掃/Restoreと本番ProviderのEvidenceへ引き継ぐ。共有認証からGMの型/Domain/SQLを参照しない。
+
+
+## 内部共通commit（#243）
+
+`RecipientCodeSessionPort.use`は任意のAbortSignalを実leaseへ渡せる。GM型/SQLを共有Applicationへ追加せず、[内部Composition](../../../recipient-invitation-runtime.ts)が実lease/消費Writer/GM Serviceを同registryで接続する。消費Policyは一度の終端計画だけを返し、新MAC/CAS/両Audit/commitを自ら実行しない。実PG検証は[認証保存README](../../infrastructure/authentication/postgres/README.md#243-実コード消費と内部composition)へTraceする。#244/#245の保守/復旧、#246以降の公開契約と本番Gateは残る。

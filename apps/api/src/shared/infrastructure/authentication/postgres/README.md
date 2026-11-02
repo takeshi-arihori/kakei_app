@@ -92,7 +92,20 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 
 `recipient-code-management.integration.spec.ts`は実PG17の2端末/取消/Actor無効化競合、最小状態/idle非更新、全世代衝突/複数hit/旧MAC再書込、期限等値/改竄/鍵Ack/各DML/監査/COMMIT前後故障、raw非保存、同backend/xminを検証する。Providerは明示発行する合成Mapであり、耐久性・全世代破棄は未実証。具体Pool所有者はPool errorも受け止め、Error/Client全体をLogへ出さない。Test Poolはrelease(true)したClientへの遅延25P04だけを期待通知とし、その他のPool errorは検証失敗にする。
 
-実GM消費/Invitation/両ContextのAuditは#242/#243、清掃/Restore/鍵退役は#244/#245、公開契約は#246以降。通常main/Dev/HTTPとProduction Gateは未接続のままとする。
+実GM消費/Invitation/両ContextのAuditは下記#243の内部統合で検証する。清掃/Restore/鍵退役は#244/#245、公開契約は#246以降。通常main/Dev/HTTPとProduction Gateは未接続のままとする。
 
 
-#242の受付補強は、共有認証がGM SQL/Domainを解釈する追加ではない。新規業務write前のopaqueなhandle/計画/本文の一回照合と、保存後の同一binding照合を分ける。これによりcaller-only replay Scopeや非SQL障害の握り潰しから部分GM commitを作れない。実Session/コードWriterと実GMの最終業務統合は#243に残る。
+#242の受付補強は、共有認証がGM SQL/Domainを解釈する追加ではない。新規業務write前のopaqueなhandle/計画/本文の一回照合と、保存後の同一binding照合を分ける。これによりcaller-only replay Scopeや非SQL障害の握り潰しから部分GM commitを作れない。実Session/コードWriterと実GMの最終業務統合は下記#243を参照する。
+
+
+## #243 実コード消費と内部Composition
+
+[内部Factory](../../../../recipient-invitation-runtime.ts)が、一つの基礎registry/専用registryへ実GM準備と保存Adapterを登録してから、実consumer/lease/管理Store/GM Applicationを接続する。共有認証はGMの型/SQLをimportせず、GMは認証Tableへ触れない。登録/接続/Transaction制御能力はFactory内だけに閉じる。通常main/Dev/公開Routeは変更しない。
+
+`createPostgresRecipientCodeConsumer`はregistryがGM成功証跡を検証した後だけ呼ばれる。Lock/MAC検証済みRecordとcallerを同期固定し、先頭で共有Lockしたkey-stateを後付けLockなしで再取得する。epoch/読取世代/旧MACと純粋consume Policyを確認し、current MACへの必要なRecord鍵確保、Issued/版CAS、新MAC、`recipient-code-consume`成功Auditを同じ借用queryで保存する。AuditのActor仮名は行為者caller、コード仮名は独立用途であり、直接宛先/Group/Invitation/原値を監査へ入れない。置換/取消/消費の鍵確保と終端CASは`recipient-code-transition-writer`を共有し、PolicyとTransaction所有を混在させない。
+
+新規leaseのコードLock待機後に不在/終端/期限超過を拒否する前にも、同Scopeのoperationを再照合する。確実rollback/COMMIT結果不明からは、新しいcaller-only leaseで一回の照合だけを行う。保存済み同内容なら最小結果、miss/照合障害/回復時のSession失効なら元のunavailableを維持する。新規create/コード消費/再発行は自動再実行しない。COMMIT送信後は接続を破棄し、照会missだけで「確実に失敗」と断定しない。AbortSignalは内部createからleaseまで伝播する。
+
+`recipient-invitation-atomicity.integration.spec.ts`は実Actor/Session/コードStore/lease/MAC/GM Application/保存kernel/両Auditを組む。別Owner/別Groupの同コード、同operation、再発行/取消の両順序、Actor無効化、Session失効、GroupのOwner譲渡/Closing/人数/受諾、locator Unique敗者、期限、各保存/暗号/監査/serialize障害、COMMIT前後/応答喪失、timeout/cancel、偽Scope/証跡/二重消費/完了済み未awaitを検証する。既存#239/#240/#242の独立Suiteは各境界の補助Evidenceとして保持する。
+
+追加[Migration11](../../../../../migrations/authentication/README.md#version-11-コード消費監査243)はEnum/CHECKだけを拡張する。コードAuditは90日保持、Record鍵の終端後24h全世代closureとGM proofの参照0件+Backup35日保持を混同しない。具体Provider耐久性/鍵破棄、清掃/Restore、公開API/本番配置は未実証のまま。

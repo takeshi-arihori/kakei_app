@@ -83,3 +83,14 @@ Schema8適用後に9だけを既存Runnerの単一Transactionで追加する。�
 Auditの所有/保持90日/既存期限索引を維持する。コード仮名世代の保持/退役とBackup照合をAudit Inventoryへ含める必要があり、旧保守Readerのコード用途拒否を広げず#244/#245で実装する。コードRecord鍵は別の全世代inventory/24h破棄に従う。Provider割当後にDB rollbackした孤立Scopeも期限を保持し、清掃対象から落とさない。退会/Restoreの信頼済みScope ticket/closure、公開API/本番ProviderのGateを解除しない。
 
 `recipient-code-schema-migration.integration.spec.ts`の#240ケースで、空1〜9/既存8行保持、NULL/既定値なし、固定操作/一対/32byte/世代制約、Checksum、DDLと台帳故障時の列/Enum/台帳rollback、Down拒否を実PG17で検証する。`recipient-code-management.integration.spec.ts`で同backend/xmin・業務/Session/両認証Auditの一括保存と故障を確認する。正式GM ER図の対象を変えず、このInventory表と実Schema検証を保存Traceとする。
+
+
+## version 11: コード消費監査（#243）
+
+`0011_recipient_code_consumption_audit.sql`は既存`audit_action`に`recipient-code-consume`を追加し、`authentication_audit_code_pair`へ同操作を追加する。成功時のコード仮名必須制約を`authentication_audit_successful_code`へ写像し、issue/consumeのallowではNULLを拒否する。既存のrevoke/inspect拒否時NULL、32byte、一対、Audit世代一致、固定許可集合を維持する。
+
+新Table/Index/FK/直接ID列・既存Envelope・Migration1〜10の変更はなく、既存Audit行を保持する。平文Inventoryは固定actionと既存の用途別Actor/コード仮名だけ。消費のActor仮名はcaller本人、コード仮名は独立コード用途である。保持Owner/90日期限を変えず、認証AuditをGM Auditの代わりにしない。
+
+旧Migrationを修正せず、共有Migration runnerで11を番号順に適用する。Enum追加とCHECKでは新Enumへのcastを同Transactionで行わずtext比較を使う。Backfill不要。旧コードを起動し直しても消費成功の監査行を削除しない。Downは常に拒否するforward-onlyであり、復旧は追加Migrationによるforward-fix。運用接続前には#244/#245のコード用途を含む保守/Restore対応とProvider/Backupの既存Gateを満たす。
+
+統合Suiteで実消費Auditと両Context rollback、既存Audit保持、同checksum再適用、仮名NULL拒否、Down拒否を検証する。正式GM ER図は認証Audit Enumを対象にしないため変更不要。新しい保持Entity/関連を図へ追加しない。

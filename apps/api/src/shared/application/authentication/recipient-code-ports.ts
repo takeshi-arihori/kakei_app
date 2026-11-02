@@ -193,6 +193,7 @@ export interface RecipientCodeSessionPort {
    * @param code 同期的に正規形検証/Copyした秘密値。保存/Log/成功結果へ残さない。
    * @param clock Lock後とserialize前のClock。期限等値を初回作成で拒否する。
    * @param callbacks GMが所有する共通operation照合と新規保存。保存proof世代を用いた再送には現コード/宛先active/Owner/現在版を要求しない。
+   * @param signal 任意の中断。commit送信後は結果不明として同operation照合だけを許す。
    * @returns 共通commit後の本文、未認証、存在非開示の拒否、または結果不明を含む障害。
    */
   use<T extends AuthenticationSerializedValue>(
@@ -200,6 +201,7 @@ export interface RecipientCodeSessionPort {
     code: RecipientCodeSecret,
     clock: AuthenticationClock,
     callbacks: RecipientCodeUseCallbacks<T>,
+    signal?: AbortSignal,
   ): Promise<AuthenticatedActorResult<T> | RecipientCodeUnavailableToActor>;
 }
 
