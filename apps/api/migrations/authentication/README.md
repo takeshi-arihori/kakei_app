@@ -17,3 +17,80 @@ Migrationはepochなし・`uninitialized`の`key_state`を1行だけ作る。`ke
 PR #221で統合したversion 5は不変とし、`0006_authentication_inventory.sql`を追加する。Identity／Aliasの未承認`created_at_ms`だけを削除し、ID、所有関係、版、Digest、Envelope、鍵状態、既存Group業務行には変更を加えない。空DBでは既存の番号順に1〜6を適用し、version 5適用済みDBでは6だけを追加する。Migration RunnerのTransactionで両列の削除と台帳追記を共通Commitし、途中故障では全てRollbackする。再実行は保存済みChecksumでskipし、不一致なら拒否する。
 
 削除した日時は復元できない。`0006_authentication_inventory.down.sql`は空DBでも明示拒否し、未承認列の再追加を行わない。適用後の変更は新しい番号のForward-fixで届ける。適用時は認証Writerを閉じ、旧日時列を参照するCodeがないことを確認してからMigrationを実行する。検証用のSchema破棄はSuiteが所有する分離環境に限定する。
+
+## version 7: HTTP専用の共有Rate予算
+
+`0007_authentication_http_rate.sql`は[承認済みHTTP契約](../../../../docs/security/authentication-http-boundary.md)に従い、独立Schema `authentication_http`へ`rate_policy`と`rate_window`を追加する。既存5/6のSQL・Checksum・認証RecordとGroup Schemaを変更しない。共通Migration RunnerのTransactionと台帳で適用し、既存DBでは7だけを追加する。
+
+`rate_policy`はstate_id=1の単一行、policy_version=1、公開deployment_namespace/key_version、32-byte鍵照合値を持つ。鍵MaterialやRaw IPを保存しない。初期化は明示操作で、異なる鍵/Namespace/Policyを無条件upsertして既存予算を消さない。
+
+`rate_window`はoperation（attempt/login/session/logout）、kind（global/peer）、32-byte専用HMAC、分境界window_start_ms、count（1〜601）、expires_at_msだけを保持する。PKはoperation/kind/digest/window。Windowのsafe範囲・60秒期限・Digest長をCHECKし、expiry Indexを小Batch清掃に使う。HMACはNamespace/操作/種別/接続Peerまたはglobal固定label/Windowへ束縛する短期仮名である。認証DataのBackup/Restoreや削除Ledgerの正本にしない。
+
+期限到達後の行は予算に再利用せず、24h以内に削除する。清掃能力と固定通知は[開発Runbook](../../../../docs/operations/authentication-local-development.md)を参照する。鍵喪失・commit結果不明・不一致は予約を許可せず、プロセス内Mapへfallbackしない。本番の鍵保管・Rotation・DB保護・Failover時の巻戻し防止は未有効の別Gate。
+
+version 7のDownは明示拒否する。使用済み予算を削除して上限を復活させず、必要な変更は追加Migrationで前進修正する。試験Schema破棄は開始時に既存Schema不在を確認したSuite所有環境だけに限定する。
+
+## version 8: 招待コードの最小Inventoryと鍵制御Metadata（#237）
+
+`0008_recipient_code_schema.sql`は[Accepted詳細設計R4](../../../../docs/security/invitation-code-lifecycle.md#r4-保存inventory鍵原子性)と[#236の内部Record](../../src/shared/application/authentication/recipient-code-record.ts)を次へ写像する。共有認証技術が所有し、Group/InvitationへのFK・Cascade・原コード・Profile・Session原値・暗号化Payload/Nonceは追加しない。
+
+| 論理field | 物理列 / 型 | 制約・意味 |
+| --- | --- | --- |
+| codeId | code_id / uuid | PK、UUIDv4。原コードから独立し、DBで乱数生成しない |
+| recipientActorId | recipient_actor_id / uuid | NOT NULL、UUIDv4、authentication.actorだけへのFK、ON DELETE RESTRICT |
+| recordVersion | record_version / positive_safe_integer | NOT NULL、1〜9007199254740991 |
+| epoch | epoch / uuid | NOT NULL、UUIDv4。現在の外部epochとの一致検証はAdapterが担当 |
+| createdAt / expiresAt | created_at_ms / expires_at_ms、utc_milliseconds | NOT NULL、非負safe integer、差は600000ms固定 |
+| status | state / recipient_code_state | NOT NULL、issued/consumed/replaced/revoked。expiredは時刻由来で保存しない |
+| terminalAt | terminal_at_ms / utc_milliseconds | 唯一のnullable列。IssuedならNULL、終端なら作成以降。期限後の終端化も許可する |
+| lookupKeyVersion / lookupDigest | lookup_key_version / text、lookup_digest / bytea | NOT NULL、鍵世代は許可ASCIIの1〜255文字、Digestは32-byte、世代とDigestの組をUnique |
+| macKeyVersion / mac | mac_key_version / text、state_mac / bytea | NOT NULL、鍵世代は許可ASCIIの1〜255文字、MACは32-byte。真偽検証は#238以降 |
+
+全列に初期値を持たせず、Migration完了時の新Tableは空。`authentication_recipient_code_issued_actor_idx`は`state='issued'`だけをpredicateとしてActorごとにUniqueにする。期限超過Issuedも再発行のTransactionで先に終端化し、`now()`をpredicateへ持ち込まない。終端行を含むActor参照索引と、`LEAST(expires_at_ms,COALESCE(terminal_at_ms,expires_at_ms))`の清掃索引を追加する。Actor無効時点との最早照合は#244の保守処理が担当する。
+
+既存`key_purpose`に`recipient-code-lookup`と`recipient-code-state-mac`の2用途だけを追加する。前者は`auth-recipient-code-lookup/v1`、後者はRecord別の`auth-recipient-code-state/v1`の世代制御で、鍵Materialではない。`key_state`のstatus/generation_version/epoch、旧`key_generation`行は更新しない。コード用世代も初期化せず、MAC Materialは将来ProviderがcodeIdごとに独立保持する。非Cookie用途として`key_generation.epoch`はNULLの既存制約を継承し、現在epochは`key_state`とRecordの照合で扱う。GM再送proofの制御は#242、コードAuditの物理保存・用途拡張は次のversion 9（#240）で扱う。
+
+### 適用・互換性・停止条件
+
+1. 適用前に対象DBの所有・PG17・台帳/Checksumと認証Writer/保守の停止を確認する。適用済み5/6/7のSQLを変更せず、7までのDBには8だけ、空DBには1〜8を番号順で渡す。
+2. 既存Runnerの単一TransactionでENUM追加・Table/索引・台帳追記を共通commitする。SQL内にTransaction制御を重複しない。新しい鍵用途ENUMの値は追加Transaction内で使用せず、世代行を作らない。故障時はENUM/Table/台帳も全rollbackする。再実行はChecksum一致ならskip、不一致なら停止する。
+3. 適用後に旧行と旧Checksum不変、recipient_codeが空、旧key_state/世代不変を確認する。通常main・専用DevのMigration一覧は変更しない。既存認証は新用途の行がない間だけ従来どおりで、新コード機能は未接続のまま。
+4. 新用途のMetadataを入れると旧通常Writer・清掃・Restore readerは、非active世代でも未知用途としてfail closedする。Readerの許可集合をこのTaskで広げたり、不明用途をskipしたりしない。#239〜#245と公開契約/実装・既存Production Gate完了前にコードWriter・鍵初期化を有効化しない。
+
+SchemaだけでMAC真正性、Actor本人性、現在epoch、同一接続の一回消費/GM原子性、24時間清掃、Restore失効を保証しない。これらが未実装の間に新しいコード行・鍵世代が見つかった場合は活性化を止め、隔離して後続保守の対応を確認する。
+
+`0008_recipient_code_schema.down.sql`は空DBでも拒否する。実DataのDropやENUM削除、台帳巻戻しで旧Writerを復活させず、Writer停止と新しい番号のForward-fixを使う。
+
+### 実DB検証と文書Trace
+
+`test/recipient-code-schema-migration.integration.spec.ts`で、空DB/7からの追加、旧認証/GM行・稼働鍵Metadata/Checksum不変、再実行・Checksum拒否、故障時DDL/ENUM/台帳rollback、12列/nullability/初期値なし、FK RESTRICT、一Actor一Issued、世代別Digest/ID一意性、状態/時刻/版/byte長・UUIDv4・鍵世代制約、清掃索引、旧Reader3種の未知用途拒否、Down拒否を実PG17で検証する。
+
+検証は末尾`_test`・PG17を確認してから共通Session Advisory Lockを取得し、既存のauthentication/authentication_http Schemaがあれば所有権を得ず拒否する。自分が不在確認後に作成したSchemaと、実行ごとのランダム名のGM検証Schemaだけを削除する。認証WriterはTest DBへ接続しない。既存の正式ER図はGM locatorの関係を対象とするため変更せず、このInventory表と実Schema検証を招待コードの保存Traceとする。
+
+## version 9: コード管理監査（#240）
+
+`0009_recipient_code_audit.sql`はAccepted R4のコード管理Auditを、既存の共有認証所有`authentication.audit_event`へ写像する。`audit_action`へ固定値`recipient-code-issue` / `recipient-code-revoke` / `recipient-code-inspect`を追加し、次のnullable列を既定値なしで追加する。既存行はNULL、旧Migration/Checksum/認証・GM行/鍵Stateは変更しない。
+
+| 列 | 保存契約 |
+| --- | --- |
+| code_digest_key_version | 独立コード仮名鍵の世代。認証Audit共通ラベルと一致、既存鍵世代の文字種/255文字上限に従う |
+| code_digest | `auth-audit-recipient-code/v1`の32byte HMAC。直接codeId/原コード/lookup/state MAC/再送proofではない |
+
+両列は一対、値がある場合は3つのコードactionだけを許す。発行allowではコード仮名必須。不在/他人の取消、no-code、拒否記録は両列NULLを許す。Actor仮名とコード仮名の用途別鍵Materialは共有しない。新しい`key_purpose`/鍵Material/初期行は追加せず、コード監査Providerは既存認証Audit共通世代に対応する独立用途を持つ。
+
+Schema8適用後に9だけを既存Runnerの単一Transactionで追加する。空DBは1〜9を番号順に同時適用できる。新Enumを追加Transaction中にEnum入力へcastせず、CHECKは`action::text`と固定文字列を比較する。DDL/Enum/台帳追記は同commit、故障は全rollback。Checksum一致の再適用はskip、不一致なら停止する。Downは空DBでも拒否し、Writer停止と追加番号のForward-fixを使う。通常main/専用DevのMigration一覧と鍵初期化は変更しない。
+
+Auditの所有/保持90日/既存期限索引を維持する。コード仮名世代の保持/退役とBackup照合をAudit Inventoryへ含める必要があり、旧保守Readerのコード用途拒否を広げず#244/#245で実装する。コードRecord鍵は別の全世代inventory/24h破棄に従う。Provider割当後にDB rollbackした孤立Scopeも期限を保持し、清掃対象から落とさない。退会/Restoreの信頼済みScope ticket/closure、公開API/本番ProviderのGateを解除しない。
+
+`recipient-code-schema-migration.integration.spec.ts`の#240ケースで、空1〜9/既存8行保持、NULL/既定値なし、固定操作/一対/32byte/世代制約、Checksum、DDLと台帳故障時の列/Enum/台帳rollback、Down拒否を実PG17で検証する。`recipient-code-management.integration.spec.ts`で同backend/xmin・業務/Session/両認証Auditの一括保存と故障を確認する。正式GM ER図の対象を変えず、このInventory表と実Schema検証を保存Traceとする。
+
+
+## version 11: コード消費監査（#243）
+
+`0011_recipient_code_consumption_audit.sql`は既存`audit_action`に`recipient-code-consume`を追加し、`authentication_audit_code_pair`へ同操作を追加する。成功時のコード仮名必須制約を`authentication_audit_successful_code`へ写像し、issue/consumeのallowではNULLを拒否する。既存のrevoke/inspect拒否時NULL、32byte、一対、Audit世代一致、固定許可集合を維持する。
+
+新Table/Index/FK/直接ID列・既存Envelope・Migration1〜10の変更はなく、既存Audit行を保持する。平文Inventoryは固定actionと既存の用途別Actor/コード仮名だけ。消費のActor仮名はcaller本人、コード仮名は独立コード用途である。保持Owner/90日期限を変えず、認証AuditをGM Auditの代わりにしない。
+
+旧Migrationを修正せず、共有Migration runnerで11を番号順に適用する。Enum追加とCHECKでは新Enumへのcastを同Transactionで行わずtext比較を使う。Backfill不要。旧コードを起動し直しても消費成功の監査行を削除しない。Downは常に拒否するforward-onlyであり、復旧は追加Migrationによるforward-fix。運用接続前には#244/#245のコード用途を含む保守/Restore対応とProvider/Backupの既存Gateを満たす。
+
+統合Suiteで実消費Auditと両Context rollback、既存Audit保持、同checksum再適用、仮名NULL拒否、Down拒否を検証する。正式GM ER図は認証Audit Enumを対象にしないため変更不要。新しい保持Entity/関連を図へ追加しない。

@@ -10,13 +10,13 @@ import {
   type GroupPolicyDigestPort,
 } from '../../application/group-access-policy.js';
 import type {
-  CommitGroupRequest,
   GroupCloseChange,
   InvitationChange,
   MembershipChange,
 } from '../../application/group-repository.js';
 import type { Group } from '../../domain/group.js';
 import { encodeGroupRecordPayload } from './group-record-payload.js';
+import type { GroupStateWritePlan } from './group-storage-contracts.js';
 
 export type ProtectedGroupRecordKind = Extract<
   ProtectedRecordHeader['recordKind'],
@@ -227,8 +227,14 @@ const actorsAllowedByCurrentGroupState = (group: Group) => {
 export class GroupRecordPreparer {
   constructor(private readonly options: GroupRecordPreparerOptions) {}
 
+  /**
+   * @param request operation形式と独立した状態/履歴/索引計画。
+   * @param version 同じTransactionのCASで決める正の保存版。
+   * @returns 既存Envelope形式の保護行と用途別索引。
+   * @throws Error ID/時刻/暗号/索引障害。ownerが部分保存をrollbackする。
+   */
   async prepare(
-    request: CommitGroupRequest,
+    request: GroupStateWritePlan,
     version: number,
   ): Promise<PreparedGroupRecords> {
     const createdAt = this.timestamp();

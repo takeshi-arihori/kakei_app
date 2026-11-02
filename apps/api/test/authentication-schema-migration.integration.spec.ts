@@ -24,7 +24,7 @@ const TEST_DATABASE_URL =
   'postgresql://kakei:kakei_local_password@localhost:5432/kakei_test';
 
 const loadMigration = async (
-  version: 1 | 2 | 3 | 4 | 5 | 6,
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7,
 ): Promise<SqlMigration> => {
   const names: Record<typeof version, string> = {
     1: '0001_group_management_storage',
@@ -33,6 +33,7 @@ const loadMigration = async (
     4: '0004_group_management_retention',
     5: '0005_authentication_schema',
     6: '0006_authentication_inventory',
+    7: '0007_authentication_http_rate',
   };
   const name = names[version];
   const directory = version >= 5 ? 'authentication' : 'group-management';
@@ -181,6 +182,7 @@ const insertSession = async (
 describe('認証Schema Migration', () => {
   const client = new Client({ connectionString: TEST_DATABASE_URL });
   let ownsAuthenticationSchema = false;
+  let ownsHttpSchema = false;
   let schemaName = '';
 
   beforeAll(async () => {
@@ -197,6 +199,14 @@ describe('認証Schema Migration', () => {
 
   beforeEach(async () => {
     await assertAuthenticationSchemaAbsent(client);
+    if (
+      (
+        await client.query<{ present: boolean }>(
+          "SELECT to_regnamespace('authentication_http') IS NOT NULL AS present",
+        )
+      ).rows[0].present
+    )
+      throw new Error('既存HTTP Rate Schemaでは検証不可');
     ownsAuthenticationSchema = true;
     schemaName = `test_issue_222_${randomUUID().replaceAll('-', '')}`;
     await client.query(`CREATE SCHEMA ${schemaName}`);
@@ -206,6 +216,10 @@ describe('認証Schema Migration', () => {
   afterEach(async () => {
     if (!ownsAuthenticationSchema) return;
     await client.query('SET search_path TO public');
+    if (ownsHttpSchema) {
+      await client.query('DROP SCHEMA authentication_http CASCADE');
+      ownsHttpSchema = false;
+    }
     await client.query('DROP SCHEMA IF EXISTS authentication CASCADE');
     await client.query(`DROP SCHEMA IF EXISTS ${schemaName} CASCADE`);
     schemaName = '';
@@ -215,6 +229,70 @@ describe('認証Schema Migration', () => {
   afterAll(async () => {
     // 接続を閉じると、Suite全体で保持したSession Advisory Lockも解放される。
     await client.end();
+  });
+
+  it('version 7は既存認証/Group行と全Checksumを保つ追加Migrationで、再実行をskipする', async () => {
+    const previous = await Promise.all(
+      ([1, 2, 3, 4, 5, 6] as const).map(loadMigration),
+    );
+    await applySqlMigrations(client, previous);
+    await insertActor(client, '00000000-0000-4000-8000-000000000218');
+    await client.query(
+      `INSERT INTO group_aggregate_record(group_id,logical_record_id,aggregate_version,access_policy_version,envelope_version,algorithm_id,schema_version,key_version,ciphertext,nonce,authentication_tag,created_at,updated_at) VALUES ('00000000-0000-4000-8000-000000000218','00000000-0000-4000-8000-000000000418',0,0,1,'AES-256-GCM',1,'synthetic-v1',$1,$2,$3,to_timestamp(1),to_timestamp(1))`,
+      [Buffer.from([1]), Buffer.alloc(12, 2), Buffer.alloc(16, 3)],
+    );
+    const snapshot = async () => ({
+      actor: (
+        await client.query<Record<string, unknown>>(
+          'SELECT * FROM authentication.actor',
+        )
+      ).rows,
+      group: (
+        await client.query<Record<string, unknown>>(
+          'SELECT * FROM group_aggregate_record',
+        )
+      ).rows,
+      migrations: (
+        await client.query<Record<string, unknown>>(
+          'SELECT * FROM app_schema_migrations WHERE version<=6 ORDER BY version',
+        )
+      ).rows,
+    });
+    const before = await snapshot();
+    const migration = await loadMigration(7);
+    expect(await applySqlMigrations(client, [...previous, migration])).toEqual({
+      appliedVersions: [7],
+      skippedVersions: [1, 2, 3, 4, 5, 6],
+    });
+    ownsHttpSchema = true;
+    expect(await snapshot()).toEqual(before);
+    expect(await applySqlMigrations(client, [migration])).toEqual({
+      appliedVersions: [],
+      skippedVersions: [7],
+    });
+    await expect(
+      applySqlMigrations(client, [
+        { ...migration, sql: migration.sql + '\nSELECT 1;' },
+      ]),
+    ).rejects.toBeInstanceOf(MigrationChecksumMismatch);
+    expect(
+      (
+        await client.query<{ table_name: string }>(
+          "SELECT table_name FROM information_schema.tables WHERE table_schema='authentication_http' ORDER BY table_name",
+        )
+      ).rows.map((v) => v.table_name),
+    ).toEqual(['rate_policy', 'rate_window']);
+    await expect(
+      client.query(
+        await readFile(
+          new URL(
+            '../migrations/authentication/0007_authentication_http_rate.down.sql',
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      ),
+    ).rejects.toThrow('forward-only');
   });
 
   it('空DBへ追加専用Schemaを作り、番号付きchecksumで再実行をskipする', async () => {

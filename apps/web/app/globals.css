@@ -146,3 +146,15 @@ main:focus-visible {
 @media (max-width: 48rem) {
   .journey { grid-template-columns: 1fr; }
 }
+
+.auth-title { margin: 0; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.35; }
+.auth-intro { color: var(--muted); max-width: 40rem; }
+.auth-card { max-width: 38rem; padding: clamp(1rem, 4vw, 2rem); margin-top: 2rem; border: 1px solid var(--line); border-radius: 1.2rem; background: white; }
+.auth-card h2 { margin-top: 0; font-size: 1.4rem; }
+.auth-card button { min-height: 44px; padding: .7rem 1rem; margin: .5rem .5rem .5rem 0; border: 2px solid var(--accent); border-radius: .6rem; background: var(--accent); color: white; font: inherit; font-weight: 700; cursor: pointer; }
+.auth-card button.secondary { color: var(--accent); background: white; }
+.auth-card button:disabled { opacity: .6; cursor: wait; }
+.auth-card button:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+.auth-note { margin-top: 1.5rem; font-size: .9rem; color: var(--muted); }
+.google-button { min-height: 44px; max-width: 100%; overflow-x: auto; margin: 1rem 0; zoom: 1.1; }
+.auth-actions { display: flex; flex-wrap: wrap; }

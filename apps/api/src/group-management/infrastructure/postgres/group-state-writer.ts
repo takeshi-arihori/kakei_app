@@ -1,8 +1,11 @@
 import type { ProtectedRecordCodec } from '../../../shared/infrastructure/protected-record/index.js';
-import type { Client, QueryResultRow } from 'pg';
+import type { QueryResultRow } from 'pg';
 
 import type { GroupPolicyDigestPort } from '../../application/group-access-policy.js';
-import type { CommitGroupRequest } from '../../application/group-repository.js';
+import type {
+  GroupSqlQuery,
+  GroupStateWritePlan,
+} from './group-storage-contracts.js';
 import {
   GroupRecordPreparer,
   type PreparedAccessIndexEntry,
@@ -10,7 +13,7 @@ import {
   type PreparedProtectedRow,
 } from './group-record-preparer.js';
 
-type SqlTransaction = Pick<Client, 'query'>;
+type SqlTransaction = GroupSqlQuery;
 
 export type GroupStateWriteOutcome =
   | Readonly<{ kind: 'Committed'; version: number }>
@@ -40,10 +43,13 @@ export class PostgresGroupStateWriter {
    * 呼出し側のTransactionだけで保存する。BEGIN／COMMIT／ROLLBACKは呼出し側が所有し、
    * 後続operation結果の保存も原子的に組み合わせる。
    * このAdapter内でCommitを隠さない。
+   * @param transaction ownerが保持する同一接続のquery限定能力。
+   * @param request operation形式と独立した状態/版/履歴/索引計画。
+   * @returns stageした版、Conflict/AlreadyExists、またはUnavailable。commitは呼出し側の責務。
    */
   async persist(
     transaction: SqlTransaction,
-    request: CommitGroupRequest,
+    request: GroupStateWritePlan,
   ): Promise<GroupStateWriteOutcome> {
     try {
       if (!this.isValidRequest(request)) {
@@ -137,7 +143,7 @@ export class PostgresGroupStateWriter {
 
   private async create(
     transaction: SqlTransaction,
-    request: CommitGroupRequest,
+    request: GroupStateWritePlan,
   ): Promise<GroupStateWriteOutcome> {
     const version = 1;
     const prepared = await this.recordPreparer.prepare(request, version);
@@ -175,7 +181,7 @@ export class PostgresGroupStateWriter {
     return { kind: 'Committed', version };
   }
 
-  private isValidRequest(request: CommitGroupRequest): boolean {
+  private isValidRequest(request: GroupStateWritePlan): boolean {
     if (
       request.expectedVersion !== 'Absent' &&
       !validVersion(request.expectedVersion)

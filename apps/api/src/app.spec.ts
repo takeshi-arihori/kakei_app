@@ -26,4 +26,23 @@ describe('Hono API', () => {
       data: { apiStatus: { status: 'ok' } },
     });
   });
+  it.each([
+    ['POST', '/auth/google/attempt'],
+    ['POST', '/auth/google/login'],
+    ['GET', '/auth/session'],
+    ['POST', '/auth/logout'],
+  ])(
+    'Capability未設定の%s %sは認証を有効にせず503を返す',
+    async (method, path) => {
+      const response = await app.request(path, { method });
+      expect(response.status).toBe(503);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(await response.json()).toMatchObject({
+        error: {
+          code: 'AUTHENTICATION_UNAVAILABLE',
+          requestId: expect.any(String) as unknown,
+        },
+      });
+    },
+  );
 });

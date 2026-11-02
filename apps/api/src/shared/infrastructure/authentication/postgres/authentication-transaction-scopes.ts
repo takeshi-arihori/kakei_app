@@ -38,6 +38,12 @@ export interface AuthenticationTransactionParticipants {
 export interface AuthenticationTransactionLease {
   /** Callbackへ渡せる、本文確定だけの制限された能力。 */
   readonly scope: AuthenticationTransactionScope;
+  /**
+   * 専用証跡へ本文を束縛するための所有者限定検査。
+   * @param value 未信頼のhandle候補。
+   * @returns このopen Scope自身が発行した実体だけtrue。
+   */
+  ownsResult(value: unknown): boolean;
   /** Callback直後に受付を停止する。DB lockと接続は保持したまま。 */
   seal(): void;
   /**
@@ -61,11 +67,47 @@ export interface AuthenticationTransactionScopes {
   /**
    * Storeが既に開始したTransactionへ新しいScopeを束縛する。
    * @param connection Store所有の同一Transaction接続。
+   * @param extension 専用leaseの追加検証。通常認証では省略する。
    * @returns Store専用のlease。ScopeだけをCallbackへ渡す。
    */
   open(
     connection: AuthenticationQueryConnection,
+    extension?: AuthenticationScopeExtension,
   ): AuthenticationTransactionLease;
+}
+
+/** 所有者だけが登録する専用leaseの検証Hook。通常Scopeの契約を変更しない。 */
+export interface AuthenticationScopeExtension {
+  /**
+   * 同じregistryへ登録する専用Scopeを作る。
+   * @param scope 本文確定だけの基礎Scope。
+   * @returns 同じserializeを使う専用Scope。
+   */
+  decorate(
+    scope: AuthenticationTransactionScope,
+  ): AuthenticationTransactionScope;
+  /**
+   * serialize前の現在期限を同期検査する。失敗は握り潰してもcommit不可。
+   * @throws 期限/状態/証跡の不整合。
+   */
+  beforeSerialize(): void;
+  /** 受付停止時に未完了の専用操作を記録する。例外を投げない。 */
+  seal(): void;
+  /**
+   * 専用証跡と返却handleの同一性を照合する。
+   * @param value 基礎registryで所有確認済みの返却handle。
+   * @throws 保存計画と返却handleが一致しない場合。
+   */
+  assertResult(value: unknown): void;
+  /**
+   * 専用操作・期限・証跡が揃わなければ拒否する。
+   * @throws 未完了/未受領/失敗操作、期限到達、証跡不一致。
+   */
+  assertCommittable(): void;
+  /** rollback前に開始済み専用操作の収束を待つ。 */
+  drain(): Promise<void>;
+  /** 確定後に専用能力を無効化する。 */
+  close(): void;
 }
 
 type JsonValue =
@@ -187,6 +229,7 @@ export const createAuthenticationTransactionScopes =
       participants,
       open(
         connection: AuthenticationQueryConnection,
+        extension?: AuthenticationScopeExtension,
       ): AuthenticationTransactionLease {
         const frame: Frame = {
           connection,
@@ -194,11 +237,12 @@ export const createAuthenticationTransactionScopes =
           failed: false,
           pending: new Set(),
         };
-        const scope = Object.freeze(
+        const baseScope = Object.freeze(
           Object.assign(Object.create(null) as object, {
             serialize(value: unknown): AuthenticationSerializedValue {
               requireOpen(frame);
               try {
+                extension?.beforeSerialize();
                 const body = JSON.stringify(copyJson(value, new Set()));
                 const handle = Object.freeze(
                   Object.assign(Object.create(null) as object, { body }),
@@ -213,13 +257,23 @@ export const createAuthenticationTransactionScopes =
             },
           }),
         ) as AuthenticationTransactionScope;
+        const scope = extension ? extension.decorate(baseScope) : baseScope;
         frames.set(scope, frame);
         return Object.freeze({
           scope,
+          ownsResult(value: unknown): boolean {
+            return (
+              frame.phase === 'open' &&
+              typeof value === 'object' &&
+              value !== null &&
+              handles.get(value) === frame
+            );
+          },
           seal(): void {
             if (frame.phase === 'sealed') return;
             requireOpen(frame);
             if (frame.pending.size !== 0) frame.failed = true;
+            extension?.seal();
             frame.phase = 'sealed';
           },
           assertResult(value: unknown): void {
@@ -230,6 +284,7 @@ export const createAuthenticationTransactionScopes =
               handles.get(value) !== frame
             )
               throw rejected();
+            extension?.assertResult(value);
           },
           assertCommittable(): void {
             if (
@@ -238,12 +293,15 @@ export const createAuthenticationTransactionScopes =
               frame.pending.size !== 0
             )
               throw rejected();
+            extension?.assertCommittable();
           },
           async drain(): Promise<void> {
             await Promise.allSettled([...frame.pending]);
+            await extension?.drain();
           },
           close(): void {
             frame.phase = 'closed';
+            extension?.close();
           },
         });
       },

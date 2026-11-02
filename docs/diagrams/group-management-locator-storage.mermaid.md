@@ -1,9 +1,9 @@
 # Group Management locator v2の保存関係
 
-- Status: Confirmed（ADR #55／#73／#85／#102で採用した保存境界）
-- Source of Truth: [operation locator／Group ID Decision](../adr/group-operation-locator-and-group-id-contract.md)、[CloseIntent保持Decision](../adr/close-intent-id-retention-boundary.md)、[v2 Migration](../../apps/api/migrations/group-management/0002_group_locator_v2.sql)、[v3 Migration](../../apps/api/migrations/group-management/0003_close_intent_registry.sql)
-- Related: [Task #42](https://github.com/takeshi-arihori/kakei_app/issues/42)、[Task #94](https://github.com/takeshi-arihori/kakei_app/issues/94)、[Task #95](https://github.com/takeshi-arihori/kakei_app/issues/95)、[Task #96](https://github.com/takeshi-arihori/kakei_app/issues/96)、[Task #103](https://github.com/takeshi-arihori/kakei_app/issues/103)
-- Last Confirmed: 2026-09-24
+- Status: Confirmed（ADR #55／#73／#85／#102と招待コード設計で採用した保存境界）
+- Source of Truth: [招待コード設計](../adr/invitation-code-lifecycle-and-protected-storage.md)、[v10 Migration](../../apps/api/migrations/group-management/0010_recipient_invitation_enlistment.sql)、[operation locator／Group ID Decision](../adr/group-operation-locator-and-group-id-contract.md)、[CloseIntent保持Decision](../adr/close-intent-id-retention-boundary.md)、[v2 Migration](../../apps/api/migrations/group-management/0002_group_locator_v2.sql)、[v3 Migration](../../apps/api/migrations/group-management/0003_close_intent_registry.sql)
+- Related: [Task #242](https://github.com/takeshi-arihori/kakei_app/issues/242)、[Task #42](https://github.com/takeshi-arihori/kakei_app/issues/42)、[Task #94](https://github.com/takeshi-arihori/kakei_app/issues/94)、[Task #95](https://github.com/takeshi-arihori/kakei_app/issues/95)、[Task #96](https://github.com/takeshi-arihori/kakei_app/issues/96)、[Task #103](https://github.com/takeshi-arihori/kakei_app/issues/103)
+- Last Confirmed: 2026-10-30
 
 ## 図の目的
 
@@ -48,6 +48,27 @@ erDiagram
         smallint id PK
         text current_key_version "nullable until provider initializes"
     }
+    GROUP_RECIPIENT_CODE_PROOF_KEY_STATE {
+        smallint id PK
+        text current_key_version "nullable until provider initializes"
+    }
+    GROUP_RECIPIENT_INVITATION_AUDIT_RECORD {
+        uuid request_id PK
+        timestamptz occurred_at
+        text action
+        text decision
+        text reason_code
+        bigint policy_version
+        bytea actor_pseudonym
+        bytea group_pseudonym
+        bytea resource_pseudonym
+        bytea request_fingerprint "unique with audit_key_version"
+        text audit_key_version
+    }
+
 ```
 
 v1 locator表は旧digestを復元・再key化せず、0件preflight後も削除しない。v2 locatorの`locator_digest`と`digest_key_version`の組が一意であり、random `group_id`とoperation結果へのFKはGroup削除時にcascadeする。Key-state行は#96のcommandが`FOR SHARE`、rotationが`FOR UPDATE`で固定する。Group closeの内容は保護Recordのciphertext内に置き、平文列を追加しない。RegistryはGroup存続中はCloseIntent UUIDをGroup FKへ束縛し、削除TransactionでGroup IDを切り離した後もUUIDと`retain_until`だけを1年間保持する。expiry後もpurge commitまではunique constraintが有効。
+
+
+#242のproof key-stateもFKを持たない共有Lock対象であり、Actorより前にlocator→proofの順で固定する。GM Auditは直接Group IDを持たず、Group削除cascadeと結ばない。proof参照/内部bindingは保護operationのciphertext内だけに置き、参照0件とBackup35日closureの前に鍵を破棄しない。新Auditの90日保持/独立用途は文章仕様に従う。認証TableとのFK、コード原値、Group payloadの平文複製を追加しない。

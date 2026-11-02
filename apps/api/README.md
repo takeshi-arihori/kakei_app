@@ -17,6 +17,10 @@ pnpm -C apps/api build
 
 - `GET /health`: Liveness
 - `POST /graphql`: GraphQL Yoga
+- `POST /auth/google/attempt`: 試行開始201。nonce/CSRFとAttempt Cookie
+- `POST /auth/google/login`: Session発行204。Session設定とAttempt削除
+- `GET /auth/session`: idle非延長のSession照会200、本人性なし401
+- `POST /auth/logout`: 現在Sessionだけ失効204
 
 GraphQL契約の正本はRepositoryの[`apps/api/schema.graphql`](schema.graphql)です。Repository rootで`pnpm codegen`を実行し、Resolver型とWeb Operation型を更新します。
 
@@ -39,3 +43,18 @@ HTTP transportのOpenAPI設計書とローカルSwagger UIの利用方法は[`do
 ## 保存レコードの保護基盤
 
 [共有Infrastructureの保護基盤](src/shared/infrastructure/protected-record/README.md)をGroup ManagementのPostgreSQL Adapterで使用します。用途別Digestの型・Portは`src/shared/application/purpose-separated-digest.ts`に置き、Applicationから暗号Infrastructureへの依存を避けます。暗号基盤はAPI内で管理し、独立Packageにはしません。具体鍵Providerと本番接続は既存のGateに従います。
+
+## 認証HTTPの起動境界
+
+Knowledge State: Confirmed。[HTTP契約](../../docs/security/authentication-http-boundary.md)と[Accepted ADR](../../docs/adr/authentication-http-and-development-boundary.md)が4操作の詳細を定める。通常mainの認証能力は未接続で503。使い捨てlocalhost入口だけが実Google SDK/実pg Store/実CSPRNG/共有Rateを接続し、Production有効化とは区別する。[専用開発Runbook](../../docs/operations/authentication-local-development.md)に従い、再起動後の非空専用DBは明示resetを要する。
+
+全操作にX-Kakei-Request: 1、POSTに固定Origin完全一致、Cookie/CSRF/厳格JSON/stream18KiB/5秒制限、no-store/nosniffを適用する。Loginのcanonical CSRF不一致と期限切れ/消費済み/不在AttemptはOwner追補で一律409。CSRF Header欠落/形式不正は403、Logout有効SessionのCSRF不一致も403。共有Rateは429/Retry-After、能力障害や結果不明は503でCookieを変更しない。再開始409のAttemptだけ削除する挙動は有効Session競合409と区別する。Errorはcode/requestIdだけ、Actor/Google識別子/診断を返さない。
+
+既存Client契約への削除/変更はなく、認証経路を追加する。Production契約のCookie名/属性はOpenAPIとHTTP契約に示すが、本番Provider/Ingress/Backup/退会のGateを満たすまで有効化しない。Forward-fixで修正し、HTTPを止める場合は開発入口を閉じる。使用済み共有予算をDownで消さない。GraphQL SDL/生成型は変更しない。
+
+
+## 招待コードの内部共通commit（#243）
+
+[`createRecipientInvitationRuntime`](src/recipient-invitation-runtime.ts)は、同じregistryへ実Session lease、実コード消費、GM Application/参加保存Adapter、両用途Auditを一度だけ組む内部Factoryである。Provider/Clock/ID/timeout能力を注入し、create/issue/revoke/inspectだけを返す。接続/registry/証跡issuerは返さず、通常main/app/Dev/HTTP/GraphQLへは未接続。公開契約・清掃/Restore・本番Capabilityは別Gateとする。
+
+必要Schemaは既存1〜10と[認証Migration11](migrations/authentication/README.md#version-11-コード消費監査243)。実PG17の[`recipient-invitation-atomicity.integration.spec.ts`](test/recipient-invitation-atomicity.integration.spec.ts)で、実Session/実消費/GM/両Auditの一回保存、競合、全rollback、結果不明からの照合を検証する。合成鍵Providerを使うため、鍵耐久性/破棄/物理Backupの保証にはならない。

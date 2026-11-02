@@ -113,3 +113,20 @@ A2は[正式Task #213](https://github.com/takeshi-arihori/kakei_app/issues/213)�
 ## A4c認証保守の実装境界
 
 #217は[保守仕様](../security/authentication-maintenance.md)の期限清掃、削除Intent Saga、最新Ledger証跡検証、Restore隔離／全Credential破棄／新epoch／Identity鍵・Alias移行を内部PortとPostgreSQL Adapterで実装する。具体外部Providerの耐久性・独立Failure domain・IAM、物理Backup真正性、Traffic／Writer fence、Scheduler／監視配信は[Runbookの本番Capability](../operations/authentication-retention-restore.md)に残す。HTTP／Rate limit／Origin／CSRF／Cookie／Proxyは#218、Googleログイン画面・実API E2Eは#219の個別Ready評価後に実装する。退会受付・未完了責務・Group過去参照保持のDecisionを変更せず、本番へwireしない。
+
+## 認証HTTP・localhost接続の具体化（2026-10-22）
+
+[Task #218](https://github.com/takeshi-arihori/kakei_app/issues/218)は[HTTP ADR](../adr/authentication-http-and-development-boundary.md)と[HTTP契約](../security/authentication-http-boundary.md)へ、4API/同一Origin/Cookie/CSRF/公開Error/共有Rate/使い捨て開発のDecisionを固定した。Owner初回承認とLogin再開始409の追補を保持し、実装後の新規4専門Reviewを経てDraft PRへ進める。通常mainでは認証能力を有効化せず、開発の単一lease/非空拒否/実CSPRNGを永続Providerの実証へ読み替えない。実Google Browser/UIは#219、Production Provider/Proxy/TLS/Backup/退会/監視は既存Gateを維持する。
+
+
+## A6認証画面の接続範囲
+
+Issue #219は[UI契約](../security/google-authentication-ui.md)に従い、localhostのGoogle buttonとA5相対4API、状態確認/logout/取消/期限/結果不明/別Tab復帰を接続する。CIのGoogle外部境界（GIS応答/公開鍵取得）の合成は2026-10-25 Owner承認。実SDK署名と実API/PG/Cookieを使うE2E、実Googleの手動、4専門Reviewは別Evidence。通常main/Production、永続鍵、退会/Backup/Ingress/監視、招待/Group画面のGateを解除しない。
+
+2026-10-25の追加Owner承認により、[Cookie共存ADR](../adr/authentication-cookie-coexistence.md)は非認証Cookie値を解釈せず無視する範囲だけHTTP ADRを部分変更する。認証Cookie/Origin/CSRF/署名/TTL/Rate/Production Gateは維持する。実Google再確認と独立Securityを含む4専門Reviewは別Evidenceを必要とする。
+
+## 招待コード詳細設計のOwner承認（2026-10-27）
+
+[設計Task #233](https://github.com/takeshi-arihori/kakei_app/issues/233)の[ADR](../adr/invitation-code-lifecycle-and-protected-storage.md)と[詳細設計](../security/invitation-code-lifecycle.md)は2026-10-27のOwner明示回答「はいお願いします。」によりAcceptedである。10分TTL、一Actor一つ、本人取消/再発行、不可逆検索値とRecord MAC、コード消費/Invitation作成の共通Transaction、コード清掃とRestore時全破棄を採用する。Proposal PR #234はdevelopへ統合済みで、この追補はOwner承認のStatus同期を行う。
+
+既存Invitationの7日/本人受諾/人数/版とADR #55/#212のGateを維持する。特に認証の既存withSessionへ宛先Actorを後付けlockせず、専用leaseとGMの同Scope参加を設計する。コードのAPI/UI・実Schema/暗号/Store/清掃/Restoreは未実装、#233と後続のReady/Doneは承認同期のdevelop統合後に個別評価し、各TaskのReady前に実装を始めない。

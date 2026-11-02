@@ -825,6 +825,11 @@ export class GroupCommandService {
       return null;
     }
 
+    if (found.kind === 'OperationMismatch')
+      throw new GroupCommandApplicationError(
+        'OPERATION_MISMATCH',
+        'The operation ID was already used for a different command',
+      );
     return this.matchStoredOperation(found.operation, fingerprint);
   }
 
@@ -883,6 +888,11 @@ export class GroupCommandService {
       request.operation.actorSubject,
       request.operation.operationId,
     );
+    if (found.kind === 'OperationMismatch')
+      throw new GroupCommandApplicationError(
+        'OPERATION_MISMATCH',
+        'The operation ID was already used for a different command',
+      );
     if (found.kind === 'Found') {
       return this.matchStoredOperation(
         found.operation,

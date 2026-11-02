@@ -7,7 +7,8 @@ test('入口で目的と利用開始前の状態を確認できる', async ({ pa
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('支出から精算まで、グループで。');
   await expect(page.getByRole('list', { name: '共有割り勘の流れ' }).getByRole('listitem')).toHaveCount(3);
   await expect(page.getByText('利用開始の準備を進めています。')).toBeVisible();
-  await expect(page.getByRole('link')).toHaveCount(2);
+  await expect(page.getByRole('link')).toHaveCount(3);
+  await expect(page.getByRole('link', {name:'ログインへ進む'})).toHaveAttribute('href','/login');
   await expect(page.getByRole('button')).toHaveCount(0);
 });
 
@@ -98,3 +99,8 @@ test('Reduced Motionでも内容と復帰導線を利用できる', async ({ pag
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('支出から精算まで、グループで。');
   expect(await hasMotion()).toBe(false);
 });
+
+ test('Productionのログイン画面はGoogleや開発APIへ接続しない',async({page})=>{
+  const requests:string[]=[];page.on('request',r=>{if(r.url().includes('accounts.google.com')||r.url().includes('/auth/'))requests.push(r.url());});
+  await page.goto('/login');await expect(page.getByRole('heading',{name:'ログインは現在準備中です'})).toBeVisible();await expect(page.getByRole('button')).toHaveCount(0);expect(requests).toEqual([]);
+ });
