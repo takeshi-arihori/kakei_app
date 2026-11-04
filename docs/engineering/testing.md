@@ -143,4 +143,4 @@ CIは `pnpm check` のBuild後、Chromiumを `playwright install --with-deps chr
 
 ## 4専門Review Gate
 
-Harnessの受入検証は[4専門Review](implementation-review.md)と[実動手順](codex-harness.md)に従う。決定的な集計・停止条件は`pnpm review:check`で検証し、Root `pnpm check`へ含める。これだけでRoleの起動や実効read-onlyを証明したとは扱わない。
+契約と停止条件は[4専門Review](implementation-review.md)に従う。`pnpm check`のpassでRoleの起動や実効read-onlyを証明したとは扱わない。

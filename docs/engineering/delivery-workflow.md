@@ -90,9 +90,9 @@ Stacked PRのBranch Base、PR Base、`Depends-On`、Merge順序、前提Merge後
 
 Branch名:
 
-- 機能追加: `codex/feat-issue-number-short-description`
-- 不具合修正: `codex/fix-issue-number-short-description`
-- 保守作業: `codex/chore-issue-number-short-description`
+- 機能追加: `feat/issue-number-short-description`
+- 不具合修正: `fix/issue-number-short-description`
+- 保守作業: `chore/issue-number-short-description`
 
 Rule:
 
@@ -105,7 +105,7 @@ Rule:
 - Secret、個人情報、公開不可情報、大容量生成物をCommitしない。
 - `develop`向けPRはSquash mergeを使用し、統合後は1 PRを1 Commitとして扱う。作業Branch内のCommitを事前に1つへ潰す必要はない。
 
-追加Worktreeを使う場合の保存先、Ignore、Codexのmanaged worktree toolとの使い分けは[Worktree運用](worktree-management.md)に従う。
+追加Worktreeを使う場合の保存先とIgnoreは[Worktree運用](worktree-management.md)に従う。
 
 ## PR前の文書同期
 

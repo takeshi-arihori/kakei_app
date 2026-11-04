@@ -75,4 +75,4 @@ SkillまたはEvaluatorを新規作成・変更するときは次を確認する
 
 ## 実装Reviewの分担
 
-I5は[4専門Review](implementation-review.md)の契約・修正上限・停止条件を正本とする。`implement-github-task`が4役の起動・原結果保存・集計・Delivery、`feature-development`が修正・Test／QA・Self Review、`code-review`がSelf Reviewを担当する。専門Roleに技術固有Ruleを埋め込まず、対象docsから取得する。Planningの`work_planning_evaluator`は維持し、旧`task_evaluator`との二重ReviewやSkillの循環呼出しを作らない。
+I5は[4専門Review](implementation-review.md)の契約・修正上限・停止条件を正本とする。`implement-github-task`が4役の起動・原結果保存・集計・Delivery、`feature-development`が修正・Test／QA・Self Review、`code-review`がSelf Reviewを担当する。専門Roleに技術固有Ruleを埋め込まず、対象docsから取得する。Planningの`work_planning_evaluator`は維持し、Skillの循環呼出しを作らない。

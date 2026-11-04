@@ -1,4 +1,0 @@
-interface:
-  display_name: "GitHub作業項目準備（旧名互換）"
-  short_description: "Notionへ接続せずGitHubのエピック・タスクを整える"
-  default_prompt: "$prepare-notion-work を互換入口として使い、GitHubのエピックまたはタスクを改善してください。"

@@ -40,7 +40,7 @@ Independent Evaluatorへ渡す直前に、Task所有の変更だけを評価対�
 5. 最新対象で4役すべてを新Threadへ渡す。blocked／上限では停止し、原因と未解決事項を報告する。
 6. 同じ最新対象の全員pass、Finding／不足Evidenceなしの場合だけDraft PRへ進む。
 
-具体的な実行・記録方法は[Harness](../../../../docs/engineering/codex-harness.md)から取得する。PR Ready化／Mergeを自動化しない。
+PR Ready化／Mergeを自動化しない。
 
 ## 4役すべてのpass後の整合確認
 

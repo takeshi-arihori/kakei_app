@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { extname, join, relative } from 'node:path';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -50,11 +50,7 @@ const skillFiles = (await collectFiles(join(root, '.agents', 'skills'))).filter(
   (path) => normalizePath(path).endsWith('/SKILL.md'),
 );
 
-const evaluatorFiles = (await collectFiles(join(root, '.codex', 'agents'))).filter(
-  (path) => extname(path) === '.toml',
-);
-
-for (const path of [...skillFiles, ...evaluatorFiles]) {
+for (const path of skillFiles) {
   const source = await readFile(path, 'utf8');
   const repositoryPath = normalizePath(relative(root, path));
 
@@ -84,5 +80,5 @@ for (const path of ruleReferences) {
 }
 
 console.log(
-  `Skill governance check passed (${skillFiles.length} skills, ${evaluatorFiles.length} evaluators)`,
+  `Skill governance check passed (${skillFiles.length} skills)`,
 );

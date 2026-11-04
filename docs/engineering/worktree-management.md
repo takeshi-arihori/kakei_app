@@ -12,10 +12,10 @@
 
 ## 作成方法
 
-希望する保存先を受け付けるworktree toolがあれば、その機能でProject rootの`.worktree/<用途>/`を指定する。Codexのmanaged worktree作成機能が保存先を指定できず、Project外の管理Directoryに作成する場合は、このProjectの保存先ruleを満たさない。`.worktree/`を求める作業では、primary checkoutからGitの`worktree add`を使い、保存先を明示する。
+希望する保存先を受け付けるworktree toolがあれば、その機能でProject rootの`.worktree/<用途>/`を指定する。保存先を指定できず、Project外の管理Directoryに作成する機能は、このProjectの保存先ruleを満たさない。`.worktree/`を求める作業では、primary checkoutからGitの`worktree add`を使い、保存先を明示する。
 
 ```bash
-git worktree add -b codex/feat-issue-number-short-name \
+git worktree add -b feat/issue-number-short-name \
   .worktree/issue-number-short-name origin/develop
 ```
 
@@ -24,6 +24,5 @@ git worktree add -b codex/feat-issue-number-short-name \
 ## 後片付け
 
 - 終了前に、worktreeに未保存の変更がないこと、関連する作業やProcessが残っていないことを確認する。
-- Managed Codex worktreeはCodexのarchive機能を使う。
 - 手動作成したworktreeは、未commit変更・未push Commitを確認し、必要な状態が保存済みの場合に限り`git worktree remove`で削除する。
 - 作業中のworktree、変更を未確認のworktree、primary checkoutは削除しない。

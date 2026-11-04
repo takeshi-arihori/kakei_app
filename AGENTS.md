@@ -49,7 +49,6 @@ Directoryの責務と採用技術はRepository docsを正本とする。Rootで�
 - `docs`: 静的な仕様・設計・Rule
 - `.worktree`: Project rootに置く、Git管理外の追加Worktree
 - `.agents/skills`: 再利用可能な作業Workflow
-- `.codex`: Project-local Codex Harness／custom agent設定
 
 具体的なArchitecture、Layer、Directory配置、Protocol、Data Store、Coding Ruleは[開発ガイド](docs/engineering/README.md)から対象文書を読む。
 
@@ -94,9 +93,9 @@ Ready TaskのDelivery
 - 依存Task／PRとStacked PRは[PR依存関係Gate](docs/engineering/pr-dependency-gate.md)に従う。
 - 採用済みDecisionを変更する場合、AIが暗黙にAccepted扱いしない。
 
-## 独立Evaluator Harness
+## 独立Evaluator
 
-Project-local custom agentは`.codex/config.toml`で宣言する。
+役割と契約はRepository docsを正本とする。Client上の実行定義は未配置で、配置先はOwner Decision待ちである。
 
 - `work_planning_evaluator`: 要求・設計・Epic／Task／Dependencies／Ready判定をread-onlyで独立評価
 - `code_reviewer`／`test_reviewer`／`spec_reviewer`／`security_reviewer`: 実装後の最新対象をそれぞれ独立にread-onlyで評価。共通契約と上限・停止条件は[4専門Review](docs/engineering/implementation-review.md)に従う。
@@ -112,7 +111,7 @@ Branch、Commit、PR、Squash merge、公開前確認、PR Template、文書同�
 - 追加WorktreeはProject rootの`.worktree/<用途>/`へ置き、Worktree内に入れ子で作らない。
 - 作成前にProjectのprimary checkoutを特定し、既存Worktree／Branch、dirty state、base Commitを確認する。
 - Project rootの`.gitignore`に`/.worktree/`を設定し、作成予定Pathが`git check-ignore`で除外されることを確認するまで作成しない。
-- Codex managed worktreeで保存先を指定できない場合は、runbookに従って保存先を明示した`git worktree add`を使う。後片付けもrunbookに従う。
+- 保存先を指定できないWorktree機能は使わず、runbookに従って保存先を明示した`git worktree add`を使う。後片付けもrunbookに従う。
 
 Root Gateとして次だけを守る。
 
