@@ -1,4 +1,0 @@
-interface:
-  display_name: "GitHub Task実装（旧名互換）"
-  short_description: "Notionへ接続せずReady済みGitHub Taskを実装する"
-  default_prompt: "$implement-notion-task を互換入口として使い、Ready済みGitHub Taskを実装してください。"

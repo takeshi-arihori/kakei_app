@@ -20,7 +20,7 @@ Secret、認証情報、内部Security情報を検出した場合、または加
 
 ## 生成と目視Review
 
-生成物は最初にTask専用の一時Directoryへ保存する。Repositoryへ保存する前に、画像は実寸、PDFは全Pageを表示して視覚確認できる形で確認する。生成担当のAIがToolで表示して確認した場合は`Reviewer: Codex visual inspection`と記録する。利用者またはPR ReviewerのAcceptanceとは区別し、本人が確認していないものをHuman reviewedと報告しない。
+生成物は最初にTask専用の一時Directoryへ保存する。Repositoryへ保存する前に、画像は実寸、PDFは全Pageを表示して視覚確認できる形で確認する。生成担当のAIがToolで表示して確認した場合は`Reviewer: AI visual inspection`と記録する。利用者またはPR ReviewerのAcceptanceとは区別し、本人が確認していないものをHuman reviewedと報告しない。
 
 確認項目:
 

@@ -146,6 +146,14 @@ pre-investigation
 
 Epic／Taskを保存する前に、新しい`work_planning_evaluator`へD0〜D2のEvidence、Requirement、Done Criteria、設計、作業分解案、Dependencies、Decisionを渡す。
 
+確認観点:
+- Problem、期待成果、制約、対象外が明確で、要求の妥当性を現状Evidenceと照合しているか
+- Requirementと観測可能なDone Criteriaへ落とせているか
+- 現行仕様、既存Code、Test、Accepted ADRとのGapと影響範囲を調査しているか
+- 既存Epic／Taskとの重複や包含関係を確認しているか
+- Epic／Taskの粒度、Dependencies、実装順序、並列・順次・Stacked PRの判断とMerge順序が関連docsに整合するか
+- 未決DecisionをClarificationまたはADRへ分離し、Ready判定がDelivery Ruleを満たすか
+
 - `pass`: D4へ進む。
 - `fail`: 親AgentがPlanningを修正し、新しいEvaluatorで再評価する。
 - `blocked`: Owner Decision、権限、正本Conflict等を解消するまで依存作業を止める。
@@ -217,7 +225,7 @@ Done Criteriaが残る場合はI1へ戻り、次の最小Caseを進める。
 
 Self Reviewと最終検証後、`implement-github-task`が最新評価対象を固定し、`code_reviewer`、`test_reviewer`、`spec_reviewer`、`security_reviewer`をそれぞれ新しい独立Threadで起動する。
 
-入力／結果契約、実効read-only、修正上限、停止条件、Evidenceは[4専門Review](implementation-review.md)を正本とする。従来の`task_evaluator`はこの4役で置換し、二重実行しない。D3の`work_planning_evaluator`は維持する。
+入力／結果契約、実効read-only、修正上限、停止条件、Evidenceは[4専門Review](implementation-review.md)を正本とする。D3の`work_planning_evaluator`は維持する。
 
 - 全員pass: 同じ最新対象でFinding／不足Evidenceがないことを確認しI6へ進む。
 - fail: 親がFindingを元Evidence付きで統合し、Scope内の最小修正、Test／QA、Self Reviewを行う。4役すべてを新Threadで再実行する。

@@ -1,10 +1,10 @@
 # 実装の4専門Review
 
-[Issue #206](https://github.com/takeshi-arihori/kakei_app/issues/206)のI5契約。工程は[Engineering Loop](engineering-loop.md)、実行方法は[Harness](codex-harness.md)に従う。
+[Issue #206](https://github.com/takeshi-arihori/kakei_app/issues/206)のI5契約。工程は[Engineering Loop](engineering-loop.md)に従う。Client上の実行定義は未配置で、配置先はOwner Decision待ちである。
 
 ## 責務と移行
 
-I5は4つの独立判定を必須とする。従来の`task_evaluator`を4役へ置き換え、登録と現行の呼出しを削除する。互換用の第5Reviewerは設けない。過去の実動記録は履歴として保持する。D3の`work_planning_evaluator`は維持する。
+I5は4つの独立判定を必須とする。互換用の第5Reviewerは設けない。D3の`work_planning_evaluator`は維持する。
 
 | Role | 確認すること |
 | --- | --- |
@@ -69,15 +69,7 @@ Blocker／Majorまたは不足Evidenceが残る場合は`pass`にしない。Act
 
 ## 実効read-only
 
-Role TOMLの`sandbox_mode = "read-only"`だけでは十分でない。親の実行時Overrideと外部Toolの継承を照合する。
-
-1. 専用CLI Sessionを`read-only`、承認Policy `never`で起動する。
-2. Shell、Apps、Plugins、操作型Browser／Computer、画像生成、Goal、Hook、Worktree等を無効化し、設定済みMCP等の外部書込み経路も確認・無効化する。
-3. Issue／docs／Diff／Testの内容を自己完結した入力として渡す。
-4. 各子のRole名、Thread ID、実効Sandbox／Policy、利用可能Tool一覧、実際のTool呼出しを別々に確認する。
-5. 安全な一時File作成Probeの拒否とFile不在を確認する。実GitHubへの書込みProbeは行わない。
-
-外部書込みTool、Shell／command executor等の実効書込み経路が利用可能な場合は未使用でも不合格。`apply_patch`等が列挙されても、実効Sandbox／承認Policyと安全な拒否Probeで書込み不能を確認した場合は、利用可能な書込み権限とは数えない。Tool名の存在と実効権限を区別する。Toolを列挙できない、設定と実効権限が一致しない、正本へアクセスできず内容もない場合は`blocked`。通常の親を恒久的にread-onlyへ変更しない。並列枠が不足する環境では4つの別Threadを逐次起動してよい。既定Model／Reasoningや並列上限はRepositoryへ固定しない。
+Reviewerは書込み権限のない実行環境で動かす。Role定義のread-only指定だけでは十分でないため、使用Clientの実効権限とTool一覧を確認する。Shell、外部書込みTool等の書込み経路が残る、または確認できない場合は`blocked`とする。実GitHubへの書込みProbeは行わない。通常の親を恒久的にread-onlyへ変更しない。並列枠が不足する環境では4つの別Threadを逐次起動してよい。既定Model／Reasoningや並列上限はRepositoryへ固定しない。
 
 ## 自律修正とDraft PR Gate
 
@@ -104,8 +96,7 @@ PR Ready化・Mergeは利用者の明示依頼が必要。Draft PR前に、評�
 
 静的検証と実動検証を分ける。
 
-- TOML構文・Schema・Role参照、文書Link／Skill frontmatter、技術Ruleの非重複を検証する。
-- 決定的なGate検証で全員pass、fail、blocked、欠落／重複／古い対象／Thread再利用、3回の修正上限を確認する。
+- 文書Link／Skill frontmatter、技術Ruleの非重複を検証する。
 - 安全な合成CaseでCode Defect、Test不足、仕様未実装、架空の秘密情報の漏洩を担当Roleが検出することを確認する。
 - 親が合成Caseの実File／入力を修正してTestを実行し、新Threadの4役が同じ修正後対象へpassするLoopを最低1回記録する。
 - 実Taskの最終Diffは合成Caseとは別に新しい4役で評価する。合成Caseのpassを実Taskへ流用しない。
@@ -114,7 +105,3 @@ PR Ready化・Mergeは利用者の明示依頼が必要。Draft PR前に、評�
 公開EvidenceはClient／Version、Base／Diff、Role／親子Thread ID、Cycle、時系列、原結果、修正、検証結果、権限・Tool確認、Gate判断を必要最小限で記録する。個人設定、認証情報、Private Projectの生データ、Session全文、実在個人・金融情報を公開しない。GitHubへ保存した状態は再取得し、期待したIssue／PR追跡を確認する。
 
 Planning段階では、現行roleで隔離方式の成立と設計・検証計画を確認する。新4役の起動・権限・E2Eは実装後の受入条件であり、未実装の成功をReady条件として先取りしない。実装後の未達条件はI5／Draft PRを止める。
-
-## 集計補助の境界
-
-`pnpm review:check`は契約Test、`pnpm review:gate -- <記録JSON>`は次工程の集計補助。記録形式と終了Codeは[Harness](codex-harness.md)を参照する。親がEvidence参照先・Hash・実効権限・最新対象を実物と照合してから使い、ScriptのpassだけでSandboxやReviewの実施を証明したとは扱わない。

@@ -13,7 +13,7 @@ Node 24+（`mise.toml`）、pnpm 10.15.1、Turborepo。DBはDocker Compose。
 ```bash
 cp .env.example .env && pnpm install && pnpm db:up   # 初期構築（db:down / db:ps / db:logs）
 pnpm dev            # Web(:3000)とAPI(:3001)を並列起動
-pnpm check          # CI相当の全検証（skill-governance, review gate, api-docs, codegen:check, lint, typecheck, test, build）
+pnpm check          # CI相当の全検証（skill-governance, api-docs, codegen:check, lint, typecheck, test, build）
 pnpm lint | typecheck | test | build | test:e2e
 pnpm codegen        # apps/api/schema.graphql からAPI Resolver型とWeb Operation型を生成（codegen:checkで差分検査）
 pnpm api-docs:check # docs/api/openapi.yaml の検証
