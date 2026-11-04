@@ -37,45 +37,71 @@ Knowledge State: **Proposal（未採用・実装前）**。対象は [#244](http
 - [ ] 実装・関連 docs をセルフレビューし、最新対象について code / test / specification / security の4専門レビューを実施する。指摘の修正後は必要な再検証を行う。
 - [ ] #245 の Restore、公開契約・画面、および具体 Provider / Backup / 監視の既存 Gate を維持する。PR の Ready 化・Merge は別の明示依頼を要する。
 
-## 設計Proposal: #244の分割とOpen Questionの推奨案
+## 設計Proposal: #244の分割とOpen Questionの推奨案（改訂3）
 
-Knowledge State: **Proposal（未採用）**。以下は独立Planning評価とOwner確認の入力であり、Accepted Decisionではない。評価でfailまたはOwnerが別案を選んだ場合は本節を修正する。実装は個別Ready後にだけ始める。
+Knowledge State: **Proposal（未採用）**。本節は独立Planning評価とOwner確認の入力であり、Accepted Decisionではない。評価は2回failし（初回: 型拡張の前提誤りと分割粒度、2回目: R5との整合・再開入口・封鎖順序・docs分配・停止契約の検証）、指摘を反映して改訂した。ADR追補がAcceptedになるまでTaskをReadyにしない。
 
-### Open Questionの推奨案
+### 現状コードの事実（評価で追加確認）
 
-| #   | 論点                      | 推奨案                                                                                                                                                                                                                    | 根拠 / 未確認                                                                                                       |
-| --- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| 1   | 孤立scopeの完全列挙       | コード専用の列挙Portを既存の`recipient-code-key-lifecycle.ts`系へ追加する。固定snapshotのPage＋所有cursorで、`codeId`・束縛Actor・期限・inventory版を返す（既存`pendingActorDeletionPage`と同型）。DB行の有無に依存しない | 既存のActor票走査と同じ欠落検出の考え方を再利用できる。新Port契約は新しい設計判断のため独立評価の対象               |
-| 1b  | 遅延`allocate`の封鎖      | `allocate`へ束縛Actorを必須入力にし、対象Actorの削除ticket登録後は同Actorの新規割当をProviderが恒久拒否する                                                                                                               | 既存`allocate`は孤立scopeに期限を保持するが、Actor束縛と削除後の拒否は未定義                                        |
-| 1c  | scope型                   | ticketのscopeを表す`AuthenticationKeyScope.recordKind`だけへ`'recipient-code'`を追加し、Record暗号用の`AuthenticationRow['recordKind']`とAAD/Codecは変更しない                                                            | `AuthenticationKeyScope`の使用箇所は保守Port/Adapter/Fixtureに限られる見込みだが、実装前の影響確認が必要（Aで確認） |
-| 2   | 旧形式のdurable inventory | #244では移行しない。未知scope・列挙不完全・版不一致はfail closedで停止し、必要性が確認された場合は#245／Production Gateで別途判断する                                                                                     | 実環境の有無は未確認のまま                                                                                          |
-| 3   | Actor無効化時点           | `authentication.actor.disabled_at_ms`（MAC検証済みActor行）をActor Lock下で読み、`dueAt=min(expiresAt, terminalAt, disabledAt)`へ含める                                                                                   | 列は`0005`で存在を確認済み。清掃側のActor Lock順序との整合はBで再検証する                                           |
+- `AuthenticationKeyScope.recordKind`は`AuthenticationRow['recordKind']`（identity/attempt/session）と同じ型で、Record暗号のDEK Port（`allocateForSeal`/`readKey`/`requestRotation`）とRecord Codecにも使われる。保守専用の型ではない。
+- 実行時ガード`authenticationMaintenanceScope`は3種以外を拒否する。コードscopeは「保守に含まれない」のではなく**明示的に拒否される**。これが旧保守Reader/Writerの未知用途拒否の実体である。
+- PG清掃の`absent`は`google-identity`/`session`以外を`login_attempt`として照会する暗黙分岐を持つ。清掃Serviceも`google-identity`以外の全scopeをCredentialとして破棄する。型の拡張だけでは誤った表を照会し、Actor削除Workflowを経ずに破棄し得る。
+- ticket系`AuthenticationKeyDestructionPort`（scope単位の`destroy(ticket)`）とコード系`RecipientCodeMacKeyLifecyclePort`（`inventory`/`closeAllGenerations`/`verifyClosure`）は別契約で、橋渡しは未定義。既存の清掃Serviceはコード用の再開入口を持たない（`deleteExpired`と`pendingCredentials`だけを走査する）。
+- 削除Serviceと`prepareAuthenticationDestruction`は`google-identity`1件を前提に、`authenticationMaintenanceScope`で検証した期待scope集合との完全一致を要求する。
+- PG清掃AdapterはActor行を`FOR SHARE SKIP LOCKED`で読み、`digests.verifyActorState`でMAC検証してから使う。`disabled_at_ms`は`0005`に存在する。
 
-### 分割と依存
+### 推奨案
+
+| #   | 論点                      | 推奨案                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 区分                                                                 |
+| --- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 1   | scope型と経路             | `AuthenticationKeyScope`・DEK Port・Codec・`authenticationMaintenanceScope`は**変更しない**。コード専用の`RecipientCodeKeyScope`（codeId＋束縛Actor）と、コード専用のticket/保守Portを新設する。通常の保守Reader/Writer経路へはコードscopeを混入させない                                                                                                                                                                                                                                                                         | 新Decision（ADR追補）                                                |
+| 1b  | Actor削除への参加         | R5は全recipient-codeを既存のPrepared/Checkpoint/Witness/全世代closureへ参加させると定める。形式を変えず、同`operationId`に紐づくコード専用の別ticketを明示的な別入口で参加させる案を推奨する。Ledgerの削除Prepared/Completeは変更せず、削除Completeの前提条件として「コードticketの全scope closure検証とDB 0-row」を加える。Ledger/Witness形式を拡張する案（既存ticketのdigestへコード側digestを束縛する、Prepared record自体を拡張する）はR5の再解釈・形式変更になるため採らない。この選択がR5を満たすかは**ADR追補で判断する** | 新Decision（ADR追補。R5の解釈）                                      |
+| 2   | ticketとclosureの橋渡し   | コード専用Portがticketを発行し、各codeIdの`inventoryRevision`をticketへ保持する。各scopeを`closeAllGenerations({codeId, operationId, inventoryRevision, deadlineAt})`→`verifyClosure`で閉じる。`deadlineAt`は**コードごと**に`min(expiresAt, terminalAt, disabledAt)+24h`とし、ticketのwindowは**最早dueAt**を使う（バッチ内の最早期限を最遅へ延ばさない）。全scopeのclosure検証とDB 0-rowの両方が揃うまで完了にしない                                                                                                           | 具体化（既存`closeAllGenerations`の入力に一致。形はADR追補に含める） |
+| 2b  | 再開入口                  | コード専用Portに`pending(limit)`、`find`、`scopes`を置き、コード専用の清掃入口（既存の認証清掃とは別のUse Case）がticketから各codeIdのinventoryRevisionを復元して同operationを再照合する。コードticketを既存の`pendingCredentials`へ載せない                                                                                                                                                                                                                                                                                     | 新Decision（ADR追補）                                                |
+| 3   | 孤立scope列挙             | コード専用Portに固定snapshotのPage＋所有cursorを持つ列挙（codeId・束縛Actor・期限・inventory版）を置く。「票のないscopeの完全列挙」はProviderの新しい完全性保証であり、既存のActor票走査とは別契約とする。保証できない場合は空成功にせず、未知scope・列挙不完全は停止する（受け入れ基準に含める）                                                                                                                                                                                                                                | 新Decision（ADR追補）                                                |
+| 4   | 遅延`allocate`封鎖        | `allocate`へ束縛Actorを必須入力にする。契約の順序は「Actor単位の封鎖登録→列挙snapshot」で、封鎖後の`allocate`はAck `unavailable`とする。署名変更と合成Provider・既存呼出元（`recipient-code-transition-writer.ts`等）の改修は**A**で行う。Actor束縛のない既存割当はfail closed（合成Providerのみで実環境の既存分は#5）。封鎖の統合検証は**C**                                                                                                                                                                                    | 新Decision（ADR追補、実ProviderはProduction Gate。#238契約の変更）   |
+| 5   | 旧形式のdurable inventory | #244では移行しない。未知scope・列挙不完全・版不一致はfail closedで停止する。実環境の有無は**未確認**で、必要なら#245／Production Gateで判断する                                                                                                                                                                                                                                                                                                                                                                                  | 既存設計の範囲内                                                     |
+| 6   | Actor無効化時点           | MAC検証済みの`authentication.actor.disabled_at_ms`（既存清掃AdapterのActor `FOR SHARE`＋`verifyActorState`経路）をActor Lock下で読み`dueAt=min(expiresAt, terminalAt, disabledAt)`へ含める。Lock順はhint→Actor→code                                                                                                                                                                                                                                                                                                              | 既存設計の具体化                                                     |
+
+分類の根拠: 既存の`closeAllGenerations`入力をそのまま使う橋渡し（案2）は具体化、型・経路、R5参加、再開入口、列挙保証、`allocate`契約変更は新しいPort契約またはR5の解釈であり、AIがAccepted扱いにしない。
+
+### 旧保守Writerの停止契約（記述場所・条件・検証）
+
+- 条件: `authenticationMaintenanceScope`と既存の保守経路は`recipient-code`を拒否し続ける。コード用途は新Portだけが扱う。旧Writerが`quarantine`/overdue封鎖の後に利用受付へ戻らないこと、`key_state`を`active`へ戻さないことを契約とする。コードの利用受付が`key_state`／epochと連動する経路は**未確認**で、Aで実コードとRestore設計を確認し、根拠となる機構（key-state/epoch/fence）を文書へ明記する。確認できない場合はOpen Questionとして設計へ戻す。
+- 記述場所: 新Portのdoc comment、認証保守README、Runbook、capability matrix。
+- 検証: 「既存保守経路が`recipient-code`scopeを拒否する」Red、および旧Writer共存時に封鎖状態から受付が再開しないTestをAで固定し、Bで清掃経路へ拡張する。#245のRestore固有の再開禁止は渡す。
+
+### 分割（縦切り）と依存
 
 ```text
-#244-A（型・Port・合成Provider） ──▶ #244-B（清掃） ──▶ #244-C（Actor削除・競合統合・docs）
+#244-A（型分離・Port・合成Provider・allocate署名＋最小縦切り） ──▶ #244-B（清掃の本格化） ──▶ #244-C（Actor削除統合）
 ```
 
-各分割は直接Base `develop`の通常PRとし、Stacked PRにはしない。前提がdevelopへ統合された後にRedを再確認して個別Ready評価する。新Issue作成・Project登録は独立評価passとOwner承認の後に行い、本節だけを根拠に作成済みとは扱わない。
+各分割は直接Base `develop`の通常PRで、Stacked PRにはしない。前提がdevelopへ統合された後にRedを再確認して個別Ready評価する。待ち時間と再確認のコストは見積へ含める。docs・Runbookは各PRで実装と同じ変更として同期する。新Issue作成・Project登録は独立評価passとOwner承認の後に行う。
 
-| 分割 | Scope                                                                                                                                                              | 主なDone Criteria対応                          | 主な検証                                                                                |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------------------- |
-| A    | ticket scope型の拡張、コード専用の列挙Portと遅延割当封鎖の契約、全世代closure契約のticket束縛、合成Provider Fixture、旧保守Writerの未知用途拒否の維持確認          | 全世代破棄/ticket契約、旧Writer停止契約        | 型・契約Unit、Fixture契約Test（Provider障害・偽closure・部分世代・版不一致・未知scope） |
-| B    | PG清掃Adapter／清掃Serviceのコード対応。hint→Actor→code SKIP LOCKED/CAS、dueAt再検証、ticket登録→行除去→全世代closure→0-row、overdue封鎖、コード利用の即時拒否維持 | dueAt/Lock順、ticket順序、overdue              | 実PG（期限直前/等値/後、2接続の再発行・消費・取消競合）、故障注入、24h未達              |
-| C    | 削除Coordinator／Prepared・Ledger・Witness inventoryへの全コード組込み、Actor無効化との競合、GM Invitation/proof鍵を巻き込まない確認、Runbook/docs同期             | Actor削除inventory、競合・故障・応答喪失、docs | 実PG+合成Provider（全世代の途中失敗、commit応答喪失、削除と清掃の競合）、V07/V12/V16    |
+| 分割 | Scope                                                                                                                                                                                                                                                | 受け入れ基準（Done Criteria対応）                                                                                                  | 検証                                                                                                                       |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| A    | コード専用scope型・ticket・保守Port契約、合成Provider、`allocate`署名変更と既存呼出元改修、停止契約の記述・拒否Red・再開しないTest、**縦切り**: 期限切れコード1件をticket登録→行除去→全世代closure→0-rowまで実PGで完了、契約docs・停止契約docsの同期 | 全世代破棄/ticket順序（一世代/0-rowだけで完了としない）、旧Writer停止契約、列挙保証の失敗は空成功にならない                        | 契約Unit、実PG（最小縦切り）、Fixture契約（偽closure・部分世代・版不一致・未知scope・列挙不完全・Provider障害）、build通過 |
+| B    | 清掃の本格化: dueAt（disabledAt含む）再検証、hint→Actor→code SKIP LOCKED/CAS、小Batch、孤立scope清掃、overdue封鎖、再開入口、Runbook同期                                                                                                             | dueAt/Lock順、**コード利用がdisabled・期限等値/後でBatchを待たず拒否される（実PGの受け入れ基準）**、overdue、2接続競合、再開しない | 実PG（期限直前/等値/後、再発行・消費・取消の2接続競合）、故障注入（SQL/Provider/**Audit**/commit応答喪失）、24h未達        |
+| C    | Actor削除の別入口でのコードticket参加（削除Complete前提）、封鎖の統合検証、削除と清掃の競合、GM Invitation/proof鍵を巻き込まない確認、通常環境へwireされない確認、docs/capability matrix同期                                                         | Actor削除inventory（R5のADR判断に従う）、封鎖、競合・故障、docs、wireしない                                                        | 実PG＋合成Provider（途中失敗、commit応答喪失、競合、**Audit**障害）、wireしないことのTest、V07/V12/V16                     |
 
-### 共通の制約
+disabled Actorの新規消費拒否は既存の消費Writer（#243）が所有する。#244は期限等値/後・disabledでの拒否がBatch清掃を待たないことを回帰として固定するだけで、拒否ロジックの新設はしない。
 
-- 通常main/Dev/Productionへコード機能をwireしない。Scheduler・Provider・IAM・退会UIは追加しない。
-- Restore専用の処理は#245へ残す。合成Providerの成功を実Provider耐久性・本番Capabilityの証拠として扱わない。
-- GM Invitation・過去Actor参照・成功operation・proof鍵をcascadeや早期破棄の対象にしない。認証からGM Tableを直接参照しない。
+### 見積
+
+初期見積2人日/5SPは分割後の合計に対して過小と評価された。暫定: A 3人日/8SP、B 3人日/8SP、C 3人日/8SP。個別Readyで再評価し、SPへ自動換算しない。
+
+### Decision候補と未確認
+
+- ADR追補が必要: 推奨案1・1b・2b・3・4。AIはAccepted扱いにしない。
+- Owner Decision候補: Aを縦切りにする粒度。
+- 未確認: 実環境の旧形式durable inventory、コードの利用受付と`key_state`／epochの連動、Providerがコードticketを保持する実運用、「事前検証と限界」の回帰件数（基準developが異なり再現していない）。
 
 ### 評価へ渡す確認点
 
-1. 推奨案1〜3はAccepted ADRの範囲内の具体化か、新しいDecisionか。
-2. A/B/Cの分割と依存は、各1 Deliverableとして妥当な粒度か（初期見積2人日/5SPの再評価を含む）。
-3. 実装前に追加の設計文書（ADR追補）が必要か。
+1. 推奨案1・1b・2b・3・4をADR追補で扱う前提で、Proposalは完結しているか。
+2. A/B/Cの縦切りと受け入れ基準はDone Criteriaを漏れなく重複なく覆うか。
+3. 事実記述と分類に誤りがないか。
 
 ## 事前検証と限界
 
