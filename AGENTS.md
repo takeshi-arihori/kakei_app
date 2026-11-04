@@ -49,6 +49,7 @@ Directoryの責務と採用技術はRepository docsを正本とする。Rootで�
 - `docs`: 静的な仕様・設計・Rule
 - `.worktree`: Project rootに置く、Git管理外の追加Worktree
 - `.agents/skills`: 再利用可能な作業Workflow
+- `.claude/agents`: 独立Reviewer／Evaluatorの定義
 
 具体的なArchitecture、Layer、Directory配置、Protocol、Data Store、Coding Ruleは[開発ガイド](docs/engineering/README.md)から対象文書を読む。
 
@@ -95,12 +96,12 @@ Ready TaskのDelivery
 
 ## 独立Evaluator
 
-役割と契約はRepository docsを正本とする。Client上の実行定義は未配置で、配置先はOwner Decision待ちである。
+定義は`.claude/agents/`に置く。
 
-- `work_planning_evaluator`: 要求・設計・Epic／Task／Dependencies／Ready判定をread-onlyで独立評価
-- `code_reviewer`／`test_reviewer`／`spec_reviewer`／`security_reviewer`: 実装後の最新対象をそれぞれ独立にread-onlyで評価。共通契約と上限・停止条件は[4専門Review](docs/engineering/implementation-review.md)に従う。
+- `work-planning-evaluator`: 要求・設計・Epic／Task／Dependencies／Ready判定をread-onlyで独立評価
+- `code-reviewer`／`test-reviewer`（常に）、`security-reviewer`（条件付き）: 実装後の対象をそれぞれ独立にread-onlyで評価。起動条件、共通契約、上限・停止条件は[独立Review](docs/engineering/implementation-review.md)に従う。
 
-親AgentだけがCode、文書、GitHub状態を変更する。Planning Evaluatorの`fail`は親Agentが修正し、新しいEvaluatorで再評価する。実装Reviewの`fail`は親AgentがScope内で修正・再検証し、4役すべてを**新しいThread**で再評価する。`blocked`は阻害要因を解消するまで依存作業を止める。PlanningはEvaluatorの`pass`、実装は同じ最新対象の4役すべての`pass`かつFinding／不足Evidenceなしの場合だけ次のDelivery段階へ進む。
+親AgentだけがCode、文書、GitHub状態を変更する。Planning Evaluatorの`fail`は親Agentが修正し、新しいEvaluatorで再評価する。実装Reviewの`fail`は親AgentがScope内で修正・再検証し、`fail`したRoleが修正差分を再評価する。`blocked`は阻害要因を解消するまで依存作業を止める。PlanningはEvaluatorの`pass`、実装は最新対象を確認した対象Roleすべての`pass`かつFinding／不足Evidenceなしの場合だけ次のDelivery段階へ進む。
 
 ## Git・Pull Request
 
@@ -118,7 +119,7 @@ Root Gateとして次だけを守る。
 - `develop`を統合Branchとし、直接Pushしない。
 - 1 Task／1 Branch／1 PRを基本とする。
 - Commitはレビュー可能な論理単位にする。
-- PR作成前にSelf Reviewと4役の独立Reviewを完了する。
+- PR作成前にSelf Reviewと独立Reviewを完了する。
 - PR Ready化・Mergeは利用者の明示依頼がある場合だけ行う。
 
 ## 完了条件
@@ -128,7 +129,7 @@ Root Gateとして次だけを守る。
 - 関連docs、Issue、Schema、ADR、Runbook等の更新要否を説明できる。
 - 実行しなかった検証と残Riskを明示する。
 - Self Reviewで重大Findingが残っていない。
-- 同じ最新評価対象に対して4役すべてが`pass`し、実効read-onlyのEvidenceがある。
+- 最新評価対象を確認した対象Reviewerすべてが`pass`し、実効read-onlyのEvidenceがある。
 
 ## 詳細ルール
 

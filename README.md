@@ -94,10 +94,10 @@ docker compose up -d swagger-ui
 
 ### 独立Evaluator
 
-- Issueを保存する前に`work_planning_evaluator`でRequirement、Done Criteria、Design、Dependencies、Ready条件を確認します。
-- 実装後は最新Diff、Issue、検証結果、Self Reviewを4専門Reviewerへ渡します。全員が`pass`でFindingと不足Evidenceがない場合だけDraft PRへ進みます。
-- `fail`は修正後に新しいEvaluatorで再評価し、`blocked`は阻害要因を解消するまで依存作業を止めます。
-- [4専門Reviewの契約](docs/engineering/implementation-review.md)
+- Issueを保存する前に`work-planning-evaluator`でRequirement、Done Criteria、Design、Dependencies、Ready条件を確認します。
+- 実装後は最新Diff、Issue、検証結果、Self Reviewを独立Reviewerへ渡します。全員が`pass`でFindingと不足Evidenceがない場合だけDraft PRへ進みます。
+- `fail`は修正後に修正差分を再評価し、`blocked`は阻害要因を解消するまで依存作業を止めます。
+- [独立Reviewの契約](docs/engineering/implementation-review.md)
 
 ## TypeScript
 

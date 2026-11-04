@@ -48,7 +48,7 @@ develop
 4. Reviewは各Taskの差分だけを確認できるよう、1 Task／1 PRを維持する。
 5. MergeはDependency Graphの上流から行う。
 6. 前提PRが`develop`へMergeされたら、直接後続PRを最新`develop`へrebase／updateし、Baseを`develop`へ変更する。
-7. 再base後の差分と検証結果が変わっていないことを確認し、必要ならSelf Reviewと4役すべての独立Reviewを新Threadで再実行する。
+7. 再base後の差分と検証結果が変わっていないことを確認し、必要ならSelf Reviewと、変わった差分の独立Reviewを再実行する。
 8. さらに後続Stackがある場合、各Branchを新しい親Headへ順番に追従させる。
 
 複数の独立前提を持つTaskは、可能なら前提PRを先にMergeしてから開始する。複雑な多親Stackを安易に作らない。
@@ -96,4 +96,4 @@ Task分解時に最低限次を記録する。
 - 期待するMerge順序
 - 前提Merge後に再実行する検証
 
-`work_planning_evaluator`はこの情報とRequirementを照合し、不要な直列化、欠落Dependency、逆順Mergeがないか独立評価する。
+`work-planning-evaluator`はこの情報とRequirementを照合し、不要な直列化、欠落Dependency、逆順Mergeがないか独立評価する。

@@ -31,7 +31,7 @@ Skillは特定の言語、DB、Framework、ORM、API Protocol、Runtimeを固定
 - [testing.md](testing.md): TDD、Test Level、検証Command、Done Criteria
 - [delivery-workflow.md](delivery-workflow.md): Epic／Task、Ready、Git、PR、文書更新
 - [worktree-management.md](worktree-management.md): Project root内の追加Worktree配置・作成・後片付け
-- [implementation-review.md](implementation-review.md): 4役の共通契約、実効権限、修正上限、Draft PR Gate
+- [implementation-review.md](implementation-review.md): Reviewerの起動条件、共通契約、修正上限、Draft PR Gate
 - [pr-dependency-gate.md](pr-dependency-gate.md): Task／PR依存とStacked PR
 - [stacked-pr-delivery.md](stacked-pr-delivery.md): gh-stackとRepository RuleのIntegration境界
 - [diagram-governance.md](diagram-governance.md): 正式図、Knowledge State、検討用入力との境界

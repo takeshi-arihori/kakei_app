@@ -4,7 +4,7 @@
 
 ## Proposal評価
 
-GitHubへ保存する前に、新しい`work_planning_evaluator`へproposalを渡す。同じEvaluator Threadを修正版の再評価に使わない。
+GitHubへ保存する前に、新しい`work-planning-evaluator`へproposalを渡す。同じEvaluatorを修正版の再評価に使わない。
 
 ReviewInputへ最低限含める。
 
@@ -32,7 +32,7 @@ Evaluatorはread-onlyとし、Issue／Projectの変更は親Agentだけが行う
 
 GitHub更新を依頼されている場合だけ、passしたproposalを保存する。保存後にIssue本文、Relation、Project Field、Status、URL等を再取得する。
 
-その実体を**別の新しい`work_planning_evaluator`**へ渡し、proposalどおり永続化されたかを評価する。
+その実体を**別の新しい`work-planning-evaluator`**へ渡し、proposalどおり永続化されたかを評価する。
 
 persisted評価がfailした場合は、親Agentが保存状態を修正して再取得し、さらに新しいEvaluatorで再評価する。blockedなら成功済み状態と阻害要因を報告する。
 

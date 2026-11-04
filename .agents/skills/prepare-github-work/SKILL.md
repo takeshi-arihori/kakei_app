@@ -59,7 +59,7 @@ D0〜D2のEvidenceが不足する場合、作業項目を推測で完成させ�
 
 ## 独立Planning Evaluator
 
-保存前に[独立Planning評価と保存確認](references/delivery.md)に従い、新しい`work_planning_evaluator`へproposalを渡す。
+保存前に[独立Planning評価と保存確認](references/delivery.md)に従い、新しい`work-planning-evaluator`へproposalを渡す。
 
 - `pass`: GitHub更新を依頼されている場合だけ保存へ進む。
 - `fail`: 親AgentがPlanningを修正し、新しいEvaluatorで再評価する。

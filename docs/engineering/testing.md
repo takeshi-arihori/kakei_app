@@ -141,6 +141,6 @@ CIは `pnpm check` のBuild後、Chromiumを `playwright install --with-deps chr
 - [セキュリティ設計](../product/design-gates.md)
 - [未確定事項・Documentation Conflict](../product/design-gates.md)
 
-## 4専門Review Gate
+## 独立Review Gate
 
-契約と停止条件は[4専門Review](implementation-review.md)に従う。`pnpm check`のpassでRoleの起動や実効read-onlyを証明したとは扱わない。
+契約と停止条件は[独立Review](implementation-review.md)に従う。`pnpm check`のpassでRoleの起動や実効read-onlyを証明したとは扱わない。

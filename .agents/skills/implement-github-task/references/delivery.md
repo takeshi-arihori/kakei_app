@@ -18,7 +18,7 @@ Independent Evaluatorへ渡す直前に、Task所有の変更だけを評価対�
 最低限記録する。
 
 - Base Commit／Branch
-- 評価対象Diffを一意に識別できるChecksumまたはCommit／Index情報
+- 評価対象Diffの`diffId`（形式は[独立Review](../../../../docs/engineering/implementation-review.md)に従う）
 - 変更File一覧
 - 作業Treeの状態
 - Requirement／Done Criteria
@@ -31,20 +31,20 @@ Independent Evaluatorへ渡す直前に、Task所有の変更だけを評価対�
 
 無関係な変更を評価対象へ混ぜない。
 
-## 4専門Reviewer Loop
+## 独立Reviewer Loop
 
 1. [共通契約](../../../../docs/engineering/implementation-review.md)からRole、入力、結果、修正上限と停止条件を取得する。
-2. 対象を固定し、内容付きの同じEvidenceを各Roleへ渡す。実効read-onlyを確認できなければ停止する。
-3. 新しい別Threadの4役を起動し、他のReviewerの結論を共有せず、原JSON・Thread・対象を保存する。
+2. 対象を固定し、同じEvidenceを各Roleへ渡す。実効read-onlyを確認できなければ停止する。
+3. 対象Roleを別のSubagentで起動し、他のReviewerの結論を共有せず、結果と対象を保持する。
 4. 結果を集計し、failは元Evidenceを維持して重複を統合する。`feature-development`で修正・再検証・Self Reviewを行う。
-5. 最新対象で4役すべてを新Threadへ渡す。blocked／上限では停止し、原因と未解決事項を報告する。
-6. 同じ最新対象の全員pass、Finding／不足Evidenceなしの場合だけDraft PRへ進む。
+5. failしたRoleへ修正差分を渡し、最後に最新対象を未確認のRoleへ差分を渡す。blocked／上限では停止し、原因と未解決事項を報告する。
+6. 最新対象を確認した全員のpass、Finding／不足Evidenceなしの場合だけDraft PRへ進む。
 
 PR Ready化／Mergeを自動化しない。
 
-## 4役すべてのpass後の整合確認
+## 全員のpass後の整合確認
 
-4役すべてが評価した同じ最新Diffと、実際にCommit／PushするDiffが同一であることを確認する。Hook、生成処理、Stage漏れ、追加修正等で差分が変わった場合は、その変更に必要な検証・Self Review・新しいEvaluator Cycleへ戻る。
+評価した最新Diffと、実際にCommit／PushするDiffが同一であることを確認する。Hook、生成処理、Stage漏れ、追加修正等で差分が変わった場合は、その変更に必要な検証・Self Review・差分の最終確認へ戻る。
 
 ## Commit／Push／Draft PR
 
@@ -52,7 +52,7 @@ PR Ready化／Mergeを自動化しない。
 
 1. 公開対象へ無関係な変更や公開不可情報がないことを確認する。
 2. レビュー可能な論理単位でCommitする。
-3. 4役がpassしたDiffとの一致を再確認する。
+3. ReviewerがpassしたDiffとの一致を再確認する。
 4. Task BranchをRemoteへPushする。
 5. 同TaskのOpen PRがなければDraft PRを作成し、既存Open PRがあれば更新する。
 6. Dependencyがある場合は正しいBaseと`Depends-On`を設定する。

@@ -43,19 +43,19 @@ ReadyでないTask、未承認Decisionに依存するTask、前提Dependencyを�
 
 `feature-development`が必要な調査・設計・TDD・実装・検証・Self Reviewを組み合わせる。
 
-## I5. 4専門Reviewer Loop
+## I5. 独立Reviewer Loop
 
-Self Review後、[検証・独立評価・Draft PR](references/delivery.md)に従って最新対象を固定し、4つの専門Roleを別Threadで起動する。共通入力／結果、起動境界、修正上限と停止条件は[4専門Review](../../../docs/engineering/implementation-review.md)から取得する。
+Self Review後、[検証・独立評価・Draft PR](references/delivery.md)に従って最新対象を固定し、対象Roleを別のSubagentで起動する。起動条件、共通入力／結果、修正上限と停止条件は[独立Review](../../../docs/engineering/implementation-review.md)から取得する。
 
-原結果を保持して集計する。failでは`feature-development`へScope内修正・再検証・Self Reviewを返し、4役すべてを新しいThreadで再評価する。blocked／上限では依存Deliveryを停止する。同じ最新対象の全員passかつFinding／不足Evidenceなしの場合だけI6へ進む。
+結果を集計する。failでは`feature-development`へScope内修正・再検証・Self Reviewを返し、failしたRoleが修正差分を再評価する。blocked／上限では依存Deliveryを停止する。最新対象を確認した対象Role全員のpassかつFinding／不足Evidenceなしの場合だけI6へ進む。
 
 Reviewerはread-only。旧Evaluatorを追加で起動せず、Planningの独立評価は維持する。
 
 ## I6. Draft PR
 
-同じ最新対象の4役すべてのpass後だけ、RepositoryのDelivery Ruleに従ってCommit、Push、Draft PR、Issue追跡を完了する。
+最新対象を確認した対象Roleすべてのpass後だけ、RepositoryのDelivery Ruleに従ってCommit、Push、Draft PR、Issue追跡を完了する。
 
-Stacked PRの場合は`stacked-pr-delivery`へ最新Diff、Task、直接Base、Dependency、Evaluator結果を渡し、[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)に一致するPR Base、`Depends-On`、Stack順序を維持してDraft PRを作成・検証する。Stack操作で評価対象Diffが変化した場合は、同Skillの再検証条件に従ってSelf Reviewと4役すべての新しいThreadでのReviewまで戻す。
+Stacked PRの場合は`stacked-pr-delivery`へ最新Diff、Task、直接Base、Dependency、Evaluator結果を渡し、[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)に一致するPR Base、`Depends-On`、Stack順序を維持してDraft PRを作成・検証する。Stack操作で評価対象Diffが変化した場合は、同Skillの再検証条件に従ってSelf Reviewと変わった差分のReviewまで戻す。
 
 PR Ready化・Mergeは利用者の明示依頼がある場合だけ行う。
 
@@ -75,7 +75,7 @@ PR Ready化・Mergeは利用者の明示依頼がある場合だけ行う。
 
 - Taskと最終DiffをTraceできる。
 - 必要なSelf ReviewとVerificationが完了している。
-- 最新評価対象に対して4役すべてが同じ最新対象へpassしている。
+- 対象Roleすべてが最新評価対象を確認してpassしている。
 - 公開Gateを満たしたDraft PRがTaskへLinkされている。
 - Dependencies／Stack状態がPRと一致している。
 - 未実施検証、未決事項、残Riskが明示されている。
