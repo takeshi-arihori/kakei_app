@@ -39,7 +39,7 @@ Knowledge State: **Proposal（未採用・実装前）**。対象は [#244](http
 
 ## 設計Proposal: #244の分割とOpen Questionの推奨案（改訂7）
 
-Knowledge State: **Proposal（未採用）**。本節は独立Planning評価とOwner確認の入力であり、Accepted Decisionではない。評価は6回failし（通常Store readerのkey-state、ticket採用時のoperationId束縛、およびticket競合規則の自己矛盾、既存清掃・削除Adapterとコード用途の共存、およびActor Lock種別のR4との食い違い、ticket一意規則、削除側の起算、key-stateとretention windowの拡張、および型拡張の前提誤り、R5との整合・再開入口・封鎖順序、Actor削除の順序・起算・ticket粒度・停止契約の根拠・Aの粒度）、指摘を反映して改訂した。ADR追補がAcceptedになるまでTaskをReadyにしない。
+Knowledge State: **Proposal**。対応するADR追補は2026-11-04にOwnerがAccepted（案1b(i)別ticket方式を選択）した。本節は独立Planning評価とOwner確認の入力であり、Accepted Decisionではない。評価は6回failし（通常Store readerのkey-state、ticket採用時のoperationId束縛、およびticket競合規則の自己矛盾、既存清掃・削除Adapterとコード用途の共存、およびActor Lock種別のR4との食い違い、ticket一意規則、削除側の起算、key-stateとretention windowの拡張、および型拡張の前提誤り、R5との整合・再開入口・封鎖順序、Actor削除の順序・起算・ticket粒度・停止契約の根拠・Aの粒度）、指摘を反映して改訂した。ADR追補がAcceptedになるまでTaskをReadyにしない。
 
 ### 現状コードの事実（評価で追加確認）
 

@@ -1,8 +1,9 @@
 # 招待コード保守の鍵inventory・ticket・Actor削除参加
 
-- Status: **Proposed（未承認。AIはAccepted扱いにしない）**。
+- Status: **Accepted（設計。実装・個別Ready・Production有効化は別Gate）**。
 - Proposed Date: 2026-11-04（Asia/Tokyo）
-- Decision Owner: Project Owner（Owner承認日: 未承認）
+- Accepted Date: 2026-11-04（Asia/Tokyo）
+- Decision Owner: Project Owner（Owner承認日: 2026-11-04。会話承認。D1・D3〜D6を承認、D2は(i)別ticket方式を選択）
 - Decision / Design Task: [#244](https://github.com/takeshi-arihori/kakei_app/issues/244)。Restoreは[#245](https://github.com/takeshi-arihori/kakei_app/issues/245)が使う。
 - Epic: [#202](https://github.com/takeshi-arihori/kakei_app/issues/202)
 - Decision Check: 方針変更あり（新しいPort契約とR5の解釈を含む）
@@ -21,9 +22,9 @@ Accepted設計は、コードの期限・終端・Actor無効化の最早時点�
 
 R5の「既存Prepared/Checkpoint/Witness/全世代closureへ参加」を、実装前にどう満たすかを決める必要がある。
 
-## Decision候補（Proposed）
+## Decision（Accepted）
 
-採用するか、どの案にするかはOwnerが決める。以下は推奨であり承認ではない。
+Project Ownerは2026-11-04、D1〜D6を次のとおり採用した。設計の採用は実装・本番保証・個別Readyを意味しない。
 
 ### D1 コード専用のscope型・ticket・保守Port
 
@@ -34,7 +35,7 @@ R5の「既存Prepared/Checkpoint/Witness/全世代closureへ参加」を、実�
 - (i) 別ticket方式: Ledger形式を変えず、同`operationId`に紐づくコード専用ticketを明示的な別入口で参加させる。削除Completeの前提に全コードticketのclosureと0-rowを加える。
 - (ii) digest束縛方式: Ledger/Witnessの検証対象へコード側digestを含める（形式変更）。
 
-(i)は変更が小さい。ただしRestore（#245）やWitnessがコードclosureを直接検証できず、Done Criteriaの「Ledger/Witnessへの包含」を満たさない可能性がある。(ii)は包含を満たすがLedger/Witness形式の変更を伴う。**推奨は未確定でOwnerが選ぶ**。選択までActor削除統合（#244-C）はReadyにしない。
+(i)は変更が小さい。ただしRestore（#245）やWitnessがコードclosureを直接検証できず、Done Criteriaの「Ledger/Witnessへの包含」を満たさない可能性がある。(ii)は包含を満たすがLedger/Witness形式の変更を伴う。**Ownerは(i)別ticket方式を選択した**。これは本Taskにおけるdurable inventoryへの全コードの包含を、削除operationへ束縛したコード専用ticket（全世代closureと0-row）で満たすというR5の解釈である。Ledger/Witnessは削除意思を保証し、コードclosureの直接検証はコード専用Portが担う。Restore（#245）はコード専用Portで検証する。(ii)は採らない。Ledger/Witnessがコードclosureを直接検証する必要が生じた場合は別途ADRで再Reviewする。
 
 ### D3 ticketの粒度・所有・採用・closure束縛
 
@@ -65,7 +66,7 @@ R5の「既存Prepared/Checkpoint/Witness/全世代closureへ参加」を、実�
 
 ## Consequences
 
-- 実装は#244-A1/A2/B/Cへ分割し、各PRは直接Base `develop`の通常PRとする。A1/A2/BのReadyはD1・D3〜D6のAccepted後、CはD2のAccepted後に評価する。
+- 実装は#244-A1/A2/B/Cへ分割し、各PRは直接Base `develop`の通常PRとする。前提ADRはAccepted済みで、A1/A2/B/Cは前提PRのMerge後に個別Ready評価する。
 - 合成Providerの成功は、実Providerの線形化・耐久性・IAM・Backup運用の証拠にならない。実Provider・物理Backup・本番運用は既存のProduction Gateのまま。
 - コード機能を通常main/Dev/Productionへwireしない。公開契約・退会業務・Ingress・監視は対象外。
 
@@ -76,6 +77,6 @@ R5の「既存Prepared/Checkpoint/Witness/全世代closureへ参加」を、実�
 ## Review Trigger
 
 - Providerの完全列挙・線形化を保証できない場合（D4/D5）。
-- D2で(ii)を選ぶ場合（Ledger/Witness形式の変更は別途ADRの再Review対象）。
+- Ledger/Witnessがコードclosureを直接検証する必要が生じ、(ii)を検討する場合（Ledger/Witness形式の変更は別途ADRの再Review対象）。
 - 実環境に旧形式のdurable inventoryが存在すると判明した場合（移行は#245／Production Gateで判断）。
 - #245のRestore設計がD3のticket/closure契約と整合しない場合。
