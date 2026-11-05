@@ -25,6 +25,21 @@
 
 実行結果・未実行理由:
 
+## 変更規模
+
+- 変更行数（生成物を除く）: <!-- 目安は約500行。数え方は docs/engineering/delivery-workflow.md のPRサイズ -->
+- 超えた場合の理由: <!-- 超えていなければ削除 -->
+
+## 独立Review
+
+<!-- 要約だけを書く。生JSON、Cycleごとの全結果、再開手順の全文は載せない。項目は docs/engineering/implementation-review.md のEvidence -->
+
+- Role／最終結果:
+- 起動しなかったRoleと理由:
+- 修正回数と修正したFinding:
+- 実効read-onlyの確認:
+- 未確認の点／残Risk:
+
 ## 文書への影響
 
 - [ ] GitHub Requirement／Task

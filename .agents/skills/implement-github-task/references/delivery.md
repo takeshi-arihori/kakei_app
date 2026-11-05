@@ -26,6 +26,7 @@ Independent Evaluatorへ渡す直前に、Task所有の変更だけを評価対�
 - 実行した検証と結果
 - 未実施検証と理由
 - Self Review結果
+- 変更行数と、目安を超えた場合の理由
 - 文書／Security／Operations／Rollback等の影響
 - 既知Riskと承認済み例外
 
@@ -56,8 +57,8 @@ PR Ready化／Mergeを自動化しない。
 4. Task BranchをRemoteへPushする。
 5. 同TaskのOpen PRがなければDraft PRを作成し、既存Open PRがあれば更新する。
 6. Dependencyがある場合は正しいBaseと`Depends-On`を設定する。
-7. PR本文へTask、Requirement／Done Criteria、変更、検証、文書／Security／Operations／Rollback、未実施事項、残Riskを記録する。
-8. PRのURL、Head、Base、Draft状態、Files、本文を再取得して永続化を確認する。
+7. PR本文へTask、Requirement／Done Criteria、変更、変更規模、検証、独立Reviewの要約、文書／Security／Operations／Rollback、未実施事項、残Riskを記録する。書き方は[Delivery Workflow](../../../../docs/engineering/delivery-workflow.md)のIssue・PR本文に従い、ログを載せない。
+8. PRのHead、Base、Draft状態、本文を同文書の手順で再取得して比較する。
 9. RepositoryのIssue／Project追跡Ruleに従ってPR URLと状態を同期する。
 
 PR Ready化・Mergeは別途明示依頼がある場合だけ行う。

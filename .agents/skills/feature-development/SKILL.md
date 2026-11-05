@@ -21,12 +21,12 @@ Ready済みTaskの実作業を、[Engineering Loop](../../../docs/engineering/en
 - Ready済みGitHub Task
 - Requirement／Done Criteria
 - Accepted Decision
-- `pre-investigation`または同等の最新調査結果
+- I0の`pre-investigation`の結果
 - 関連docsと既存Code／Test
 
 ## Routing
 
-原則として`pre-investigation`で現状、Gap、影響範囲を確認する。対象と影響範囲が既にEvidence付きで確定している小さな機械変更だけ、省略理由を記録して省略できる。
+I0の調査結果を使い、`pre-investigation`をやり直さない。結果がない場合（本Skillを直接使う場合）だけ実施する。対象と影響範囲が既にEvidence付きで確定している小さな機械変更は、省略理由を記録して省略できる。
 
 調査結果から必要なSkillだけを選ぶ。
 
@@ -44,7 +44,7 @@ Ready済みTaskの実作業を、[Engineering Loop](../../../docs/engineering/en
 ## 実行順序
 
 ```text
-pre-investigation
+I0の調査結果
        │
        ├─ 必要な設計Skill ──┐
        │                    ▼
