@@ -72,7 +72,7 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 
 `limits`はLock/statement/transactionの正のmillisecondsを要求し、PostgreSQL17のSET LOCAL相当とCallbackの実時間上限を設定する。AbortSignalまたはTransaction上限でCallbackが戻らない場合も受付をsealし接続を破棄する。切断時のPG Transaction abortにより途中DMLを残さず、遅延Callbackのqueryを拒否する。PGのerror Eventを持つPool/接続Wrapperは`on/removeListener`も転送し、queryがない間のtransaction_timeout/切断を所有者の中断へ接続する。破棄中のsocket errorも原因を公開せず受け止める。COMMIT送信後は確定済みの可能性を保持してunavailableとし、Callbackを自動再実行しない。接続取得自体の待機上限は注入Pool側の責務であり、本番Pool/Provider応答時間の保証は未実証。固定Alertだけを通知し、通知例外/SQL詳細/入力値を返さない。
 
-専用`readRecipientCodeKeyState`だけがSchema8のコード2用途を受理する。旧通常Writer/保守/Restoreの未知用途拒否は維持する。新しい鍵世代の初期化、旧Writer/Restoreとの公開切替、実GM Adapter、実コード消費/両Audit、清掃/Restore、HTTP/Dev/mainへの接続を今回の内部leaseで完成扱いにしない。
+専用`readRecipientCodeKeyState`と`readRecipientCodeManagementKeyState`、コード保守用の`readRecipientCodeMaintenanceKeyState`だけがSchema8のコード2用途を受理する。旧通常Writer/保守/Restoreの未知用途拒否は維持する。コード2用途を受理するReaderのうち`readRecipientCodeMaintenanceKeyState`だけが`quarantined`でも読め、利用受付の入口には使わない。呼出元はまだなく、通常入口とコードRuntimeへの未接続は`architecture-dependencies.spec.ts`で検査する。新しい鍵世代の初期化、旧Writer/Restoreとの公開切替、実GM Adapter、実コード消費/両Audit、清掃/Restore、HTTP/Dev/mainへの接続を今回の内部leaseで完成扱いにしない。
 
 `recipient-code-transaction-scopes.spec.ts`は偽証跡/参照差/二重消費/未await/別本文/受付終了を検証する。`recipient-code-leases.integration.spec.ts`は専用PG17のSuite所有Schemaで実Actor/Session/コードMAC/Lock/2接続競合/期限/SQL故障/rollback/COMMIT応答喪失/cancelを検証する。GM key-state/Table/業務保存、コード消費WriterとコードAuditはTest-onlyの合成参加者で、実GM保存は#242、コード消費とInvitation作成/両Auditの共通業務atomicityは#243のEvidenceが必要。公開契約・Provider・保守/復旧・Production Gateを解除しない。
 
