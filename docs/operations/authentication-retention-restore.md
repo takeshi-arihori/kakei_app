@@ -51,4 +51,15 @@ Witness修復は真正な同headとFailure domainの運用証拠を確認する�
 
 [Task #233の運用設計](invitation-code-retention-restore.md)は2026-10-27のOwner承認により詳細設計Accepted、実装は未実施である。実装時はコードRecord/全MAC鍵世代を清掃・Actor削除inventory・全コードRestore破棄へ追加し、新Schema/epochを理解しない旧Writer/Restoreをfenceする必要がある。既存の全Attempt/Session破棄だけでは十分にならない。
 
+停止契約は実装済みで、`recipient-code-stop-contract.integration.spec.ts`が実PGで固定する。
+
+| 操作 | `active`／`rotating` | `quarantined` | `restoring`／`uninitialized` | コードpurposeあり | 未知purposeあり |
+| --- | --- | --- | --- | --- | --- |
+| 通常認証Store（既存Reader） | 受理 | 拒否 | 拒否 | 拒否 | 拒否 |
+| 既存の清掃・削除Reader | 受理 | 受理 | 拒否 | 拒否 | 拒否 |
+| コード発行・消費 | 受理 | 拒否 | 拒否 | 必須 | 拒否 |
+| コード保守Reader（呼出元なし） | 受理 | 受理 | 拒否 | 必須 | 拒否 |
+
+`quarantined`から`active`へ戻す更新はRestoreの`restoring`限定CASだけが持つ。これらは旧Writerを止める契約で、清掃やActor削除でコードを除去する機能ではない。既存の清掃・削除Adapterはコードpurposeの初期化後に止まる。継続動作への拡張（[ADR](../adr/recipient-code-maintenance-key-inventory.md)のD6）とコードpurposeの初期化は未実装である。
+
 現行Runbookがコードを既に扱うとは主張しない。GM Invitation/成功operationとの共通commitを片側SchemaのRestoreで巻き戻さず、全Context復旧点/Checkpoint整合を検証するまで開通しない。新たな本番Capabilityと実証は同設計のB4/Production Gateに残す。

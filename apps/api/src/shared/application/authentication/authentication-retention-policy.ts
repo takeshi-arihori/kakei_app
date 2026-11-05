@@ -77,6 +77,26 @@ export const authenticationRetentionWindow = (
 };
 
 /**
+ * コード行と全MAC鍵世代の除去期限を、最早の時点から計算する。
+ * @param record MAC検証済みのコード期限と終端時刻、および操作ごとのActor側の時点。
+ *   清掃はActorのdisabledAt、Actor削除はpreparedAtを渡す。該当しない時点はnull。
+ * @returns 最早の時点と、その24時間後の最遅除去期限。
+ * @throws AuthenticationCryptoUnavailable 不正な日時、または整数overflow。
+ */
+export const recipientCodeRetentionWindow = (record: {
+  readonly expiresAt: number;
+  readonly terminalAt: number | null;
+  readonly actorCutoffAt: number | null;
+}): AuthenticationRetentionWindow => {
+  const dueAt = Math.min(
+    time(record.expiresAt),
+    record.terminalAt === null ? Infinity : time(record.terminalAt),
+    record.actorCutoffAt === null ? Infinity : time(record.actorCutoffAt),
+  );
+  return Object.freeze({ dueAt, deadline: add(dueAt, day) });
+};
+
+/**
  * Lock後Clockで期限前・対象・最遅期限到達を区別する。
  * @param window 検証済みMetadataから算出した保持Window。
  * @param now 判断点で再取得したUTC milliseconds。

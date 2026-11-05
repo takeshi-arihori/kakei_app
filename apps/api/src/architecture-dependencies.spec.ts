@@ -398,7 +398,67 @@ const findArchitectureViolations = (): string[] => {
 const fixturePath = (relativePath: string): string =>
   resolve(sourceRoot, relativePath);
 
+const reachableModules = (entries: readonly string[]): Set<string> => {
+  const compilerOptions = loadCompilerOptions();
+  const reached = new Set<string>();
+  const pending = [...entries];
+  while (pending.length > 0) {
+    const path = pending.pop()!;
+    if (reached.has(path)) continue;
+    reached.add(path);
+    const sourceFile = ts.createSourceFile(
+      path,
+      readFileSync(path, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    for (const reference of collectModuleReferences(sourceFile)) {
+      if (!reference.analyzable || isExternalSpecifier(reference.specifier))
+        continue;
+      const resolved = ts.resolveModuleName(
+        reference.specifier,
+        path,
+        compilerOptions,
+        ts.sys,
+      ).resolvedModule?.resolvedFileName;
+      if (resolved !== undefined && !resolved.includes('/node_modules/'))
+        pending.push(resolved);
+    }
+  }
+  return reached;
+};
+
 describe('API architecture dependencies', () => {
+  it('コード保守の読取とwindowを通常入口とコードRuntimeへwireしない', () => {
+    const normalEntries = [
+      'main.ts',
+      'app.ts',
+      '../dev/main.ts',
+      '../dev/migrate.ts',
+    ].map(fixturePath);
+    const runtime = fixturePath('recipient-invitation-runtime.ts');
+    const normal = reachableModules(normalEntries);
+    const keyState = fixturePath(
+      'shared/infrastructure/authentication/postgres/authentication-key-state.ts',
+    );
+    const retention = fixturePath(
+      'shared/application/authentication/authentication-retention-policy.ts',
+    );
+    // 探索が入口の外へ届かなければ、次の検査は何も証明しない。
+    expect(normal.has(keyState)).toBe(true);
+    expect(normal.has(runtime)).toBe(false);
+
+    const users = [...reachableModules([...normalEntries, runtime])].filter(
+      (path) =>
+        path !== keyState &&
+        path !== retention &&
+        /readRecipientCodeMaintenanceKeyState|recipientCodeRetentionWindow/.test(
+          readFileSync(path, 'utf8'),
+        ),
+    );
+    expect(users.map(relativeToSource)).toEqual([]);
+  });
+
   it('招待コード内部FactoryだけをCompositionとして許可しContext/共有からの逆依存を拒否する', () => {
     const root = fixturePath('recipient-invitation-runtime.ts');
     const adapter = fixturePath(

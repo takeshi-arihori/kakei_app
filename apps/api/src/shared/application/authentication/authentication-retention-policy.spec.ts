@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import type {
-  AuthenticationAttemptRow,
-  AuthenticationSessionRow,
+import {
+  AuthenticationCryptoUnavailable,
+  type AuthenticationAttemptRow,
+  type AuthenticationSessionRow,
 } from './authentication-record-protection.js';
 import {
   authenticationRetentionWindow,
   authenticationRetentionState,
   assertAuthenticationBackupAge,
+  recipientCodeRetentionWindow,
 } from './authentication-retention-policy.js';
 
 const day = 86_400_000;
@@ -125,4 +127,48 @@ describe('認証Dataの保持期限', () => {
   it.each([35 * day + 1, -1])('35日超または未来のBackupを拒否する', (age) =>
     expect(() => assertAuthenticationBackupAge(1000, 1000 + age)).toThrow(),
   );
+});
+
+describe('招待コードのretention window', () => {
+  const expiresAt = 10 * day;
+
+  it.each([
+    ['期限だけ', { terminalAt: null, actorCutoffAt: null }, expiresAt],
+    ['終端が先', { terminalAt: 3 * day, actorCutoffAt: null }, 3 * day],
+    ['Actor側が先', { terminalAt: 3 * day, actorCutoffAt: day }, day],
+    ['期限が先', { terminalAt: 12 * day, actorCutoffAt: 11 * day }, expiresAt],
+    ['同時刻', { terminalAt: expiresAt, actorCutoffAt: expiresAt }, expiresAt],
+  ])('%sなら最早の時点をdueAtにする', (_name, input, dueAt) => {
+    const window = recipientCodeRetentionWindow({ expiresAt, ...input });
+    expect(window).toEqual({ dueAt, deadline: dueAt + day });
+    expect(authenticationRetentionState(window, dueAt - 1)).toBe('retained');
+    expect(authenticationRetentionState(window, dueAt)).toBe('due');
+    expect(authenticationRetentionState(window, dueAt + day)).toBe('overdue');
+    expect(Object.isFrozen(window)).toBe(true);
+  });
+
+  it.each([
+    { expiresAt: -1, terminalAt: null, actorCutoffAt: null },
+    { expiresAt: 1.5, terminalAt: null, actorCutoffAt: null },
+    { expiresAt: Number.NaN, terminalAt: null, actorCutoffAt: null },
+    { expiresAt, terminalAt: -1, actorCutoffAt: null },
+    { expiresAt, terminalAt: null, actorCutoffAt: 1.5 },
+    // 最早値にならない不正値も、min後の加算に頼らず拒否する。
+    { expiresAt: expiresAt + 0.5, terminalAt: day, actorCutoffAt: null },
+    { expiresAt: Infinity, terminalAt: day, actorCutoffAt: null },
+    { expiresAt, terminalAt: expiresAt + 0.5, actorCutoffAt: null },
+    { expiresAt, terminalAt: Infinity, actorCutoffAt: null },
+    { expiresAt, terminalAt: Number.NaN, actorCutoffAt: null },
+    { expiresAt, terminalAt: null, actorCutoffAt: expiresAt + 0.5 },
+    { expiresAt, terminalAt: null, actorCutoffAt: Infinity },
+    {
+      expiresAt: Number.MAX_SAFE_INTEGER,
+      terminalAt: null,
+      actorCutoffAt: null,
+    },
+  ])('不正な時刻とoverflowを拒否する %#', (input) => {
+    expect(() => recipientCodeRetentionWindow(input)).toThrow(
+      AuthenticationCryptoUnavailable,
+    );
+  });
 });

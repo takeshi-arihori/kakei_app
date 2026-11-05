@@ -239,6 +239,26 @@ export const readAuthenticationMaintenanceKeyState = (
   readState(connection, ['active', 'rotating', 'quarantined']);
 
 /**
+ * コード保守だけが、隔離後もコード世代を読める。利用受付やactiveへの復帰には使わない。
+ * @param connection 保守操作が所有するTransaction接続。Actorより前にkey_stateを共有Lockする。
+ * @returns 通常運転またはquarantinedの既存認証世代とコード世代。
+ * @throws AuthenticationCryptoUnavailable 未初期化/Restore中、未知用途、不正/不足世代。
+ */
+export const readRecipientCodeMaintenanceKeyState = (
+  connection: AuthenticationQueryConnection,
+): Promise<
+  AuthenticationStoreKeyState & {
+    /** 全searchable lookup世代。 */ readonly codeLookup: readonly string[];
+    /** 全searchable MAC世代。 */ readonly codeMac: readonly string[];
+  }
+> =>
+  readState(
+    connection,
+    ['active', 'rotating', 'quarantined'],
+    ['recipient-code-lookup', 'recipient-code-state-mac'],
+  );
+
+/**
  * 外部fenceを検証した復旧専用Adapterだけが使う。
  * @param connection 復旧処理が所有するTransaction接続。
  * @returns restoringに限定した共有Lock付き世代。
