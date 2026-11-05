@@ -1,11 +1,18 @@
 // Browser E2E専用process。通常dev/ProductionからImportしない。
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
-import { Client } from 'pg';
+import { fileURLToPath } from 'node:url';
 import { gaxios } from 'google-auth-library';
+import { Client } from 'pg';
 import { migrateAuthenticationDevelopmentDatabase } from '../../dev/authentication-development-migrations.js';
 import { openAuthenticationDevelopmentRuntime } from '../../dev/authentication-development-runtime.js';
 import { createAuthenticationDevelopmentServer } from '../../dev/authentication-development-server.js';
+import { repositoryTestDatabaseUrl } from './repository-test-database-url.js';
+
+const testDatabaseUrl = repositoryTestDatabaseUrl(
+  fileURLToPath(new URL('../../../../.env', import.meta.url)),
+);
+if (testDatabaseUrl) process.env.TEST_DATABASE_URL = testDatabaseUrl;
 if (
   process.env.NODE_ENV !== 'test' ||
   process.env.KAKEI_BROWSER_FIXTURE !== '1'
