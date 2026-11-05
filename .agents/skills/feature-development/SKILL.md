@@ -78,7 +78,7 @@ pre-investigation
 
 ## 修正Loop
 
-I5の4役が返すFindingの原結果・集計・起動は`implement-github-task`へ任せる。本SkillはScope内修正、Test／QA、Self Reviewを担当し、最新Evidenceを返す。再起動と停止は[4専門Review](../../../docs/engineering/implementation-review.md)に従う。
+I5のReviewerが返すFindingの集計・起動は`implement-github-task`へ任せる。本SkillはScope内修正、Test／QA、Self Reviewを担当し、最新Evidenceを返す。再起動と停止は[独立Review](../../../docs/engineering/implementation-review.md)に従う。
 
 `testing`または`code-review`でFindingが出たら原因へ戻す。
 

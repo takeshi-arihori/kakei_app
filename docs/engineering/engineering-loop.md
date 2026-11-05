@@ -57,13 +57,13 @@ I1 Red Test ──▶ I2 Implementation ──▶ I3 Green / Refactor
                          Finding ──────┘
                                       │ Pass
                                       ▼
-                          I5 Four Independent Reviewers
+                          I5 Independent Reviewers
                              │                │
                          fail│                │全員pass
                              ▼                ▼
                        修正・再検証       I6 Draft PR
                              │
-                             └────▶ 4役すべてを新Threadで再評価
+                             └────▶ failしたRoleが修正差分を再評価
 ```
 
 未決Decisionや正本Conflictが結果を左右する場合は、その判断に依存する経路だけを停止する。依存しない調査・整理・検証は継続する。
@@ -144,7 +144,7 @@ pre-investigation
 
 ## D3. 独立Planning Review
 
-Epic／Taskを保存する前に、新しい`work_planning_evaluator`へD0〜D2のEvidence、Requirement、Done Criteria、設計、作業分解案、Dependencies、Decisionを渡す。
+Epic／Taskを保存する前に、新しい`work-planning-evaluator`へD0〜D2のEvidence、Requirement、Done Criteria、設計、作業分解案、Dependencies、Decisionを渡す。
 
 確認観点:
 - Problem、期待成果、制約、対象外が明確で、要求の妥当性を現状Evidenceと照合しているか
@@ -158,7 +158,7 @@ Epic／Taskを保存する前に、新しい`work_planning_evaluator`へD0〜D2�
 - `fail`: 親AgentがPlanningを修正し、新しいEvaluatorで再評価する。
 - `blocked`: Owner Decision、権限、正本Conflict等を解消するまで依存作業を止める。
 
-Evaluatorはread-onlyとし、GitHub更新は親Agentだけが行う。
+Evaluatorはread-onlyとし、GitHub更新は親Agentだけが行う。実効read-onlyの確認は[独立Review](implementation-review.md)の同名の節に従い、PRがない段階では確認結果をIssueへ記録する。
 
 ## D4. Epic・Task・PR順序へ分解する
 
@@ -219,23 +219,23 @@ Done Criteriaが残る場合はI1へ戻り、次の最小Caseを進める。
 
 必要な専門観点がある場合だけ専門Skillを呼ぶ。Blocker／Major相当のFindingがあれば、原因に応じてD2、I1、I2、I3へ戻す。
 
-セルフレビューはI5の4役の独立Reviewの代替ではない。
+セルフレビューはI5の独立Reviewの代替ではない。
 
-## I5. 4専門Subagent Review
+## I5. 独立Subagent Review
 
-Self Reviewと最終検証後、`implement-github-task`が最新評価対象を固定し、`code_reviewer`、`test_reviewer`、`spec_reviewer`、`security_reviewer`をそれぞれ新しい独立Threadで起動する。
+Self Reviewと最終検証後、`implement-github-task`が最新評価対象を固定し、`code-reviewer`、`test-reviewer`、条件に該当する場合は`security-reviewer`を、それぞれ別のSubagentで起動する。
 
-入力／結果契約、実効read-only、修正上限、停止条件、Evidenceは[4専門Review](implementation-review.md)を正本とする。D3の`work_planning_evaluator`は維持する。
+入力／結果契約、実効read-only、修正上限、停止条件、Evidenceは[独立Review](implementation-review.md)を正本とする。D3の`work-planning-evaluator`は維持する。
 
-- 全員pass: 同じ最新対象でFinding／不足Evidenceがないことを確認しI6へ進む。
-- fail: 親がFindingを元Evidence付きで統合し、Scope内の最小修正、Test／QA、Self Reviewを行う。4役すべてを新Threadで再実行する。
+- 全員pass: 最新対象でFinding／不足Evidenceがないことを確認しI6へ進む。
+- fail: 親がFindingを元Evidence付きで統合し、Scope内の最小修正、Test／QA、Self Reviewを行う。`fail`したRoleが修正差分を再評価し、最後に未確認のRoleが差分を確認する。
 - blockedまたは上限到達: 依存Deliveryを停止し、原因・未解決Finding・再現／検証結果・残Riskを報告する。未承認DecisionやScope外要求はPlanningへ戻す。
 
-Reviewerはread-onlyであり、親だけがCode／文書／GitHubを変更する。並列非対応時も4つの別Threadで逐次実行し、他のReviewerの結論を入力へ混ぜない。
+Reviewerはread-onlyであり、親だけがCode／文書／GitHubを変更する。並列非対応時も別のSubagentで逐次実行し、他のReviewerの結論を入力へ混ぜない。
 
 ## I6. Draft PR
 
-4役すべてが同じ最新対象へ`pass`し、Findingと不足Evidenceが残っていない場合だけ、`implement-github-task`がCommit／Push／Draft PR／Issue追跡を完了する。修正後は4役すべてを新Threadで評価した結果を使う。
+対象Roleすべてが最新対象を確認して`pass`し、Findingと不足Evidenceが残っていない場合だけ、`implement-github-task`がCommit／Push／Draft PR／Issue追跡を完了する。
 
 PR Ready化・Mergeは別の明示依頼として扱う。
 
@@ -248,6 +248,6 @@ Engineering Loopを完了扱いにできるのは次を満たす場合だけで�
 - 関連docsが最終差分と同期している。
 - 未承認Decisionを実装で確定していない。
 - PR前セルフレビューの重大Findingが残っていない。
-- 4役すべてが同じ最新評価対象に対して`pass`している。
+- 対象Reviewerすべてが最新評価対象を確認して`pass`している。
 - 未実施検証と残Riskが明示されている。
 - Draft PRがTaskへTraceできる。
