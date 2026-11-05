@@ -153,7 +153,12 @@ describe('コード管理Storeの実PG17原子性 #240（GMと公開経路なし
   });
   const stateKeys = {
     allocate: vi.fn(
-      (input: { codeId: string; keyVersion: string; expiresAt: number }) => {
+      (input: {
+        codeId: string;
+        recipientActorId: string;
+        keyVersion: string;
+        expiresAt: number;
+      }) => {
         const id = `${input.codeId}/${input.keyVersion}`;
         if (allocated.has(id))
           return Promise.resolve(
@@ -723,6 +728,16 @@ describe('コード管理Storeの実PG17原子性 #240（GMと公開経路なし
     async (mode) => {
       await issue();
       const before = await rows();
+      // 孤立scopeもActorから辿れるよう、発行本人のActorへ束縛して確保する（ADR D5）。
+      const { rows: owners } = await observer.query<{
+        recipient_actor_id: string;
+      }>('SELECT recipient_actor_id FROM authentication.recipient_code');
+      expect(owners).toHaveLength(1);
+      expect(stateKeys.allocate).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          recipientActorId: owners[0].recipient_actor_id,
+        }),
+      );
       const allocations = stateKeys.allocate.mock.calls.length;
       let failed = false;
       store = make(
@@ -900,6 +915,7 @@ describe('コード管理Storeの実PG17原子性 #240（GMと公開経路なし
           status: 'allocated',
           created: true,
           codeId: randomUUID(),
+          recipientActorId: randomUUID(),
           keyVersion: 'wrong',
           expiresAt: 0,
         });

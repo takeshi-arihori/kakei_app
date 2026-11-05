@@ -127,20 +127,6 @@ export const createPostgresRecipientCodeStore = (options: {
     )
       reject();
   };
-  const allocate = async (
-    codeId: string,
-    keyVersion: string,
-    expiresAt: number,
-    requireNew = true,
-  ) => {
-    await allocateRecipientCodeStateKey(
-      options.stateKeys,
-      codeId,
-      keyVersion,
-      expiresAt,
-      requireNew,
-    );
-  };
   const audit = async (
     ctx: Context,
     action: AuthenticationStoreAction,
@@ -297,7 +283,12 @@ export const createPostgresRecipientCodeStore = (options: {
             const current = time(clock);
             if (current < plan.createdAt || current >= plan.expiresAt) reject();
           });
-          await allocate(codeId, ctx.state.codeMacWrite, plan.expiresAt);
+          await allocateRecipientCodeStateKey(options.stateKeys, {
+            codeId,
+            recipientActorId: ctx.caller.actorSubject,
+            keyVersion: ctx.state.codeMacWrite,
+            expiresAt: plan.expiresAt,
+          });
           const fields = {
             codeId,
             recipientActorId: ctx.caller.actorSubject,

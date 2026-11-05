@@ -196,6 +196,7 @@ describe('実Session・コード消費・Invitation・両Auditの共通commit #2
       await rotateCodeMac();
       const descriptor = {
         codeId: issued.codeId,
+        recipientActorId: (await f.codes())[0].recipientActorId,
         keyVersion: 'v2',
         expiresAt: issued.expiresAt,
       };
@@ -260,6 +261,7 @@ describe('実Session・コード消費・Invitation・両Auditの共通commit #2
     'unavailable',
     'throw',
     'codeId',
+    'recipientActorId',
     'keyVersion',
     'expiresAt',
     'created',
@@ -282,6 +284,8 @@ describe('実Session・コード消費・Invitation・両Auditの共通commit #2
           if (fault === 'unavailable') return { status: 'unavailable' };
           const answer = await original(input);
           if (fault === 'codeId') return { ...answer, codeId: randomUUID() };
+          if (fault === 'recipientActorId')
+            return { ...answer, recipientActorId: randomUUID() };
           if (fault === 'keyVersion') return { ...answer, keyVersion: 'v3' };
           if (fault === 'expiresAt')
             return { ...answer, expiresAt: input.expiresAt + 1 };
