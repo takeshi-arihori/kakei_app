@@ -83,7 +83,7 @@ appは`kakei_app`。各Fieldはtag 1開始・記載順、presence 0/1、uint32 B
 ### 鍵寿命の分離
 
 - Record別MACの通常rotationは旧MACを検証して再MACし、必要な旧世代を読取保持する。ただし最早の終端/期限/Actor無効化+24hまでの**全世代破棄をBackup読取保持より優先**する。
-- `recipient-code-key-lifecycle.ts`のinventory/closure PortはreadKeyとは別能力。全current/旧/廃棄済み世代と認証済みInventory版、同operationの永久Scope封鎖、全世代破棄、closure真正性/所属の照合を要求する。証拠参照の文字列だけでは完了にしない。#244/#245がdurable ticket/DB削除/0-row/復旧時の信頼済みInventory照合へ接続する。
+- `recipient-code-key-lifecycle.ts`のinventory/closure PortはreadKeyとは別能力。全current/旧/廃棄済み世代と認証済みInventory版、同operationの永久Scope封鎖、全世代破棄、closure真正性/所属の照合を要求する。証拠参照の文字列だけでは完了にしない。#266がticket/封鎖/固定snapshotのPort契約を[共有認証Application](../../application/authentication/README.md#コード保守のport契約266)へ置き、#244/#245がdurable ticket/DB削除/0-row/復旧時の信頼済みInventory照合へ接続する。
 - Lookup鍵は全参照0件かつ関連Backupの35日window終了後に退役する。GM proof鍵は参照するGM operationが0件かつ同Backup window終了まで保持し、コード行/Record MAC鍵清掃やActor Identity鍵破棄に巻き込まない。Audit仮名鍵の保持は参照Auditの既存90日保持/Backupと整合させ、Record清掃へ混在させない。
 
 本TaskはProviderの読取/保守契約とNode暗号部品だけ。具体Provider・全世代の外部durability/永久封鎖/closure真正性・24h運用・35日Backup・Session lease・SQL/Audit原子性・清掃/Restore・公開経路・本番Compositionを実証したとは扱わない。
@@ -96,8 +96,12 @@ Unit Testは全MAC Fieldの差替え、別Record/用途/Scope、鍵不在/廃棄
 
 ## コードRecord鍵の明示発行（#240）
 
-`RecipientCodeStateKeyAllocationPort.allocate`は読取`RecipientCodeKeyPort`と別能力である。codeId/現行MAC世代ごとに独立256bit鍵をProviderが生成し、DB外の全世代inventoryへ登録してから、codeId/keyVersion/expiresAt/createdの固定Ackだけを返す。StoreはDescriptorを完全照合し、秘密Materialを受け取らない。`readKey`で未知Scopeを暗黙生成しない。
+`RecipientCodeStateKeyAllocationPort.allocate`は読取`RecipientCodeKeyPort`と別能力である。codeId/現行MAC世代ごとに独立256bit鍵をProviderが生成し、DB外の全世代inventoryへ登録してから、codeId/recipientActorId/keyVersion/expiresAt/createdの固定Ackだけを返す。StoreはDescriptorを完全照合し、秘密Materialを受け取らない。`readKey`で未知Scopeを暗黙生成しない。
 
-新Recordではcreated=trueを必須とする。旧Recordを現行世代で再MACする際、同一Descriptorの鍵が既にある場合だけcreated=falseで再確認し、既存Materialを変えない。これにより鍵確保後のDB rollbackから本人が明示再発行しても、旧Recordの鍵を上書きしない。Descriptor不一致、破棄済みScope/世代、全世代closure済みScopeはunavailable。発行結果不明からProvider鍵やコード原値を復元しない。
+新Recordではcreated=trueを必須とする。旧Recordを現行世代で再MACする際、同一Descriptorの鍵が既にある場合だけcreated=falseで再確認し、既存Materialを変えない。これにより鍵確保後のDB rollbackから本人が明示再発行しても、旧Recordの鍵を上書きしない。Descriptor不一致、破棄済みScope/世代、全世代closure済みScope、Actor封鎖後、ticket登録済みcodeIdはunavailable。発行結果不明からProvider鍵やコード原値を復元しない。
 
-Provider割当はDB rollbackで消えない。新コードの保存失敗/結果不明で孤立したScopeもexpiryを持つinventoryに保持し、終端/期限/Actor無効化の最早時点+24h以内の全世代破棄へ含める。旧Record再MACでも期限を延長しない。#244/#245のdurable ticket/closure/Restore照合と具体Providerのdurability・上限・監視が未実証であり、合成Mapの成功では本番を有効化しない。コード監査鍵はlookup/状態MAC/Actor監査と独立し、既存認証Audit共通世代ラベルに対応する`auth-audit-recipient-code/v1`のauthentication Scopeを使う。
+Provider割当はDB rollbackで消えない。新コードの保存失敗/結果不明で孤立したScopeもexpiryと束縛Actorを持つinventoryに保持し、終端/期限/Actor無効化の最早時点+24h以内の全世代破棄へ含める。旧Record再MACでも期限を延長しない。#244/#245のdurable ticket/closure/Restore照合と具体Providerのdurability・上限・監視が未実証であり、合成Mapの成功では本番を有効化しない。コード監査鍵はlookup/状態MAC/Actor監査と独立し、既存認証Audit共通世代ラベルに対応する`auth-audit-recipient-code/v1`のauthentication Scopeを使う。
+
+## コード保守の合成Provider（#266）
+
+`test/recipient-code-maintenance-fixtures.ts`はallocate・全世代closure・ticket・封鎖をDB外に保持するTest-onlyのProviderである。`test/recipient-code-maintenance-fixtures.spec.ts`が偽closure・部分世代・版不一致・未知scope・列挙不完全・Provider障害を`guardRecipientCodeMaintenance`の契約として固定する。JavaScriptの単一threadで線形化しているだけなので、成功を実Providerの線形化・耐久性・IAM・Backup運用の証拠にしない。

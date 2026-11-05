@@ -56,6 +56,12 @@ const uuid = (value: unknown): value is string =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
     value,
   );
+/**
+ * Record・保守契約で共通するServer生成IDの形式を確認する。所有や存在は証明しない。
+ * @param value 形式未確認の値。
+ * @returns UUIDv4の小文字表現だけtrue。
+ */
+export const isRecipientCodeUuid = uuid;
 const time = (value: unknown): value is number =>
   Number.isSafeInteger(value) && Number(value) >= 0;
 const reference = (value: unknown): value is string =>

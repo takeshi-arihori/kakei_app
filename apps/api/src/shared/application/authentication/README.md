@@ -41,9 +41,29 @@ GM key-state準備/保存証跡と認証の消費WriterはInfrastructure/Composi
 
 [管理Store](../../infrastructure/authentication/postgres/README.md#240-コードの発行取消状態確認)が発行/再発行/取消/状態確認を実装する。`inspectActor`は本人Actorの共有Lockと有効Sessionを検証し、idleを更新しない専用入口。`withActor`の管理排他/idle更新と分け、状態照会のためGM登録を要求しない。発行の秘密値はcommit確認後だけ、状態照会はcodeId/state/expiresAtだけ。COMMIT結果不明を失敗確定とせず、自動再発行/原値復元は行わない。
 
-`RecipientCodeStateKeyAllocationPort`は読取Cryptoと独立した明示発行能力。codeId/世代/期限に一致する固定Ackを要求し、新Recordはcreated=trueだけを受理する。旧Record再MAC用の既存鍵はcreated=falseで再確認できるが、再生成/上書き/破棄Scope復活は認めない。孤立Scopeも有限期限の全世代inventoryに残し、#244/#245の清掃/Restoreと本番ProviderのEvidenceへ引き継ぐ。共有認証からGMの型/Domain/SQLを参照しない。
+`RecipientCodeStateKeyAllocationPort`は読取Cryptoと独立した明示発行能力。codeId/束縛Actor/世代/期限に一致する固定Ackを要求し、新Recordはcreated=trueだけを受理する。旧Record再MAC用の既存鍵はcreated=falseで再確認できるが、再生成/上書き/破棄Scope復活は認めない。孤立Scopeも有限期限の全世代inventoryに残し、#244/#245の清掃/Restoreと本番ProviderのEvidenceへ引き継ぐ。共有認証からGMの型/Domain/SQLを参照しない。
 
 
 ## 内部共通commit（#243）
 
 `RecipientCodeSessionPort.use`は任意のAbortSignalを実leaseへ渡せる。GM型/SQLを共有Applicationへ追加せず、[内部Composition](../../../recipient-invitation-runtime.ts)が実lease/消費Writer/GM Serviceを同registryで接続する。消費Policyは一度の終端計画だけを返し、新MAC/CAS/両Audit/commitを自ら実行しない。実PG検証は[認証保存README](../../infrastructure/authentication/postgres/README.md#243-実コード消費と内部composition)へTraceする。#244/#245の保守/復旧、#246以降の公開契約と本番Gateは残る。
+
+## コード保守のPort契約（#266）
+
+[Accepted ADR](../../../../../../docs/adr/recipient-code-maintenance-key-inventory.md)のD1/D3/D4/D5に対応する契約で、PG清掃（#258）やActor削除統合の実装はここに含まない。`AuthenticationKeyScope`・DEK Port・codec・`authenticationMaintenanceScope`は変更しない。通常main/Dev/Productionと`recipient-invitation-runtime.ts`へwireしない（`architecture-dependencies.spec.ts`で検査する）。
+
+| 部品 | 責務と限界 |
+| --- | --- |
+| `recipient-code-maintenance-ports.ts` | コード専用の`RecipientCodeKeyScope`、1 ticket=1 codeIdの票、保守Port（`blockActor`/`scopePage`/`prepare`/`find`/`pending`/`byOperation`/`scopes`/`complete`）。Providerが満たす契約を定義する |
+| `recipient-code-maintenance-guard.ts` | Portの応答を信頼せず検証する入口。全世代を閉じる`close`も持つ。検証失敗とProvider障害は固定の`RecipientCodeUnavailable`へ揃え、原因を外へ出さない |
+| `recipient-code-key-lifecycle.ts` | `allocate`はActorへ束縛する。封鎖後とticket登録済みcodeIdへの追加`allocate`は、同一Descriptorの再確認と再MACを含めて`unavailable`とする |
+
+ticketの規則は次のとおり。
+
+- `prepare`はfindの結果を`expected`へ渡すCASとする。結果は`created`/`resumed`/`adopted`/`satisfied`の4種で、重複ticketを作らない。
+- `dueAt`は`allocate`が保持する`expiresAt`を超えない。超える要求はProviderが拒否する。
+- 採用時の`dueAt`は所有側と採用側の最小値、`deadline`は`dueAt+24h`で、前倒しだけを認める。窓の変更、採用の記録、完了で版が1つ上がる。
+- 完了済みticketの`prepare`は窓を動かさず、採用だけを記録する`satisfied`を返す。
+- closureの`operationId`は採用経由でも常に所有operationとする。guardは`verifyClosure`に加えて全世代の`destroyed`も照合する。DB 0-rowと`dueAt`到達の確認はguardの外で、呼出し側（#258）が行う。
+
+`scopePage`は票のないscopeも含む固定snapshotを返す。guardは件数、重複、Actor条件、cursorの発行元をPageをまたいで検証し、完全性を保証できない`unavailable`を空の成功へ読み替えない。ただしProviderが全件を隠して空のsnapshotを主張する嘘はguardでは検出できず、完全列挙と封鎖の線形化は実ProviderのProduction Gateに残る。Actor削除でCompleteの前に再snapshotと`byOperation`を照合する処理はCの範囲とする。
