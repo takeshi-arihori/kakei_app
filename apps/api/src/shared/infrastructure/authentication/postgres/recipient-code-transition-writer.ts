@@ -10,25 +10,22 @@ import type { AuthenticationQueryConnection } from './authentication-transaction
 /**
  * 未知Recordの読取で鍵を生成せず、Writerだけが明示割当を検証する。
  * @param keys Record別の鍵確保能力。退役/破棄能力は含まない。
- * @param codeId 同じRecordの参照。
- * @param keyVersion 書込世代。
- * @param expiresAt 延長しないコード期限。
+ * @param descriptor 同じRecordの参照、束縛Actor、書込世代、延長しないコード期限。
  * @param requireNew 新規発行では既存割当を拒否する。
- * @throws RecipientCodeUnavailable 割当不能または応答の参照/期限/新規性が不一致。
+ * @throws RecipientCodeUnavailable 割当不能または応答の参照/Actor/期限/新規性が不一致。
  */
 export const allocateRecipientCodeStateKey = async (
   keys: RecipientCodeStateKeyAllocationPort,
-  codeId: string,
-  keyVersion: string,
-  expiresAt: number,
+  descriptor: Parameters<RecipientCodeStateKeyAllocationPort['allocate']>[0],
   requireNew = true,
 ): Promise<void> => {
-  const answer = await keys.allocate({ codeId, keyVersion, expiresAt });
+  const answer = await keys.allocate(descriptor);
   if (
     answer.status !== 'allocated' ||
-    answer.codeId !== codeId ||
-    answer.keyVersion !== keyVersion ||
-    answer.expiresAt !== expiresAt ||
+    answer.codeId !== descriptor.codeId ||
+    answer.recipientActorId !== descriptor.recipientActorId ||
+    answer.keyVersion !== descriptor.keyVersion ||
+    answer.expiresAt !== descriptor.expiresAt ||
     typeof answer.created !== 'boolean' ||
     (requireNew && !answer.created)
   )
@@ -62,9 +59,12 @@ export const writeRecipientCodeTransition = async (options: {
   if (previous.macKeyVersion !== keyVersion)
     await allocateRecipientCodeStateKey(
       options.stateKeys,
-      previous.codeId,
-      keyVersion,
-      previous.expiresAt,
+      {
+        codeId: previous.codeId,
+        recipientActorId: previous.recipientActorId,
+        keyVersion,
+        expiresAt: previous.expiresAt,
+      },
       false,
     );
   const { mac: ignored, ...fields } = previous;

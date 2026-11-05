@@ -429,7 +429,7 @@ const reachableModules = (entries: readonly string[]): Set<string> => {
 };
 
 describe('API architecture dependencies', () => {
-  it('コード保守の読取とwindowを通常入口とコードRuntimeへwireしない', () => {
+  it('コード保守の読取・window・Port・guardを通常入口とコードRuntimeへwireしない', () => {
     const normalEntries = [
       'main.ts',
       'app.ts',
@@ -452,7 +452,7 @@ describe('API architecture dependencies', () => {
       (path) =>
         path !== keyState &&
         path !== retention &&
-        /readRecipientCodeMaintenanceKeyState|recipientCodeRetentionWindow/.test(
+        /readRecipientCodeMaintenanceKeyState|recipientCodeRetentionWindow|RecipientCodeMaintenancePort|guardRecipientCodeMaintenance/.test(
           readFileSync(path, 'utf8'),
         ),
     );
