@@ -117,7 +117,7 @@ Branch、Commit、PR、Squash merge、公開前確認、PR Template、文書同�
 Root Gateとして次だけを守る。
 
 - `develop`を統合Branchとし、直接Pushしない。
-- 1 Task／1 Branch／1 PRを基本とする。
+- 1 Task／1 Branch／1 PRを基本とし、Taskごとに新しいSessionで開始する。
 - Commitはレビュー可能な論理単位にする。
 - PR作成前にSelf Reviewと独立Reviewを完了する。
 - PR Ready化・Mergeは利用者の明示依頼がある場合だけ行う。

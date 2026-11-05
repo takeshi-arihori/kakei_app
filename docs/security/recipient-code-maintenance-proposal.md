@@ -34,7 +34,7 @@ Knowledge State: **Proposal（未採用・実装前）**。対象は [#244](http
 - [ ] 必要に応じて #244 と後続 Task の分割・依存を確定し、Issue / Project へ保存後、別の独立評価で再取得を確認する。#244 が Ready になるまで Production 実装へ進まない。
 - [ ] Requirement に対応する Red を固定し、清掃・Actor 削除・必要な内部 Port / Adapter を実装する。途中段階で Actor 削除が鍵を残したまま Complete にならないことを保証する。
 - [ ] 期限直前・等値・後、発行 / 取消 / 消費との2接続競合、孤立 scope、全世代の部分破棄、Provider / SQL / Audit 障害、commit 応答喪失、overdue を実 PostgreSQL と合成 Provider で検証する。
-- [ ] 実装・関連 docs をセルフレビューし、最新対象について code / test / specification / security の4専門レビューを実施する。指摘の修正後は必要な再検証を行う。
+- [ ] 実装・関連 docs をセルフレビューし、最新対象について[独立Review](../engineering/implementation-review.md)を実施する。指摘の修正後は必要な再検証を行う。
 - [ ] #245 の Restore、公開契約・画面、および具体 Provider / Backup / 監視の既存 Gate を維持する。PR の Ready 化・Merge は別の明示依頼を要する。
 
 ## 設計Proposal: #244の分割とOpen Questionの推奨案（改訂7）
