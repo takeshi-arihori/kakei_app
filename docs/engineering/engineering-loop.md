@@ -34,19 +34,19 @@ D0 要求検証
 D1 要件化
  │
  ▼
-D2 調査・設計
+D2 調査・設計（設計判断がある場合）
  │
  ▼
-D3 Planning Review
+D3 Planning Review（起動条件に該当する場合）
  │
  ▼
-D4 Epic / Task / Dependency / PR順序
+D4 Epic / Task名 / Dependency / PR順序
  │
  ▼
-Ready Task
+Backlog Task
  │
  ▼
-I0 Delivery開始
+I0 Task着手（調査1回・詳細記入・Ready判定）
  │
  ▼
 I1 Red Test ──▶ I2 Implementation ──▶ I3 Green / Refactor
@@ -67,6 +67,19 @@ I1 Red Test ──▶ I2 Implementation ──▶ I3 Green / Refactor
 ```
 
 未決Decisionや正本Conflictが結果を左右する場合は、その判断に依存する経路だけを停止する。依存しない調査・整理・検証は継続する。
+
+## 同じ確認を繰り返さない
+
+| 確認 | 行う場所 | 回数 |
+| --- | --- | --- |
+| 既存Epic／Taskとの重複 | D0 | 要求ごとに1回 |
+| Epicの目的、Task名、Dependencies | D4 | Epicごとに1回。変更時だけ更新 |
+| Taskの現状調査 | I0の`pre-investigation` | Taskごとに1回 |
+| Taskの詳細記入とReady判定 | I0 | Taskごとに1回 |
+| 独立Planning評価 | D3 | 起動条件に該当する場合だけ |
+| 保存結果 | 保存直後の再取得と比較 | 保存ごとに1回。Evaluatorは使わない |
+
+設計判断を含まない単一Taskは、D0の重複確認とTask Issueの作成（Task名、Dependencies、依存するDecision）だけを行い、D1〜D4を省略してI0へ進む。I0で設計判断が必要と分かった場合はD2へ戻る。
 
 # 設計フェーズ
 
@@ -98,23 +111,23 @@ Gate:
 
 ## D1. 要件化する
 
-**目的**: 実装手段ではなく、観測可能なRequirementとDone Criteriaへ変換する。
+**目的**: 実装手段ではなく、観測可能な成果へ変換する。
 
 実施:
-- Requirement、制約、対象外を整理する。
-- 必要なUse Caseは契約としてPrecondition／Postcondition／Invariant／FailureへTraceできる状態にする。
-- 正常・境界・権限・失敗・競合・再試行のうち、Riskと成果に関係するDone Criteriaを定義する。
+- 目的、期待成果、制約、対象外を整理する。
 - 非機能・Security・Data・Operations等は関連docsに要求がある場合だけ適用する。
 
 出力:
-- Requirement
-- Done Criteria
+- 目的と期待成果
 - Scope／Out of scope
-- 必要な契約・Test観点
+
+Task単位のRequirement、Done Criteria、契約、Test観点はこの段階で書かず、I0で書く。I0では、必要なUse Caseを契約としてPrecondition／Postcondition／Invariant／FailureへTraceできる状態にし、正常・境界・権限・失敗・競合・再試行のうちRiskと成果に関係するDone Criteriaを定義する。
 
 ## D2. 調査・設計する
 
 **目的**: 現行実装をEvidenceとして確認し、現在のRequirementに基づく設計を確定する。
+
+設計判断がある場合に、その判断とEpicの分解に必要な範囲だけ調査する。Taskごとの詳細調査はI0へ残す。設計結果でTask構成が変わる場合は、設計Taskを先に完了させてから後続を分解する。
 
 基本Flow:
 
@@ -144,25 +157,36 @@ pre-investigation
 
 ## D3. 独立Planning Review
 
-Epic／Taskを保存する前に、新しい`work-planning-evaluator`へD0〜D2のEvidence、Requirement、Done Criteria、設計、作業分解案、Dependencies、Decisionを渡す。
+次のいずれかに該当する場合だけ、Epic／Taskを保存する前に、新しい`work-planning-evaluator`へD0〜D2のEvidence、Epicの目的と期待成果、設計、Task名の案、Dependencies、Decisionを渡す。
+
+- Epic／Taskの分解、順序または内容が、Domain境界、Data Owner、認可、公開契約等の設計判断に依存する
+- ADR ProposalまたはAccepted Decisionの変更を伴う
+- Stacked PRを計画する
+- Ownerが依頼した、または親Agentが該当するか判断できない
+
+次の場面では起動しない。起動しなかった理由を完了報告へ1行で書く。
+
+- 設計判断を含まないEpicや単一Task
+- I0のTask詳細記入とReady判定
+- 保存後の確認
 
 確認観点:
 - Problem、期待成果、制約、対象外が明確で、要求の妥当性を現状Evidenceと照合しているか
-- Requirementと観測可能なDone Criteriaへ落とせているか
+- Epicの目的が観測可能な成果へ落とせているか
 - 現行仕様、既存Code、Test、Accepted ADRとのGapと影響範囲を調査しているか
 - 既存Epic／Taskとの重複や包含関係を確認しているか
-- Epic／Taskの粒度、Dependencies、実装順序、並列・順次・Stacked PRの判断とMerge順序が関連docsに整合するか
-- 未決DecisionをClarificationまたはADRへ分離し、Ready判定がDelivery Ruleを満たすか
+- Task名の粒度、Dependencies、実装順序、並列・順次・Stacked PRの判断とMerge順序が関連docsに整合するか
+- 未決DecisionをClarificationまたはADRへ分離し、依存Taskに依存先を記録しているか
 
 - `pass`: D4へ進む。
 - `fail`: 親AgentがPlanningを修正し、新しいEvaluatorで再評価する。
 - `blocked`: Owner Decision、権限、正本Conflict等を解消するまで依存作業を止める。
 
-Evaluatorはread-onlyとし、GitHub更新は親Agentだけが行う。実効read-onlyの確認は[独立Review](implementation-review.md)の同名の節に従い、PRがない段階では確認結果をIssueへ記録する。
+Evaluatorはread-onlyとし、GitHub更新は親Agentだけが行う。実効read-onlyの確認は[独立Review](implementation-review.md)の同名の節に従い、PRがない段階では結果と確認結果を対象IssueのCommentへ1行で記録する。
 
 ## D4. Epic・Task・PR順序へ分解する
 
-[Delivery Workflow](delivery-workflow.md)に従ってEpic／Taskを設計し、[PR依存関係Gate](pr-dependency-gate.md)に従ってDependency GraphとDelivery順序を決める。
+[Delivery Workflow](delivery-workflow.md)に従ってEpicの目的、Task名、Dependenciesを決め、[PR依存関係Gate](pr-dependency-gate.md)に従ってDelivery順序を決める。Taskの詳細はここで書かない。保存後は[Delivery Workflow](delivery-workflow.md)の手順で再取得して比較する。
 
 ```text
 Requirement
@@ -179,15 +203,23 @@ Epic（必要な場合）
 
 依存がないTaskは並行Deliveryできる。未Mergeの変更へCode上の依存があるTaskはStacked PR候補とし、Merge順序をDependency Graphから決める。
 
-TaskがRepositoryのReady条件を満たした時点で実装フェーズへ進む。
+Taskは`Backlog`のまま保存し、着手時にI0へ進む。
 
 # 実装フェーズ
 
-## I0. Deliveryを開始する
+## I0. Taskに着手する
 
-`implement-github-task`を入口に、対象Task、Requirement、Done Criteria、Dependencies、Accepted ADR、基準`develop`、作業Treeを確認する。
+`implement-github-task`を入口に、次を1回で行う。
 
-ReadyでないTaskは実装へ進めない。Task専用Branchを用意し、GitHub Lifecycleは`implement-github-task`、実際の変更Workflowは`feature-development`へ委譲する。
+1. 対象Task、親Epic、Dependencies、Accepted ADR、基準`develop`、作業Treeを確認する。
+2. `pre-investigation`で現状とGapを調査する。同じ対象の調査が基準Commit付きでIssue、PR、docsにあり、その後に対象Pathの変更がなければ再利用する。変更があれば変更分だけ調査する。
+3. Taskの詳細をIssue本文へ書く。すでに書かれている場合は不足分だけ補う。変更規模が目安を超えそうなら分割を検討する。
+4. [Delivery Workflow](delivery-workflow.md)のReady判定を行う。
+5. 保存結果を再取得して比較する。
+
+Ready条件を満たさないTask、特に未承認Decisionに依存するTaskは実装へ進めず、`Backlog`のまま不足条件を報告する。
+
+Task専用Branchを用意し、GitHub Lifecycleは`implement-github-task`、実際の変更Workflowは`feature-development`へ委譲する。調査結果も渡し、`feature-development`では調査をやり直さない。
 
 ## I1. TDDのRedを作る
 
@@ -225,7 +257,7 @@ Done Criteriaが残る場合はI1へ戻り、次の最小Caseを進める。
 
 Self Reviewと最終検証後、`implement-github-task`が最新評価対象を固定し、`code-reviewer`、`test-reviewer`、条件に該当する場合は`security-reviewer`を、それぞれ別のSubagentで起動する。
 
-入力／結果契約、実効read-only、修正上限、停止条件、Evidenceは[独立Review](implementation-review.md)を正本とする。D3の`work-planning-evaluator`は維持する。
+入力／結果契約、実効read-only、修正上限、停止条件、Evidenceは[独立Review](implementation-review.md)を正本とする。
 
 - 全員pass: 最新対象でFinding／不足Evidenceがないことを確認しI6へ進む。
 - fail: 親がFindingを元Evidence付きで統合し、Scope内の最小修正、Test／QA、Self Reviewを行う。`fail`したRoleが修正差分を再評価し、最後に未確認のRoleが差分を確認する。
@@ -235,7 +267,7 @@ Reviewerはread-onlyであり、親だけがCode／文書／GitHubを変更す�
 
 ## I6. Draft PR
 
-対象Roleすべてが最新対象を確認して`pass`し、Findingと不足Evidenceが残っていない場合だけ、`implement-github-task`がCommit／Push／Draft PR／Issue追跡を完了する。
+対象Roleすべてが最新対象を確認して`pass`し、Findingと不足Evidenceが残っていない場合だけ、`implement-github-task`がCommit／Push／Draft PR／Issue追跡を完了する。本文は[Delivery Workflow](delivery-workflow.md)のIssue・PR本文の節に従い、ログを載せない。
 
 PR Ready化・Mergeは別の明示依頼として扱う。
 

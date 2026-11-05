@@ -96,4 +96,4 @@ Task分解時に最低限次を記録する。
 - 期待するMerge順序
 - 前提Merge後に再実行する検証
 
-`work-planning-evaluator`はこの情報とRequirementを照合し、不要な直列化、欠落Dependency、逆順Mergeがないか独立評価する。
+Dependencyがない項目は省略してよい。[Engineering Loop](engineering-loop.md)のD3に該当する場合、`work-planning-evaluator`がこの情報とEpicの目的を照合し、不要な直列化、欠落Dependency、逆順Mergeがないか独立評価する。

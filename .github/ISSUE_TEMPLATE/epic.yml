@@ -4,19 +4,19 @@ title: "epic: "
 body:
   - type: markdown
     attributes:
-      value: "Public Repositoryです。未分類・要編集・非公開情報を入力しないでください。単一の1〜2日作業にはTaskを使用します。"
+      value: "Public Repositoryです。未分類・要編集・非公開情報を入力しないでください。単一の1〜2日作業にはTaskを使用します。進捗は本文に書かず、Projectに置きます。"
   - type: textarea
     id: requirement
     attributes:
-      label: Requirement・Done Criteria
-      description: なぜ必要か、期待成果、観測可能なEpic完了条件
+      label: 目的
+      description: なぜ必要か、期待成果
     validations:
       required: true
   - type: textarea
     id: planning
     attributes:
-      label: Planning
-      description: Owner、Project、Phase、Area、Priority、Status、構成TaskのGitHub URL・順序・依存関係
+      label: Taskと依存関係
+      description: Owner、Task名、依存関係、Task IssueのURL。Taskの詳細と、ProjectのFieldにある値は書かない
     validations:
       required: true
   - type: textarea

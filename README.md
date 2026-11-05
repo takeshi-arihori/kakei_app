@@ -89,12 +89,12 @@ docker compose up -d swagger-ui
 
 - 実装ルールと文書の入口: [開発ガイド](docs/engineering/README.md)
 - Project／Epic／Task／仕様／設計／ADRの正本はGitHubです。設計変更とADRの入口は[08. 設計変更・意思決定](docs/governance/README.md)です。
-- 実装対象はReadyになったGitHub Taskから選び、PR前に関連文書を更新します。
-- `prepare-github-work`でEpic／Taskを整え、`implement-github-task`でReady TaskをTDD実装します。
+- 実装対象はDependenciesが解消済みのGitHub Taskから選び、着手時にReady判定を行い、PR前に関連文書を更新します。
+- `prepare-github-work`でEpicの目的、Task名、依存関係を決め、`implement-github-task`でTaskの詳細記入とReady判定を行ってTDD実装します。
 
 ### 独立Evaluator
 
-- Issueを保存する前に`work-planning-evaluator`でRequirement、Done Criteria、Design、Dependencies、Ready条件を確認します。
+- 設計判断を含むPlanningでは、Issueを保存する前に`work-planning-evaluator`で評価します。起動条件は[Engineering LoopのD3](docs/engineering/engineering-loop.md)に従います。
 - 実装後は最新Diff、Issue、検証結果、Self Reviewを独立Reviewerへ渡します。全員が`pass`でFindingと不足Evidenceがない場合だけDraft PRへ進みます。
 - `fail`は修正後に修正差分を再評価し、`blocked`は阻害要因を解消するまで依存作業を止めます。
 - [独立Reviewの契約](docs/engineering/implementation-review.md)

@@ -20,15 +20,15 @@ Public Issue/PRへ入力する前に、本文・画像・添付・リンク先�
 
 Requirement、観測可能なDone Criteria、Owner、親Epic、Project、Area、Phase、Priority、Milestone、Estimate、Dependencies、Decision Check、Related ADRを揃える。該当しない項目は理由を書く。1〜2日で単一成果を検証でき、依存作業は完了または非阻害の根拠があること。
 
-方針変更あり・不明ならOwnerがAcceptedにしたADRへ追跡できること。未確定のBounded Context、Data Owner、Aggregate、認可などを推測しない。公開Gateと独立Planning Evaluatorのproposal/persisted評価を通す。
+方針変更あり・不明ならOwnerがAcceptedにしたADRへ追跡できること。未確定のBounded Context、Data Owner、Aggregate、認可などを推測しない。公開Gateを通す。判定はTask着手時に一度行い、独立Planning Evaluatorは[Engineering Loop](engineering-loop.md)のD3に該当する場合だけ使う。
 
 ## Definition of Done
 
-Done Criteria、関連lint/typecheck/test/build、必要な権限・失敗・競合・再試行検証、Security Review、文書更新、独立Evaluatorを満たす。未実行検証には理由と残リスクを記録する。必要なPRは受入完了を要し、Draft PRの準備だけならReviewに留める。PR URL、検証証拠、DecisionへのリンクをIssueに保存する。
+Done Criteria、関連lint/typecheck/test/build、必要な権限・失敗・競合・再試行検証、Security Review、文書更新、独立Evaluatorを満たす。未実行検証には理由と残リスクを記録する。必要なPRは受入完了を要し、Draft PRの準備だけならReviewに留める。PR URLとDecisionへのリンクをIssueに、検証証拠の要約をPRに保存する。
 
 ## 状態とView
 
-Backlog → Ready → In Progress → Review → Done。状態を飛ばす場合はIssueへ理由を記録する。
+Backlog → Ready → In Progress → Review → Done。Task着手時のReady判定をその場で満たした場合を除き、状態を飛ばす場合はIssueへ理由を記録する。
 旧Inbox・要件整理中はBacklog、旧DoingはIn Progress、旧Ready/Review/Doneは同名へ対応する。
 
 | View | Layout | Filter / Group |
@@ -62,7 +62,7 @@ is:issue in:title "docs(adr):"
 
 ## イベントと繰越
 
-Planningは30分を目安にGoal、優先度、Ready、容量、SPを確認する。日次5分でGoalへの進捗、Blocked、WIPを確認する。Reviewは20分で成果と検証証拠を確認し、Retrospectiveは15分で改善を1件選び次Sprintへ反映する。
+Planningは30分を目安にGoal、優先度、未決Decisionへの依存、容量、SPを確認する。日次5分でGoalへの進捗、Blocked、WIPを確認する。Reviewは20分で成果と検証証拠を確認し、Retrospectiveは15分で改善を1件選び次Sprintへ反映する。
 
 未完了Itemは自動繰越しない。残作業、依存、優先度、次Sprint Goalを再評価し、再選択した場合だけSprintを変更する。元Sprintと繰越理由はIssueへ残す。未完了に部分SPを計上しない。
 

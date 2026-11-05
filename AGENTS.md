@@ -56,10 +56,10 @@ Directoryの責務と採用技術はRepository docsを正本とする。Rootで�
 ## 作業の入口
 
 ```text
-要求・設計・作業分解
+要求・設計・Epicの分解
     └─ prepare-github-work
 
-Ready TaskのDelivery
+Taskの着手からDelivery
     └─ implement-github-task
           ├─ feature-development
           └─ stacked-pr-delivery（PlanningでStacked PR確定時のみ）
@@ -98,14 +98,14 @@ Ready TaskのDelivery
 
 定義は`.claude/agents/`に置く。
 
-- `work-planning-evaluator`: 要求・設計・Epic／Task／Dependencies／Ready判定をread-onlyで独立評価
+- `work-planning-evaluator`（条件付き）: 設計判断を含むPlanningをread-onlyで独立評価。起動条件は[Engineering Loop](docs/engineering/engineering-loop.md)のD3に従う。
 - `code-reviewer`／`test-reviewer`（常に）、`security-reviewer`（条件付き）: 実装後の対象をそれぞれ独立にread-onlyで評価。起動条件、共通契約、上限・停止条件は[独立Review](docs/engineering/implementation-review.md)に従う。
 
-親AgentだけがCode、文書、GitHub状態を変更する。Planning Evaluatorの`fail`は親Agentが修正し、新しいEvaluatorで再評価する。実装Reviewの`fail`は親AgentがScope内で修正・再検証し、`fail`したRoleが修正差分を再評価する。`blocked`は阻害要因を解消するまで依存作業を止める。PlanningはEvaluatorの`pass`、実装は最新対象を確認した対象Roleすべての`pass`かつFinding／不足Evidenceなしの場合だけ次のDelivery段階へ進む。
+親AgentだけがCode、文書、GitHub状態を変更する。Planning Evaluatorの`fail`は親Agentが修正し、新しいEvaluatorで再評価する。実装Reviewの`fail`は親AgentがScope内で修正・再検証し、`fail`したRoleが修正差分を再評価する。`blocked`は阻害要因を解消するまで依存作業を止める。Planningは起動条件に該当する場合はEvaluatorの`pass`、実装は最新対象を確認した対象Roleすべての`pass`かつFinding／不足Evidenceなしの場合だけ次のDelivery段階へ進む。
 
 ## Git・Pull Request
 
-Branch、Commit、PR、Squash merge、公開前確認、PR Template、文書同期の具体Ruleは[Delivery Workflow](docs/engineering/delivery-workflow.md)を正本とする。
+Branch、Commit、PR、PRサイズ、Issue・PR本文、Squash merge、公開前確認、PR Template、文書同期の具体Ruleは[Delivery Workflow](docs/engineering/delivery-workflow.md)を正本とする。
 
 追加Worktreeの保存先と作成方法は[Worktree運用](docs/engineering/worktree-management.md)に従う。
 

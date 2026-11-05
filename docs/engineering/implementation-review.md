@@ -30,7 +30,7 @@
 
 - `role`、`cycle`、`mode`（`full`または`incremental`）
 - Task Issueの本文、Done Criteria、Dependenciesの状態。Reviewerはネットワークへ接続しないので、親が取得して渡す
-- `baseCommit`、`diffId`、差分を保存した一時Fileのパス
+- `baseCommit`、`diffId`、差分を保存した一時Fileのパス、変更行数（数え方は[Delivery Workflow](delivery-workflow.md)のPRサイズ）と目安を超えた場合の理由
 - Test／QAのCommandと結果、Self Review、未実行の検証と理由、残Risk
 - 起動しなかったRoleと理由
 
@@ -108,7 +108,21 @@ PR Ready化・Mergeは利用者の明示依頼が必要。Draft PR前に、評�
 
 ## Evidence
 
-Repository QAは`pnpm check`であり、Reviewの実施を代替しない。PRには起動したRole、起動しなかったRoleと理由、Cycle、結果、修正、検証結果、実効read-onlyの確認結果を必要最小限で記録する。個人設定、認証情報、Session全文、実在個人・金融情報を公開しない。
+Repository QAは`pnpm check`であり、Reviewの実施を代替しない。
+
+PR本文の「独立Review」には次だけを書く。最新の状態へ上書きし、Cycleごとに追記しない。
+
+- 起動したRole、起動しなかったRoleと理由
+- 修正回数と、Roleごとの最終結果
+- 修正したFindingの要約（1件1行）
+- 実効read-onlyの確認結果
+- 未確認の点、残Risk
+
+検証結果はPR本文の確認方法の節に書く。生JSON、Cycleごとの全結果、再開手順の全文は載せない（[Delivery Workflow](delivery-workflow.md)のIssue・PR本文）。
+
+修正上限または`blocked`で停止した場合は、停止理由、解消条件、次の1手と、未解決FindingのSeverity、File、最小修正を1件1行で加える。
+
+個人設定、認証情報、Session全文、実在個人・金融情報を公開しない。
 
 ## この形にした根拠
 
