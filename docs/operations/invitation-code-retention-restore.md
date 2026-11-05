@@ -43,9 +43,23 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | 公開経路 | CSRF/Origin/Rate、secret非保存/no-store、旧code拒否、新発行・Invitation作成・本人受諾の実HTTP/Browser |
 | 監視 | overdue/pending/破損/epoch不一致の実配信と封鎖、秘密/直接IDの非収集 |
 
-コード用の除去期限は`recipientCodeRetentionWindow`が計算し、`dueAt`を`expiresAt`・`terminalAt`・Actor側の時点の最早値、`deadline`をその24時間後とする。Actor側の時点は清掃がdisabledAt、Actor削除がpreparedAtである。関数の追加だけで、清掃へはまだ接続していない。key-stateの停止契約は[認証Runbook](authentication-retention-restore.md#招待コード拡張の採用設計未実装)に記載する。
+コード用の除去期限は`recipientCodeRetentionWindow`が計算し、`dueAt`を`expiresAt`・`terminalAt`・Actor側の時点の最早値、`deadline`をその24時間後とする。Actor側の時点は清掃がdisabledAt、Actor削除がpreparedAtである。下記の清掃入口が使い、Actor削除へはまだ接続していない。key-stateの停止契約は[認証Runbook](authentication-retention-restore.md#招待コード拡張の採用設計未実装)に記載する。
 
 本Taskは採用済みの運用設計の文書化であり、上表を実行済みとは扱わない。B4の合成Provider成功も本番Capabilityの証拠ではない。既知の期限未達、外部票不足、MAC/鍵不整合、未知Schema、旧Writer共存、片側復旧のいずれかがあれば成功/開通を停止する。
+
+## #258 コード1件の清掃の実装範囲
+
+[内部入口](../../apps/api/src/shared/application/authentication/recipient-code-cleanup-service.ts)の`cleanOne`が、上記「清掃」の3と4をコード1件について実装する。実PGと合成Providerで検証した。通常main/Dev/Production、Scheduler、公開Routeへは接続していない。
+
+| 手順 | 実装の内容 |
+| --- | --- |
+| 対象の確認 | Providerの`scopePage`でcodeId・束縛Actor・期限を確認する。Providerが知らない組合せ、列挙の完全性を保証できない場合は停止する |
+| 起算 | `dueAt`はProviderが保持する`expiresAt`と、MAC検証済みの`terminalAt`の早い方。検証できない行の値では起算しない |
+| 順序 | ticket登録→行除去→全世代closure→コード表の0-row→ticket完了。DB Lockの保持中に保守Portを呼ばない |
+| Lock | key-state共有Lock→Actor `FOR UPDATE`→コード`FOR UPDATE`。MAC不一致や鍵の喪失を理由に行を残さない |
+| 結果 | 完了として数えるのは`completed`だけ。`unavailable`は同じ入力の再実行が同operationで再開する。`already-complete`は再確認で、戻っていた行を除去する |
+
+結果は固定の4種だけで、codeIdや原因を返さない。次はこの入口に含まない: Actorの`disabledAt`起算、小Batch、孤立scopeの列挙、overdueとMAC不整合の封鎖・通知・監視、2接続競合、清掃Audit。MAC不一致の行は通知なしで除去されるので、改竄の痕跡の扱いは#244-Bで決める。Actor削除は#244-Cが扱う。行のないscopeも同じ経路で閉じるが、列挙と封鎖が揃うまで24時間以内の除去を主張しない。合成Providerの成功を実IAM・破棄運用の証拠にしない。
 
 ## #240 管理Storeから保守へ引き継ぐInventory
 
