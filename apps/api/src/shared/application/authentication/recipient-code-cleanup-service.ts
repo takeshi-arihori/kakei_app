@@ -440,22 +440,14 @@ export const createRecipientCodeCleanupService = (
         let removed = 0;
         let attempted = 0;
         let remaining = false;
-        for (const { scope, known, dueAt, hasRow } of selected) {
+        for (const { scope, known, hasRow } of selected) {
           try {
             const found = await maintenance.find(scope.codeId);
             // 行のない完了済みscopeは履歴が増えても予算とDBを消費しない。
             if (found?.state === 'complete' && !hasRow) continue;
+            // 最早の期限から処理するので、残した候補は処理済みのものより新しい。
             if (attempted >= limit) {
               remaining = true;
-              // 残した候補の未達は処理しなくても封鎖する。並びが最早順なので以降は判定不要。
-              await enforceDeadline(
-                state,
-                recipientCodeRetentionWindow({
-                  expiresAt: dueAt,
-                  terminalAt: null,
-                  actorCutoffAt: null,
-                }),
-              );
               break;
             }
             attempted += 1;
