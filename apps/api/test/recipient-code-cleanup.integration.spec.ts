@@ -870,6 +870,15 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
       const [newest] = rows.slice(-1);
       await expect(service.run(1)).resolves.toEqual({ status: 'pending' });
       expect((await f.codes()).length).toBe(2);
+      // 残した最早の対象を監視へ渡す。
+      expect(monitor.record).toHaveBeenLastCalledWith({
+        operation: 'cleanup',
+        code: 'OK',
+        oldest: {
+          dueAt: expect.any(Number) as number,
+          deadline: expect.any(Number) as number,
+        },
+      });
       await expect(service.run(1)).resolves.toEqual({ status: 'pending' });
       expect((await f.codes()).length).toBe(1);
       f.now = newest.expiresAt;
@@ -891,6 +900,11 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
       });
       expect(await rowCount(row.codeId)).toBe(1);
       expect(await keys.maintenance.find(row.codeId)).toBeNull();
+      expect(monitor.record).toHaveBeenLastCalledWith({
+        operation: 'cleanup',
+        code: 'OK',
+        oldest: null,
+      });
     });
 
     it('Lock済みの行はskipして他を進め、完了扱いにしない', async () => {

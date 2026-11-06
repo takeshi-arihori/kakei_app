@@ -61,7 +61,7 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | 封鎖 | ticketや候補の`deadline`到達、Record MACまたはActor MACの確定した不一致では`key_state`を`quarantined`にし、固定Code（`OVERDUE`／`QUARANTINED`）を通知する。封鎖を確認できなければ成功も封鎖済みも返さない。封鎖はRestoreだけが解く |
 | 鍵障害 | MAC鍵を取得できず照合できない場合は封鎖せず`UNAVAILABLE`を通知し、Providerが保持する期限で除去する。障害が期限後まで続くと`terminalAt`で起算できず、`deadline`はコードの有効期限（最大10分）分遅れる |
 | 再開 | 中断は同じticketとoperationで再開し、二重ticket・二重closureを作らない。完了済みticketのscopeはProviderの`scopes`で解決するので、列挙が完了済みscopeを残すかに依存しない |
-| 結果 | 件数を返すのは全対象を確認できた`complete`だけ。`pending`は残件またはskip、`quarantined`は封鎖、`unavailable`は障害で、どれも件数を返さない |
+| 結果 | 件数を返すのは全対象を確認できた`complete`だけ。`pending`は残件またはskip、`quarantined`は封鎖、`unavailable`は障害で、どれも件数を返さない。監視へは固定Codeと、期限到達のまま残した最早の対象の窓だけを渡す |
 
 結果と通知はcodeIdや原因を含まない。`purge` AuditはActor仮名だけを持ち、コード仮名を持たない（Migrationなし）。行のない孤立scopeの除去ではAuditを書かない。Actor削除は#244-C（#260）が扱う。合成Providerの成功を実IAM・破棄運用・Scheduler・通知配信の証拠にしない。
 

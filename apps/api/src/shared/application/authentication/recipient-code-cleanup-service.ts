@@ -440,31 +440,57 @@ export const createRecipientCodeCleanupService = (
         let removed = 0;
         let attempted = 0;
         let remaining = false;
-        for (const { scope, known, hasRow } of selected) {
+        // 期限到達のまま残した最早の対象。監視へ渡し、残件を隠さない。
+        let oldest: number | null = null;
+        const leave = (dueAt: number) => {
+          remaining = true;
+          oldest = Math.min(oldest ?? dueAt, dueAt);
+        };
+        for (const { scope, known, dueAt, hasRow } of selected) {
           try {
             const found = await maintenance.find(scope.codeId);
             // 行のない完了済みscopeは履歴が増えても予算とDBを消費しない。
             if (found?.state === 'complete' && !hasRow) continue;
             // 最早の期限から処理するので、残した候補は処理済みのものより新しい。
             if (attempted >= limit) {
-              remaining = true;
+              leave(dueAt);
               break;
             }
             attempted += 1;
             const result = await advance(state, scope, known, found);
             if (result.status === 'completed') removed += 1;
-            if (result.status === 'skipped') remaining = true;
+            if (result.status === 'skipped') leave(dueAt);
           } catch {
             // 1件のLock timeoutや障害で他の期限到達を止めない。完了は数えない。
             failed = true;
+            oldest = Math.min(oldest ?? dueAt, dueAt);
           }
         }
         if (confirmed(state)) return { status: 'quarantined' };
-        if (failed || state.required) throw new RecipientCodeUnavailable();
+        const window =
+          oldest === null
+            ? null
+            : recipientCodeRetentionWindow({
+                expiresAt: oldest,
+                terminalAt: null,
+                actorCutoffAt: null,
+              });
+        if (failed || state.required) {
+          await monitor
+            .record({
+              operation: 'cleanup',
+              code: 'UNAVAILABLE',
+              oldest: window,
+            })
+            .catch(() => {
+              /* 監視障害も許可結果へ変換しない。 */
+            });
+          return { status: 'unavailable' };
+        }
         await monitor.record({
           operation: 'cleanup',
           code: 'OK',
-          oldest: null,
+          oldest: window,
         });
         return remaining
           ? { status: 'pending' }
