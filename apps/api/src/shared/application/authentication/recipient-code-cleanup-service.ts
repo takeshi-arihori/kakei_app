@@ -62,7 +62,7 @@ export interface RecipientCodeCleanupDatabase {
   /**
    * 期限到達が疑われる行を、Lockせず最早の順に返す。候補であり判断の根拠にしない。
    * @param now 判定時刻。
-   * @param limit 1〜1000件。
+   * @param limit 1〜1001件。runは上限で切った行を残件として検出するため、処理件数より1件多く読む。
    * @returns 未検証のscopeとdueAt。
    * @throws Error key-state不正、SQL障害。
    */

@@ -938,6 +938,26 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
       expect(await rowCount(rows[2].codeId)).toBe(1);
     });
 
+    it('未完了ticketが上限まで返った場合は完了を主張せず、その期限を監視へ渡す', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt;
+      keys.faults.add('before-close');
+      await service.run(10);
+      keys.faults.delete('before-close');
+      const ticket = await keys.maintenance.find(row.codeId);
+      await expect(service.run(1)).resolves.toEqual({ status: 'pending' });
+      expect(monitor.record).toHaveBeenLastCalledWith({
+        operation: 'cleanup',
+        code: 'OK',
+        oldest: ticket!.window,
+      });
+      await expect(service.run(1)).resolves.toEqual({
+        status: 'complete',
+        removed: 0,
+      });
+      await expectComplete(row.codeId);
+    });
+
     it('期限前だけなら何も変えない', async () => {
       const { row } = await issue();
       await expect(service.run(10)).resolves.toEqual({
@@ -1103,6 +1123,24 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
       expect(monitor.record).toHaveBeenCalledWith({
         operation: 'cleanup',
         code: 'OVERDUE',
+        oldest: {
+          dueAt: row.expiresAt,
+          deadline: row.expiresAt + 86_400_000,
+        },
+      });
+    });
+
+    it('列挙で止まったら、封鎖前の未達でも観測した最早の窓を通知する', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt;
+      keys.faults.add('scope-page-unavailable');
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'unavailable',
+      });
+      expect(await keyStatus()).toBe('active');
+      expect(monitor.record).toHaveBeenLastCalledWith({
+        operation: 'cleanup',
+        code: 'UNAVAILABLE',
         oldest: {
           dueAt: row.expiresAt,
           deadline: row.expiresAt + 86_400_000,
