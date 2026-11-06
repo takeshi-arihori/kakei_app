@@ -16,6 +16,7 @@ import {
 } from './authentication-database-values.js';
 import { authenticationMaintenanceScope } from './authentication-maintenance-values.js';
 import type { AuthenticationQueryConnection } from './authentication-transaction-scopes.js';
+import { authenticationDeletionIntentColumns } from './authentication-columns.js';
 
 const fail = (): never => {
   throw new AuthenticationCryptoUnavailable();
@@ -119,7 +120,7 @@ export const ensureAuthenticationDeletionIntent = async (
   now: number,
 ) => {
   const found = await connection.query(
-    'SELECT * FROM authentication.deletion_intent WHERE operation_id=$1 OR (actor_digest_key_version=$2 AND actor_digest=$3) FOR UPDATE',
+    `SELECT ${authenticationDeletionIntentColumns} FROM authentication.deletion_intent WHERE operation_id=$1 OR (actor_digest_key_version=$2 AND actor_digest=$3) FOR UPDATE`,
     [
       record.operationId,
       record.actorDigestKeyVersion,

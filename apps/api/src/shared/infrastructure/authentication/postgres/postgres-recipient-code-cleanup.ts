@@ -12,6 +12,7 @@ import {
   type AuthenticationTransactionLimits,
 } from './authentication-transactions.js';
 import { readRecipientCode } from './recipient-code-selection.js';
+import { authenticationRecipientCodeColumns } from './authentication-columns.js';
 
 /**
  * R4のLock順で本人Actorを最初からFOR UPDATEし、その後でコード行を読む。
@@ -32,7 +33,7 @@ const lockCode = async (
   );
   if (actor.rows.length !== 1) throw new RecipientCodeUnavailable();
   const code = await connection.query(
-    'SELECT * FROM authentication.recipient_code WHERE code_id=$1 FOR UPDATE',
+    `SELECT ${authenticationRecipientCodeColumns} FROM authentication.recipient_code WHERE code_id=$1 FOR UPDATE`,
     [authenticationUuid(scope.codeId)],
   );
   return { codeMac, stored: code.rows[0] };

@@ -12,6 +12,7 @@ import {
 } from './authentication-database-values.js';
 import { AuthenticationMultipleMatches } from './authentication-record-selection.js';
 import type { AuthenticationQueryConnection } from './authentication-transaction-scopes.js';
+import { authenticationRecipientCodeColumns } from './authentication-columns.js';
 
 /**
  * SQLの最小Inventoryを復元する。MAC/本人性認証の代替ではない。
@@ -75,7 +76,7 @@ export const findRecipientCode = async (
     return `(lookup_key_version = $${values.length - 1} AND lookup_digest = $${values.length})`;
   });
   const result = await connection.query(
-    `SELECT * FROM authentication.recipient_code WHERE ${conditions.join(' OR ')}`,
+    `SELECT ${authenticationRecipientCodeColumns} FROM authentication.recipient_code WHERE ${conditions.join(' OR ')}`,
     values,
   );
   if (result.rows.length > 1) throw new AuthenticationMultipleMatches();

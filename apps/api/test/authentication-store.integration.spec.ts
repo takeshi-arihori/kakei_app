@@ -480,6 +480,44 @@ describe('PostgreSQL認証Store', () => {
     ).toBe(7);
   });
 
+  it('無関係な列が追加されても読取りは明示列だけを使い、利用不能や封鎖へ倒れない', async () => {
+    const tables = [
+      'actor',
+      'google_identity',
+      'session_record',
+      'login_attempt',
+    ];
+    for (const table of tables)
+      await observer.query(
+        `ALTER TABLE authentication.${table} ADD COLUMN unrelated_extra text DEFAULT 'extra'`,
+      );
+    try {
+      const command = await begin();
+      expect((await store.complete(command, clock)).status).toBe(
+        'authenticated',
+      );
+      now += 10_000;
+      expect(
+        (
+          await store.withSession(
+            command.sessionSecret,
+            'activity',
+            clock,
+            (_actor, scope) => Promise.resolve(scope.serialize(null)),
+          )
+        ).status,
+      ).toBe('authenticated');
+      expect(await store.revoke(command.sessionSecret, clock)).toEqual({
+        status: 'logged-out',
+      });
+    } finally {
+      for (const table of tables)
+        await observer.query(
+          `ALTER TABLE authentication.${table} DROP COLUMN unrelated_extra`,
+        );
+    }
+  });
+
   it('旧ready試行を置換し、Session有効時の再loginをAudit付きで拒否する', async () => {
     const first = await begin();
     const next = {
@@ -862,8 +900,9 @@ describe('PostgreSQL認証Store', () => {
         }
         const fence =
           race === 'same-attempt'
-            ? sql.startsWith('SELECT * FROM authentication.login_attempt') &&
-              sql.includes('FOR UPDATE')
+            ? /^SELECT [a-z_,]+ FROM authentication\.login_attempt WHERE attempt_id/.test(
+                sql,
+              ) && sql.includes('FOR UPDATE')
             : sql.startsWith('INSERT INTO authentication.identity_alias');
         if (fence && ownerPid === undefined) {
           ownerPid = pid;

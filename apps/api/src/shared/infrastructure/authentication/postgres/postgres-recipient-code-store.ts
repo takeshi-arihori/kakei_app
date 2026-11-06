@@ -44,6 +44,7 @@ import {
   findRecipientCode,
   readRecipientCode,
 } from './recipient-code-selection.js';
+import { authenticationRecipientCodeColumns } from './authentication-columns.js';
 
 type State = Awaited<ReturnType<typeof readRecipientCodeManagementKeyState>>;
 type Result =
@@ -239,7 +240,7 @@ export const createPostgresRecipientCodeStore = (options: {
         false,
         async (ctx) => {
           const rows = await query(ctx.scope).query(
-            "SELECT * FROM authentication.recipient_code WHERE recipient_actor_id=$1 AND state='issued' ORDER BY code_id FOR UPDATE",
+            `SELECT ${authenticationRecipientCodeColumns} FROM authentication.recipient_code WHERE recipient_actor_id=$1 AND state='issued' ORDER BY code_id FOR UPDATE`,
             [ctx.caller.actorSubject],
           );
           if (rows.rows.length > 1) reject();
@@ -346,7 +347,7 @@ export const createPostgresRecipientCodeStore = (options: {
         async (ctx) => {
           const codeId = authenticationUuid(inputId);
           const selected = await query(ctx.scope).query(
-            'SELECT * FROM authentication.recipient_code WHERE code_id=$1 AND recipient_actor_id=$2 FOR UPDATE',
+            `SELECT ${authenticationRecipientCodeColumns} FROM authentication.recipient_code WHERE code_id=$1 AND recipient_actor_id=$2 FOR UPDATE`,
             [codeId, ctx.caller.actorSubject],
           );
           if (selected.rows.length > 1) reject();
@@ -377,7 +378,7 @@ export const createPostgresRecipientCodeStore = (options: {
         true,
         async (ctx) => {
           const selected = await query(ctx.scope).query(
-            'SELECT * FROM authentication.recipient_code WHERE recipient_actor_id=$1 ORDER BY code_id FOR SHARE',
+            `SELECT ${authenticationRecipientCodeColumns} FROM authentication.recipient_code WHERE recipient_actor_id=$1 ORDER BY code_id FOR SHARE`,
             [ctx.caller.actorSubject],
           );
           const rows = selected.rows.map(readRecipientCode);

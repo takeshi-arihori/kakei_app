@@ -80,6 +80,12 @@ import {
   type AuthenticationConnectionPool,
   type AuthenticationTransactionOutcome,
 } from './authentication-transactions.js';
+import {
+  authenticationActorColumns,
+  authenticationAttemptColumns,
+  authenticationIdentityColumns,
+  authenticationSessionColumns,
+} from './authentication-columns.js';
 
 /** 原因・直接ID・秘密値を含めず監視へ送る固定分類。 */
 export interface AuthenticationStoreAlert {
@@ -232,7 +238,7 @@ export const createPostgresAuthenticationStore = (options: {
     ].sort();
     for (const id of sorted) {
       const result = await connection.query(
-        'SELECT * FROM authentication.actor WHERE actor_id = $1 FOR SHARE',
+        `SELECT ${authenticationActorColumns} FROM authentication.actor WHERE actor_id = $1 FOR SHARE`,
         [id],
       );
       if (result.rows.length !== 1) return unavailable();
@@ -257,7 +263,7 @@ export const createPostgresAuthenticationStore = (options: {
   ): Promise<Session | null> => {
     if (hint === null) return null;
     const result = await connection.query(
-      'SELECT * FROM authentication.session_record WHERE session_id = $1 FOR UPDATE',
+      `SELECT ${authenticationSessionColumns} FROM authentication.session_record WHERE session_id = $1 FOR UPDATE`,
       [hint.row.sessionId],
     );
     if (result.rows.length !== 1) return unavailable();
@@ -271,7 +277,7 @@ export const createPostgresAuthenticationStore = (options: {
   ): Promise<Attempt | null> => {
     if (hint === null) return null;
     const result = await connection.query(
-      'SELECT * FROM authentication.login_attempt WHERE attempt_id = $1 FOR UPDATE',
+      `SELECT ${authenticationAttemptColumns} FROM authentication.login_attempt WHERE attempt_id = $1 FOR UPDATE`,
       [hint.row.attemptId],
     );
     if (result.rows.length !== 1) return unavailable();
@@ -640,7 +646,7 @@ export const createPostgresAuthenticationStore = (options: {
                 null;
               if (identityHint !== null) {
                 const locked = await connection.query(
-                  'SELECT * FROM authentication.google_identity WHERE identity_id = $1 FOR UPDATE',
+                  `SELECT ${authenticationIdentityColumns} FROM authentication.google_identity WHERE identity_id = $1 FOR UPDATE`,
                   [identityHint.identityId],
                 );
                 if (locked.rows.length !== 1) return unavailable();

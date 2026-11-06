@@ -14,6 +14,10 @@ import {
   authenticationDatabaseBytes,
   authenticationDatabaseRow,
 } from './authentication-database-values.js';
+import {
+  authenticationAttemptColumns,
+  authenticationSessionColumns,
+} from './authentication-columns.js';
 import type { AuthenticationStoreKeyState } from './authentication-key-state.js';
 import {
   readStoredAuthenticationAttempt,
@@ -70,7 +74,7 @@ export const findAuthenticationCookie = async (
     return `(cookie_digest_key_version = $${values.length - 1} AND cookie_digest = $${values.length})`;
   });
   const result = await connection.query(
-    `SELECT * FROM authentication.${kind === 'attempt' ? 'login_attempt' : 'session_record'} WHERE ${conditions.join(' OR ')}`,
+    `SELECT ${kind === 'attempt' ? authenticationAttemptColumns : authenticationSessionColumns} FROM authentication.${kind === 'attempt' ? 'login_attempt' : 'session_record'} WHERE ${conditions.join(' OR ')}`,
     values,
   );
   if (result.rows.length > 1) throw new AuthenticationMultipleMatches();

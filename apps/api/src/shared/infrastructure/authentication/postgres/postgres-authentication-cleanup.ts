@@ -40,6 +40,11 @@ import {
   createAuthenticationTransactions,
   type AuthenticationConnectionPool,
 } from './authentication-transactions.js';
+import {
+  authenticationActorColumns,
+  authenticationAttemptColumns,
+  authenticationSessionColumns,
+} from './authentication-columns.js';
 
 const day = 86_400_000;
 
@@ -95,7 +100,7 @@ export const createPostgresAuthenticationCleanup = (
             actors = new Set<string>();
             for (const actorId of hints) {
               const selected = await connection.query(
-                'SELECT * FROM authentication.actor WHERE actor_id=$1 FOR SHARE SKIP LOCKED',
+                `SELECT ${authenticationActorColumns} FROM authentication.actor WHERE actor_id=$1 FOR SHARE SKIP LOCKED`,
                 [actorId],
               );
               if (selected.rows.length === 0) continue;
@@ -112,7 +117,7 @@ export const createPostgresAuthenticationCleanup = (
               actors.add(actorId);
             }
             const selectedSessions = await connection.query(
-              'SELECT * FROM authentication.session_record WHERE actor_id=ANY($1::uuid[]) ' +
+              `SELECT ${authenticationSessionColumns} FROM authentication.session_record WHERE actor_id=ANY($1::uuid[]) ` +
                 'AND LEAST(idle_expires_at_ms,absolute_expires_at_ms,terminal_at_ms) <= $2 ' +
                 'ORDER BY session_id LIMIT $3 FOR UPDATE SKIP LOCKED',
               [[...actors], hintNow, limit],
@@ -134,7 +139,7 @@ export const createPostgresAuthenticationCleanup = (
             );
           }
           const selectedAttempts = await connection.query(
-            'SELECT * FROM authentication.login_attempt ' +
+            `SELECT ${authenticationAttemptColumns} FROM authentication.login_attempt ` +
               'WHERE COALESCE(terminal_at_ms,expires_at_ms) <= $1 ' +
               'ORDER BY attempt_id LIMIT $2 FOR UPDATE SKIP LOCKED',
             [hintNow, limit],
