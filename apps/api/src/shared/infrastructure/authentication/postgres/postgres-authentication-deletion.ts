@@ -45,6 +45,12 @@ import {
   createAuthenticationTransactions,
   type AuthenticationConnectionPool,
 } from './authentication-transactions.js';
+import {
+  authenticationActorColumns,
+  authenticationDeletionIntentColumns,
+  authenticationIdentityColumns,
+  authenticationSessionColumns,
+} from './authentication-columns.js';
 
 const fail = (): never => {
   throw new AuthenticationCryptoUnavailable();
@@ -97,7 +103,7 @@ export const createPostgresAuthenticationDeletion = (
     actorId: string,
   ) => {
     const found = await connection.query(
-      'SELECT * FROM authentication.actor WHERE actor_id=$1 FOR UPDATE',
+      `SELECT ${authenticationActorColumns} FROM authentication.actor WHERE actor_id=$1 FOR UPDATE`,
       [actorId],
     );
     if (found.rows.length !== 1) return fail();
@@ -121,7 +127,7 @@ export const createPostgresAuthenticationDeletion = (
       const actorId = authenticationUuid(inputActorId);
       return run(async (connection, state) => {
         const selected = await connection.query(
-          'SELECT * FROM authentication.actor WHERE actor_id=$1 FOR SHARE',
+          `SELECT ${authenticationActorColumns} FROM authentication.actor WHERE actor_id=$1 FOR SHARE`,
           [actorId],
         );
         if (selected.rows.length !== 1) return fail();
@@ -159,7 +165,7 @@ export const createPostgresAuthenticationDeletion = (
       return run(async (connection, state) => {
         const storedActor = await actor(connection, state, target.actorId);
         const selected = await connection.query(
-          'SELECT * FROM authentication.session_record WHERE actor_id=$1 ORDER BY session_id FOR UPDATE',
+          `SELECT ${authenticationSessionColumns} FROM authentication.session_record WHERE actor_id=$1 ORDER BY session_id FOR UPDATE`,
           [target.actorId],
         );
         const sessions = selected.rows.map(readStoredAuthenticationSession);
@@ -266,7 +272,7 @@ export const createPostgresAuthenticationDeletion = (
         const storedActor = await actor(connection, state, target.actorId);
         if (storedActor.row.state !== 'disabled') return fail();
         const selectedSessions = await connection.query(
-          'SELECT * FROM authentication.session_record WHERE actor_id=$1 ORDER BY session_id FOR UPDATE',
+          `SELECT ${authenticationSessionColumns} FROM authentication.session_record WHERE actor_id=$1 ORDER BY session_id FOR UPDATE`,
           [target.actorId],
         );
         const sessions = selectedSessions.rows.map(
@@ -285,7 +291,7 @@ export const createPostgresAuthenticationDeletion = (
           await options.codec.open(stored);
         }
         const selectedIdentities = await connection.query(
-          'SELECT * FROM authentication.google_identity WHERE actor_id=$1 FOR UPDATE',
+          `SELECT ${authenticationIdentityColumns} FROM authentication.google_identity WHERE actor_id=$1 FOR UPDATE`,
           [target.actorId],
         );
         const identities = selectedIdentities.rows.map(
@@ -338,7 +344,7 @@ export const createPostgresAuthenticationDeletion = (
         );
         if (present.rows.length !== 0) return fail();
         const rows = await connection.query(
-          'SELECT * FROM authentication.deletion_intent WHERE operation_id=$1 FOR UPDATE',
+          `SELECT ${authenticationDeletionIntentColumns} FROM authentication.deletion_intent WHERE operation_id=$1 FOR UPDATE`,
           [record.operationId],
         );
         if (rows.rows.length !== 1) return fail();
@@ -380,7 +386,7 @@ export const createPostgresAuthenticationDeletion = (
           return fail();
         authenticationUuid(authenticationDatabaseRow(state.rows[0]).epoch);
         const rows = await connection.query(
-          'SELECT * FROM authentication.deletion_intent ORDER BY operation_id',
+          `SELECT ${authenticationDeletionIntentColumns} FROM authentication.deletion_intent ORDER BY operation_id`,
         );
         try {
           for (const value of rows.rows as unknown[]) {

@@ -502,6 +502,32 @@ describe('コード管理Storeの実PG17原子性 #240（GMと公開経路なし
       records.find((r) => r.codeId === first.codeId)?.lookupDigest,
     );
   });
+  it('無関係な列が追加されても招待コードの読取りは明示列だけを使い、封鎖へ倒れない', async () => {
+    const tables = ['recipient_code', 'session_record', 'actor'];
+    for (const table of tables)
+      await observer.query(
+        `ALTER TABLE authentication.${table} ADD COLUMN unrelated_extra text DEFAULT 'extra'`,
+      );
+    try {
+      const first = await issue();
+      now += 100;
+      const second = await issue();
+      expect(second.codeId).not.toBe(first.codeId);
+      expect(await store.inspect(secret(10), clock)).toEqual({
+        status: 'found',
+        code: {
+          codeId: second.codeId,
+          state: 'issued',
+          expiresAt: second.expiresAt,
+        },
+      });
+    } finally {
+      for (const table of tables)
+        await observer.query(
+          `ALTER TABLE authentication.${table} DROP COLUMN unrelated_extra`,
+        );
+    }
+  });
   it('状態確認は不在/最小状態を返し、idle/Session版/コード期限を延長しない', async () => {
     expect(await store.inspect(secret(10), clock)).toEqual({
       status: 'no-code',

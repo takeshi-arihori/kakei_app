@@ -18,6 +18,10 @@
 
 既存Schema v5＋v6を使用し、Migrationを変更しない。Production認証からGroupのMigration Runnerへ依存しない。
 
+## 明示列
+
+認証Tableの読取りは`SELECT *`を使わず、`authentication-columns.ts`の明示列だけを読む。将来追加される秘密値・PIIの列を黙って読み込まず、列集合の完全一致を求める読取り（`readRecipientCode`等）が無関係な列で形式不正になって利用不能や封鎖へ倒れることも避ける。列を足す場合は読取関数とこの定数を同時に直す。`authentication-columns.spec.ts`が`SELECT *`の再混入を検査し、Integration Testが無関係な列の追加後も読取りが成功することを確認する。
+
 ## Lock・世代・再試行
 
 READ COMMITTEDの同一接続で、key_state FOR SHARE → Actor UUID昇順FOR SHARE → Session UUID昇順FOR UPDATE → Attempt UUID昇順FOR UPDATE → Identity／Alias → Audit insertの順にlockする。無効化側はActor FOR UPDATE、Rotation公開はkey_state FOR UPDATE。非locking lookupはhintであり、Lock後にRecord ID・Actor FK・Digest・epoch・版を再確認する。更新済み版は最新暗号文と共に再検証し、completeはsnapshot全Fieldの一致も必須とする。判断時刻は必要なLockと暗号検証後の注入Clockから取得する。

@@ -58,6 +58,11 @@ import {
   readRecipientCode,
 } from './recipient-code-selection.js';
 import type { RecipientCodeTransactionScopes } from './recipient-code-transaction-scopes.js';
+import {
+  authenticationActorColumns,
+  authenticationRecipientCodeColumns,
+  authenticationSessionColumns,
+} from './authentication-columns.js';
 
 type Session = StoredAuthenticationRecord<AuthenticationSessionRow>;
 type KeyState = Awaited<ReturnType<typeof readRecipientCodeKeyState>>;
@@ -206,7 +211,7 @@ export const createPostgresRecipientCodeLeases = (options: {
         const actors = new Map<string, AuthenticationActorState>();
         for (const id of ids) {
           const rows = await connection.query(
-            `SELECT * FROM authentication.actor WHERE actor_id = $1 ${mode === 'manage' ? 'FOR UPDATE' : 'FOR SHARE'}`,
+            `SELECT ${authenticationActorColumns} FROM authentication.actor WHERE actor_id = $1 ${mode === 'manage' ? 'FOR UPDATE' : 'FOR SHARE'}`,
             [id],
           );
           if (rows.rows.length !== 1) return reject();
@@ -241,7 +246,7 @@ export const createPostgresRecipientCodeLeases = (options: {
         let session: Session | null = null;
         if (hint) {
           const rows = await connection.query(
-            'SELECT * FROM authentication.session_record WHERE session_id = $1 FOR UPDATE',
+            `SELECT ${authenticationSessionColumns} FROM authentication.session_record WHERE session_id = $1 FOR UPDATE`,
             [hint.row.sessionId],
           );
           if (rows.rows.length !== 1) return reject();
@@ -468,7 +473,7 @@ export const createPostgresRecipientCodeLeases = (options: {
           };
           if (!ctx.hint) return denied();
           const rows = await ctx.connection.query(
-            'SELECT * FROM authentication.recipient_code WHERE code_id = $1 FOR UPDATE',
+            `SELECT ${authenticationRecipientCodeColumns} FROM authentication.recipient_code WHERE code_id = $1 FOR UPDATE`,
             [ctx.hint.codeId],
           );
           if (!rows.rows.length) return denied();

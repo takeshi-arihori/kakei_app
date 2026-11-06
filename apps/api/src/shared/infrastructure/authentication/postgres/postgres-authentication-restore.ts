@@ -50,6 +50,13 @@ import {
   createAuthenticationTransactions,
   type AuthenticationConnectionPool,
 } from './authentication-transactions.js';
+import {
+  authenticationActorColumns,
+  authenticationAttemptColumns,
+  authenticationDeletionIntentColumns,
+  authenticationIdentityColumns,
+  authenticationSessionColumns,
+} from './authentication-columns.js';
 
 const fail = (): never => {
   throw new AuthenticationCryptoUnavailable();
@@ -247,7 +254,7 @@ export const createPostgresAuthenticationRestore = (
       return restoring(fence, async (connection) => {
         const state = await readAuthenticationRestoreKeyState(connection);
         const actorRows = await connection.query(
-          'SELECT * FROM authentication.actor WHERE actor_id=$1 FOR UPDATE',
+          `SELECT ${authenticationActorColumns} FROM authentication.actor WHERE actor_id=$1 FOR UPDATE`,
           [target.actorId],
         );
         const actor =
@@ -255,12 +262,12 @@ export const createPostgresAuthenticationRestore = (
             ? null
             : await checkActor(authenticationDatabaseRow(actorRows.rows[0]));
         const sessionRows = await connection.query(
-          'SELECT * FROM authentication.session_record WHERE actor_id=$1 ORDER BY session_id FOR UPDATE',
+          `SELECT ${authenticationSessionColumns} FROM authentication.session_record WHERE actor_id=$1 ORDER BY session_id FOR UPDATE`,
           [target.actorId],
         );
         const sessions = sessionRows.rows.map(readStoredAuthenticationSession);
         const identityRows = await connection.query(
-          'SELECT * FROM authentication.google_identity WHERE actor_id=$1 FOR UPDATE',
+          `SELECT ${authenticationIdentityColumns} FROM authentication.google_identity WHERE actor_id=$1 FOR UPDATE`,
           [target.actorId],
         );
         const identities = identityRows.rows.map(
@@ -337,7 +344,7 @@ export const createPostgresAuthenticationRestore = (
         }
         if (record.state === 'complete') {
           const current = await connection.query(
-            'SELECT * FROM authentication.deletion_intent WHERE operation_id=$1 FOR UPDATE',
+            `SELECT ${authenticationDeletionIntentColumns} FROM authentication.deletion_intent WHERE operation_id=$1 FOR UPDATE`,
             [record.operationId],
           );
           if (current.rows.length !== 1) return fail();
@@ -368,15 +375,15 @@ export const createPostgresAuthenticationRestore = (
       return restoring(fence, async (connection) => {
         const state = await readAuthenticationRestoreKeyState(connection);
         const actors = await connection.query(
-          'SELECT * FROM authentication.actor ORDER BY actor_id FOR SHARE',
+          `SELECT ${authenticationActorColumns} FROM authentication.actor ORDER BY actor_id FOR SHARE`,
         );
         for (const value of actors.rows as unknown[]) await checkActor(value);
         const sessionRows = await connection.query(
-          'SELECT * FROM authentication.session_record ORDER BY session_id FOR UPDATE',
+          `SELECT ${authenticationSessionColumns} FROM authentication.session_record ORDER BY session_id FOR UPDATE`,
         );
         const sessions = sessionRows.rows.map(readStoredAuthenticationSession);
         const attemptRows = await connection.query(
-          'SELECT * FROM authentication.login_attempt ORDER BY attempt_id FOR UPDATE',
+          `SELECT ${authenticationAttemptColumns} FROM authentication.login_attempt ORDER BY attempt_id FOR UPDATE`,
         );
         const attempts = attemptRows.rows.map(readStoredAuthenticationAttempt);
         const tickets = [];
@@ -436,7 +443,7 @@ export const createPostgresAuthenticationRestore = (
         const previousState =
           await readAuthenticationRestoreKeyState(connection);
         const selectedActors = await connection.query(
-          'SELECT * FROM authentication.actor ORDER BY actor_id FOR UPDATE',
+          `SELECT ${authenticationActorColumns} FROM authentication.actor ORDER BY actor_id FOR UPDATE`,
         );
         const actors = [];
         for (const value of selectedActors.rows as unknown[]) {
@@ -495,7 +502,7 @@ export const createPostgresAuthenticationRestore = (
           if (changed.rowCount !== 1) return fail();
         }
         const selected = await connection.query(
-          'SELECT * FROM authentication.google_identity ORDER BY identity_id FOR UPDATE',
+          `SELECT ${authenticationIdentityColumns} FROM authentication.google_identity ORDER BY identity_id FOR UPDATE`,
         );
         const identities = selected.rows.map(readStoredAuthenticationIdentity);
         for (const stored of identities) {

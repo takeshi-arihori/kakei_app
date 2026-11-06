@@ -17,6 +17,7 @@ import {
   createAuthenticationTransactions,
   type AuthenticationConnectionPool,
 } from './authentication-transactions.js';
+import { authenticationRatePolicyColumns } from './authentication-columns.js';
 
 const limits: Record<AuthenticationHttpOperation, readonly [number, number]> = {
   attempt: [10, 120],
@@ -103,7 +104,7 @@ export const createPostgresAuthenticationHttpRate = (
   ) => {
     const rows = (
       await connection.query(
-        'SELECT * FROM authentication_http.rate_policy WHERE state_id=1 ' +
+        `SELECT ${authenticationRatePolicyColumns} FROM authentication_http.rate_policy WHERE state_id=1 ` +
           lock,
       )
     ).rows;
