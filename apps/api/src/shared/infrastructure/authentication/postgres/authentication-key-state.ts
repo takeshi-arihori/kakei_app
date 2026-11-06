@@ -53,6 +53,7 @@ const known = new Set([
  * @param statuses 各専用入口で固定した許可State。
  * @param additionalPurposes 専用leaseが明示的に受理するコード2用途。
  * @param acquireLock 先頭のleaseだけtrue。同じleaseの管理参加者は再Lockしない。
+ * @param ignoredPurposes あってもなくても結果へ含めず、未知用途として拒否もしない用途。
  * @returns commitまで共有Lockで守られた世代集合。
  * @throws 不正State、世代不足、またはDB障害。
  */
@@ -61,6 +62,7 @@ const readState = async (
   statuses: readonly string[],
   additionalPurposes: readonly string[] = [],
   acquireLock = true,
+  ignoredPurposes: readonly string[] = [],
 ): Promise<
   AuthenticationStoreKeyState & {
     codeLookup: readonly string[];
@@ -98,7 +100,9 @@ const readState = async (
     const version = authenticationKeyVersion(row.key_version);
     if (
       typeof row.purpose !== 'string' ||
-      (!known.has(row.purpose) && !additionalPurposes.includes(row.purpose)) ||
+      (!known.has(row.purpose) &&
+        !additionalPurposes.includes(row.purpose) &&
+        !ignoredPurposes.includes(row.purpose)) ||
       typeof row.searchable !== 'boolean' ||
       typeof row.write_required !== 'boolean'
     )
@@ -237,6 +241,48 @@ export const readAuthenticationMaintenanceKeyState = (
   connection: AuthenticationQueryConnection,
 ): Promise<AuthenticationStoreKeyState> =>
   readState(connection, ['active', 'rotating', 'quarantined']);
+
+/**
+ * 既存の認証清掃はコード行を扱わないので、コード用途の初期化前後で同じ結果にする（ADR D6）。
+ * 通常認証Store、Actor削除、Restoreのreaderはこの許容を持たない。
+ * @param connection 清掃が所有するTransaction接続。
+ * @returns 通常運転またはquarantinedの共有Lock付き世代。コード世代は含まない。
+ * @throws 未初期化/Restore中、未知用途、不正State、鍵世代不足。
+ */
+export const readAuthenticationCleanupKeyState = (
+  connection: AuthenticationQueryConnection,
+): Promise<AuthenticationStoreKeyState> =>
+  readState(connection, ['active', 'rotating', 'quarantined'], [], true, [
+    'recipient-code-lookup',
+    'recipient-code-state-mac',
+  ]);
+
+/**
+ * 利用受付を閉じる。隔離済みとRestore中は状態を変えず、封鎖済みとして扱う。
+ * activeへ戻す遷移を持たない。
+ * @param connection 保守が所有するTransaction接続。
+ * @returns 封鎖を確認できた場合だけtrue。未初期化やCAS不成立はfalse。
+ * @throws DB障害。封鎖済みとして扱わない。
+ */
+export const quarantineAuthenticationKeyState = async (
+  connection: AuthenticationQueryConnection,
+): Promise<boolean> => {
+  const rows = await connection.query(
+    'SELECT status,generation_version FROM authentication.key_state WHERE state_id=1 FOR UPDATE',
+  );
+  if (rows.rows.length !== 1) return false;
+  const state = authenticationDatabaseRow(rows.rows[0]);
+  if (state.status === 'uninitialized') return false;
+  if (state.status === 'quarantined' || state.status === 'restoring')
+    return true;
+  const version = authenticationDatabaseInteger(state.generation_version, 1);
+  const next = authenticationDatabaseInteger(version + 1, 1);
+  const changed = await connection.query(
+    "UPDATE authentication.key_state SET status='quarantined',generation_version=$1 WHERE state_id=1 AND generation_version=$2",
+    [next, version],
+  );
+  return changed.rowCount === 1;
+};
 
 /**
  * コード保守だけが、隔離後もコード世代を読める。利用受付やactiveへの復帰には使わない。

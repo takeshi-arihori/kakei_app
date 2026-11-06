@@ -31,6 +31,7 @@ describe('招待コード管理の本人性境界', () => {
         verifyLookup: unavailable,
         recordMac: unavailable,
         verifyRecord: unavailable,
+        checkRecord: unavailable,
         audit: unavailable,
       },
       entropy: {

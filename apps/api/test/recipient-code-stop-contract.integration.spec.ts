@@ -18,6 +18,7 @@ import { AuthenticationCryptoUnavailable } from '../src/shared/application/authe
 import type { AuthenticationTransactionScope } from '../src/shared/application/authentication/authentication-transaction-scope.js';
 import type { RecipientCodeSecret } from '../src/shared/application/authentication/recipient-code-input.js';
 import {
+  readAuthenticationCleanupKeyState,
   readAuthenticationKeyState,
   readAuthenticationMaintenanceKeyState,
   readRecipientCodeKeyState,
@@ -25,9 +26,14 @@ import {
   readRecipientCodeManagementKeyState,
 } from '../src/shared/infrastructure/authentication/postgres/authentication-key-state.js';
 import { createAuthenticationTransactionScopes } from '../src/shared/infrastructure/authentication/postgres/authentication-transaction-scopes.js';
+import { createPostgresAuthenticationCleanup } from '../src/shared/infrastructure/authentication/postgres/postgres-authentication-cleanup.js';
+import { createPostgresAuthenticationDeletion } from '../src/shared/infrastructure/authentication/postgres/postgres-authentication-deletion.js';
 import { createPostgresAuthenticationStore } from '../src/shared/infrastructure/authentication/postgres/postgres-authentication-store.js';
 import { ids } from '../src/shared/infrastructure/authentication/test/authentication-crypto-fixtures.js';
+import { syntheticAuthenticationLedger } from '../src/shared/infrastructure/authentication/test/authentication-maintenance-ledger-fixtures.js';
+import { syntheticAuthenticationManagedKeys } from '../src/shared/infrastructure/authentication/test/authentication-maintenance-key-fixtures.js';
 import {
+  actors,
   RecipientInvitationFixture,
   sessionSecret,
 } from './support/recipient-invitation-fixture.js';
@@ -185,7 +191,8 @@ describe('招待コード保守の停止契約（実PG17）', () => {
             fromRestoring: false,
           },
           {
-            path: 'postgres-authentication-cleanup.ts',
+            // 既存清掃とコード清掃が共有する封鎖関数（#259で移動）。
+            path: 'authentication-key-state.ts',
             target: 'quarantined',
             fromRestoring: false,
           },
@@ -204,6 +211,7 @@ describe('招待コード保守の停止契約（実PG17）', () => {
     it.each([
       ['通常認証', readAuthenticationKeyState, false],
       ['既存保守', readAuthenticationMaintenanceKeyState, false],
+      ['既存清掃', readAuthenticationCleanupKeyState, true],
       ['コード専用lease', readRecipientCodeKeyState, true],
       ['コード管理', readRecipientCodeManagementKeyState, true],
       ['コード保守', readRecipientCodeMaintenanceKeyState, true],
@@ -226,6 +234,101 @@ describe('招待コード保守の停止契約（実PG17）', () => {
       await expect(create(issued.code)).resolves.toEqual({
         status: 'unavailable',
       });
+    });
+  });
+
+  describe('既存の清掃・削除Adapter（ADR D6）', () => {
+    const adapterKeys = () => syntheticAuthenticationManagedKeys();
+    const cleanup = () =>
+      createPostgresAuthenticationCleanup({
+        pool: f.runtimeOptions.pool,
+        codec: f.authCodec,
+        digests: f.digests,
+        keys: adapterKeys().keys,
+        clock: f.clock,
+      });
+    const deletion = () =>
+      createPostgresAuthenticationDeletion({
+        pool: f.runtimeOptions.pool,
+        codec: f.authCodec,
+        digests: f.digests,
+        keys: adapterKeys().keys,
+        clock: f.clock,
+        ledger: syntheticAuthenticationLedger().evidence,
+      });
+    const revokedSession = async () => {
+      const before = await f.admin.query<{ session_id: string }>(
+        'SELECT session_id FROM authentication.session_record',
+      );
+      await f.addSession(actors.member, 77);
+      const after = await f.admin.query<{ session_id: string }>(
+        'SELECT session_id FROM authentication.session_record',
+      );
+      const known = new Set(before.rows.map((row) => row.session_id));
+      return after.rows.find((row) => !known.has(row.session_id))!.session_id;
+    };
+
+    it('コードpurposeがあっても既存清掃は期限切れSessionを除去する', async () => {
+      const sessionId = await revokedSession();
+      f.now += 8 * 86_400_000;
+      await expect(cleanup().deleteExpired(100)).resolves.toMatchObject({
+        status: 'committed',
+      });
+      expect(
+        (
+          await f.admin.query(
+            'SELECT 1 FROM authentication.session_record WHERE session_id=$1',
+            [sessionId],
+          )
+        ).rowCount,
+      ).toBe(0);
+    });
+
+    it('コードpurposeがなくても既存清掃は動く', async () => {
+      const generations = await removeCodePurposes();
+      expect(generations).toHaveLength(2);
+      const sessionId = await revokedSession();
+      f.now += 8 * 86_400_000;
+      await expect(cleanup().deleteExpired(100)).resolves.toMatchObject({
+        status: 'committed',
+      });
+      expect(
+        (
+          await f.admin.query(
+            'SELECT 1 FROM authentication.session_record WHERE session_id=$1',
+            [sessionId],
+          )
+        ).rowCount,
+      ).toBe(0);
+    });
+
+    it('既存清掃も未知purposeでは止まる', async () => {
+      await addUnknownPurpose();
+      try {
+        await expect(cleanup().deleteExpired(100)).resolves.toEqual({
+          status: 'unavailable',
+        });
+      } finally {
+        await f.admin.query(
+          "DELETE FROM authentication.key_generation WHERE purpose='future-purpose'",
+        );
+      }
+    });
+
+    it('既存の削除Adapterはコードpurposeがあると止まり、Actorを変えない（拡張は#260）', async () => {
+      const before = await f.admin.query(
+        'SELECT * FROM authentication.actor WHERE actor_id=$1',
+        [actors.member],
+      );
+      await expect(deletion().plan(actors.member)).rejects.toBeDefined();
+      expect(
+        (
+          await f.admin.query(
+            'SELECT * FROM authentication.actor WHERE actor_id=$1',
+            [actors.member],
+          )
+        ).rows,
+      ).toEqual(before.rows);
     });
   });
 

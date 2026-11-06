@@ -5,6 +5,7 @@ import {
   createRecipientCodeCleanupService,
   type RecipientCodeCleanupDatabase,
 } from './recipient-code-cleanup-service.js';
+import type { AuthenticationMaintenanceMonitor } from './authentication-maintenance-ports.js';
 import type { RecipientCodeMacKeyLifecyclePort } from './recipient-code-key-lifecycle.js';
 import { guardRecipientCodeMaintenance } from './recipient-code-maintenance-guard.js';
 
@@ -30,19 +31,34 @@ const setup = async (terminalAt: number | null = null) => {
   });
   const events: string[] = [];
   const state = { row: true, now: expiresAt };
-  const remove = vi.fn(() => {
+  const remove = vi.fn<RecipientCodeCleanupDatabase['remove']>(() => {
     events.push('remove');
     state.row = false;
-    return Promise.resolve();
+    return Promise.resolve('removed');
   });
   const absent = vi.fn(() => {
     events.push('absent');
     return Promise.resolve(!state.row);
   });
+  const quarantine = vi.fn(() => Promise.resolve(true));
   const database: RecipientCodeCleanupDatabase = {
-    verifiedTerminalAt: () => Promise.resolve(terminalAt),
+    inspect: () =>
+      Promise.resolve({
+        status: 'read',
+        disabledAt: null,
+        terminalAt,
+        integrity: 'valid',
+      }),
     remove,
     absent,
+    dueHints: () => Promise.resolve([]),
+    disabledHints: () => Promise.resolve(new Map()),
+    quarantine,
+  };
+  const monitor = {
+    record: vi.fn<AuthenticationMaintenanceMonitor['record']>(() =>
+      Promise.resolve(),
+    ),
   };
   const nextOperationId = vi.fn(() => operationId);
   const lifecycle: RecipientCodeMacKeyLifecyclePort = {
@@ -78,6 +94,7 @@ const setup = async (terminalAt: number | null = null) => {
       database,
       clock: { now: () => state.now },
       nextOperationId,
+      monitor,
     });
   const destroyed = async () =>
     (await keys.lifecycle.inventory(codeId)).generations.every(
@@ -92,8 +109,21 @@ const setup = async (terminalAt: number | null = null) => {
     nextOperationId,
     service,
     destroyed,
+    monitor,
+    quarantine,
   };
 };
+
+/** setupのDB境界を、個別のinspectだけ差し替えて使う。 */
+const baseDatabase = (t: Awaited<ReturnType<typeof setup>>) =>
+  Promise.resolve<RecipientCodeCleanupDatabase>({
+    inspect: () => Promise.reject(new Error('unused')),
+    remove: t.remove,
+    absent: t.absent,
+    dueHints: () => Promise.resolve([]),
+    disabledHints: () => Promise.resolve(new Map()),
+    quarantine: t.quarantine,
+  });
 
 describe('createRecipientCodeCleanupService', () => {
   it('ticket登録→行除去→全世代closure→0-row→完了の順で1件を完了する', async () => {
@@ -164,7 +194,7 @@ describe('createRecipientCodeCleanupService', () => {
 
   it('closure後も行が残れば完了せず、除去後に同operationで完了する', async () => {
     const t = await setup();
-    t.remove.mockImplementationOnce(() => Promise.resolve());
+    t.remove.mockImplementationOnce(() => Promise.resolve('removed'));
     await expect(t.service().cleanOne(scope)).resolves.toEqual({
       status: 'unavailable',
     });
@@ -362,9 +392,101 @@ describe('createRecipientCodeCleanupService', () => {
     const t = await setup();
     await t.service().cleanOne(scope);
     t.state.row = true;
-    t.remove.mockImplementationOnce(() => Promise.resolve());
+    t.remove.mockImplementationOnce(() => Promise.resolve('removed'));
     await expect(t.service().cleanOne(scope)).resolves.toEqual({
       status: 'unavailable',
     });
+  });
+
+  it.each([
+    ['retained', 'retained'],
+    ['locked', 'skipped'],
+  ] as const)(
+    '除去のLock後に%sなら閉じずに%sを返す',
+    async (answer, status) => {
+      const t = await setup();
+      t.remove.mockResolvedValueOnce(answer);
+      await expect(t.service().cleanOne(scope)).resolves.toEqual({ status });
+      expect(t.events).toEqual(['prepare']);
+      expect(await t.destroyed()).toBe(false);
+    },
+  );
+
+  it('起算はterminalAt・disabledAt・期限の最早値とする', async () => {
+    const t = await setup(900_000);
+    const service = createRecipientCodeCleanupService({
+      maintenance: guardRecipientCodeMaintenance(t.keys),
+      database: {
+        ...(await baseDatabase(t)),
+        inspect: () =>
+          Promise.resolve({
+            status: 'read',
+            disabledAt: 800_000,
+            terminalAt: 900_000,
+            integrity: 'valid',
+          }),
+      },
+      clock: { now: () => 800_000 },
+      nextOperationId: () => operationId,
+      monitor: t.monitor,
+    });
+    await expect(service.cleanOne(scope)).resolves.toEqual({
+      status: 'completed',
+    });
+    await expect(t.keys.maintenance.find(codeId)).resolves.toMatchObject({
+      window: { dueAt: 800_000 },
+    });
+  });
+
+  it.each([
+    ['mismatch', true, 'quarantined', 'QUARANTINED'],
+    ['unverifiable', false, 'completed', 'UNAVAILABLE'],
+  ] as const)(
+    '照合結果%sでは封鎖=%sとし、%sを返して%sを通知する',
+    async (integrity, sealed, status, code) => {
+      const t = await setup();
+      const service = createRecipientCodeCleanupService({
+        maintenance: guardRecipientCodeMaintenance(t.keys),
+        database: {
+          ...(await baseDatabase(t)),
+          inspect: () =>
+            Promise.resolve({
+              status: 'read',
+              disabledAt: null,
+              terminalAt: null,
+              integrity,
+            }),
+        },
+        clock: { now: () => expiresAt },
+        nextOperationId: () => operationId,
+        monitor: t.monitor,
+      });
+      await expect(service.cleanOne(scope)).resolves.toEqual({ status });
+      expect(t.quarantine).toHaveBeenCalledTimes(sealed ? 1 : 0);
+      expect(t.monitor.record).toHaveBeenCalledWith({
+        operation: 'cleanup',
+        code,
+        oldest: null,
+      });
+    },
+  );
+
+  it('封鎖を確認できなければquarantinedを返さない', async () => {
+    const t = await setup();
+    t.quarantine.mockResolvedValue(false);
+    t.state.now = expiresAt + 86_400_000;
+    await expect(t.service().cleanOne(scope)).resolves.toEqual({
+      status: 'unavailable',
+    });
+    expect(t.events).toEqual([]);
+  });
+
+  it('runは不正なlimitをDBへ渡さず止める', async () => {
+    const t = await setup();
+    for (const limit of [0, 1001, 1.5])
+      await expect(t.service().run(limit)).resolves.toEqual({
+        status: 'unavailable',
+      });
+    expect(t.events).toEqual([]);
   });
 });
