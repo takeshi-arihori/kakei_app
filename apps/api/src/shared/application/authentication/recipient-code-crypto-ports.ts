@@ -124,6 +124,13 @@ export interface RecipientCodeCrypto {
    */
   verifyRecord(row: RecipientCodeRecord): Promise<boolean>;
   /**
+   * 清掃の封鎖判断のため、確定したMAC不一致と鍵障害を内部で区別する。原因は外部へ出さない。
+   * @param row 構造だけでは信頼しない最小Inventory。
+   * @returns 計算できた場合の照合結果。
+   * @throws RecipientCodeUnavailable 不正形式・鍵障害。不一致として扱わない。
+   */
+  checkRecord(row: RecipientCodeRecord): Promise<'valid' | 'mismatch'>;
+  /**
    * 直接codeIdをAuditへ出さない独立仮名を作る。
    * @param input codeIdとAudit世代。原コードを渡さない。
    * @returns Audit専用の仮名。

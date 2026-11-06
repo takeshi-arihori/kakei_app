@@ -193,6 +193,13 @@ export const createRecipientCodeCrypto = (options: {
         if (!timingSafeEqual(mac, calculated.bytes)) return fail();
         return true;
       }),
+    checkRecord: (input) =>
+      safe('record-mac', async () => {
+        const r = snapshotRecipientCodeRecord(input);
+        const { mac, ...metadata } = r;
+        const calculated = await state(metadata);
+        return timingSafeEqual(mac, calculated.bytes) ? 'valid' : 'mismatch';
+      }),
     audit: (input) =>
       safe('audit', () => {
         const r = authenticationObject(input, ['codeId', 'keyVersion']);

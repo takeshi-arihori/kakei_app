@@ -25,7 +25,10 @@ import {
   authenticationDatabaseInteger,
   authenticationDatabaseRow,
 } from './authentication-database-values.js';
-import { readAuthenticationMaintenanceKeyState } from './authentication-key-state.js';
+import {
+  quarantineAuthenticationKeyState,
+  readAuthenticationCleanupKeyState,
+} from './authentication-key-state.js';
 import {
   authenticationMaintenanceScope,
   prepareAuthenticationDestruction,
@@ -77,7 +80,7 @@ export const createPostgresAuthenticationCleanup = (
         return { status: 'unavailable' };
       const result = await tx.run(
         async (connection): Promise<AuthenticationCleanupCommit> => {
-          const state = await readAuthenticationMaintenanceKeyState(connection);
+          const state = await readAuthenticationCleanupKeyState(connection);
           const hintNow = authenticationDatabaseInteger(options.clock.now(), 0);
           let afterActor: string | null = null;
           let actors = new Set<string>();
@@ -315,31 +318,7 @@ export const createPostgresAuthenticationCleanup = (
       return result.value;
     },
     async quarantine() {
-      const result = await tx.run(async (connection) => {
-        const rows = await connection.query(
-          'SELECT status,generation_version FROM authentication.key_state WHERE state_id=1 FOR UPDATE',
-        );
-        if (
-          rows.rows.length !== 1 ||
-          authenticationDatabaseRow(rows.rows[0]).status === 'uninitialized'
-        )
-          return false;
-        if (
-          authenticationDatabaseRow(rows.rows[0]).status === 'quarantined' ||
-          authenticationDatabaseRow(rows.rows[0]).status === 'restoring'
-        )
-          return true;
-        const version = authenticationDatabaseInteger(
-          authenticationDatabaseRow(rows.rows[0]).generation_version,
-          1,
-        );
-        const next = authenticationDatabaseInteger(version + 1, 1);
-        const changed = await connection.query(
-          "UPDATE authentication.key_state SET status='quarantined',generation_version=$1 WHERE state_id=1 AND generation_version=$2",
-          [next, version],
-        );
-        return changed.rowCount === 1;
-      });
+      const result = await tx.run(quarantineAuthenticationKeyState);
       return result.status === 'committed' && result.value;
     },
   };
