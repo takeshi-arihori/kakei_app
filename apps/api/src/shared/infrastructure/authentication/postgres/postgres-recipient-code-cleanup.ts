@@ -25,6 +25,17 @@ import {
 import { readRecipientCode } from './recipient-code-selection.js';
 
 type Integrity = 'valid' | 'mismatch' | 'unverifiable';
+
+/**
+ * 読取関数が使う列だけを明示する。将来の列を黙って読み込まず、
+ * 列の追加でコード行の厳密な形式検証を不一致へ倒さない。
+ */
+const actorColumns =
+  'actor_id,state,version,created_at_ms,disabled_at_ms,control_key_version,state_mac';
+/** `readRecipientCode`が受理する12列。MAC検証の入力を欠かさない。 */
+const codeColumns =
+  'code_id,recipient_actor_id,record_version,epoch,created_at_ms,expires_at_ms,' +
+  'state,terminal_at_ms,lookup_key_version,lookup_digest,mac_key_version,state_mac';
 type MaintenanceState = Awaited<
   ReturnType<typeof readRecipientCodeMaintenanceKeyState>
 >;
@@ -49,7 +60,7 @@ const lockActor = async (
 ): Promise<{ state: MaintenanceState; actor: unknown }> => {
   const state = await readRecipientCodeMaintenanceKeyState(connection);
   const actor = await connection.query(
-    'SELECT * FROM authentication.actor WHERE actor_id=$1 FOR UPDATE',
+    `SELECT ${actorColumns} FROM authentication.actor WHERE actor_id=$1 FOR UPDATE`,
     [authenticationUuid(scope.recipientActorId)],
   );
   if (actor.rows.length !== 1) throw new RecipientCodeUnavailable();
@@ -71,7 +82,7 @@ const lockCode = async (
 > => {
   const id = authenticationUuid(codeId);
   const code = await connection.query(
-    'SELECT * FROM authentication.recipient_code WHERE code_id=$1 FOR UPDATE SKIP LOCKED',
+    `SELECT ${codeColumns} FROM authentication.recipient_code WHERE code_id=$1 FOR UPDATE SKIP LOCKED`,
     [id],
   );
   if (code.rows.length === 1) return { status: 'locked', stored: code.rows[0] };

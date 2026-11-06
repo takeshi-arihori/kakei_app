@@ -119,5 +119,6 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 - `remove`はLock後のClockで`dueAt`を再検証し、`record_version`のCASで行を除去する。同じcommitへ`purge` Audit（Actor仮名だけ）を保存する。行がなければ何も書かない。
 - `dueHints`と`disabledHints`はLockしない候補で、判断の根拠にしない。`quarantine`は既存清掃と共有する`quarantineAuthenticationKeyState`を使う。
 - `absent`はコード表だけを照合する。
+- ActorとコードはSQLで列を明示して読む。将来の列を読み込まず、列の追加でコード行の厳密な形式検証を不一致（封鎖）へ倒さない。
 
 各操作は別Transactionで、保守Portの呼出しをDB Lockの保持中に行わない。`recipient-code-cleanup.integration.spec.ts`が実PG17でLock順、SKIP LOCKED、期限境界、disabledAt、MAC不一致と封鎖、再発行・取消・消費との2接続競合、小Batch、孤立scope、列挙の停止、24時間未達、SQL・Audit・Provider障害、COMMIT応答喪失、部分世代、復元行、key-stateを検証する。Providerは合成で、実Providerの耐久性・破棄の証拠にしない。

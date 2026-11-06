@@ -429,6 +429,34 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
       });
     });
 
+    it('必要な列だけを読み、無関係な列が増えても誤って封鎖しない', async () => {
+      const { row, scope } = await issue();
+      f.now = row.expiresAt;
+      // 列の追加は通常のMigrationで起こる。全列を読むと厳密な形式検証が不一致へ倒れる。
+      for (const table of ['actor', 'recipient_code'])
+        await f.admin.query(
+          `ALTER TABLE authentication.${table} ADD COLUMN synthetic_extra text`,
+        );
+      try {
+        f.sqls = [];
+        await expect(service.cleanOne(scope)).resolves.toEqual({
+          status: 'completed',
+        });
+        expect(await keyStatus()).toBe('active');
+        expect(
+          f.sqls
+            .filter(({ sql }) => /SELECT \*/.test(sql))
+            .map(({ sql }) => sql),
+        ).toEqual([]);
+      } finally {
+        for (const table of ['actor', 'recipient_code'])
+          await f.admin.query(
+            `ALTER TABLE authentication.${table} DROP COLUMN synthetic_extra`,
+          );
+      }
+      await expectComplete(row.codeId);
+    });
+
     it('除去のLock後に期限前と分かれば削除しない', async () => {
       const { row, scope } = await issue();
       await expect(database.remove(scope, row.expiresAt)).resolves.toBe(
