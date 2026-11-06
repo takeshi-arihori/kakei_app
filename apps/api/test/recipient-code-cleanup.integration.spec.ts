@@ -8,8 +8,11 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from 'vitest';
 
+import { OperationId } from '../src/group-management/application/group-repository.js';
+import type { AuthenticationMaintenanceMonitor } from '../src/shared/application/authentication/authentication-maintenance-ports.js';
 import { createRecipientInvitationRuntime } from '../src/recipient-invitation-runtime.js';
 import { createRecipientCodeCleanupService } from '../src/shared/application/authentication/recipient-code-cleanup-service.js';
 import { guardRecipientCodeMaintenance } from '../src/shared/application/authentication/recipient-code-maintenance-guard.js';
@@ -19,6 +22,7 @@ import { ids } from '../src/shared/infrastructure/authentication/test/authentica
 import { syntheticRecipientCodeManagedKeys } from '../src/shared/infrastructure/authentication/test/recipient-code-maintenance-fixtures.js';
 import {
   actors,
+  barrier,
   RecipientInvitationFixture,
   sessionSecret,
 } from './support/recipient-invitation-fixture.js';
@@ -33,7 +37,7 @@ const limits = {
 };
 const issuerSession = sessionSecret(20);
 
-describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
+describe('招待コードの清掃（実PG17＋合成Provider）', () => {
   const f = new RecipientInvitationFixture(url);
   const holder = new Client({ connectionString: url });
   let holderPid = 0;
@@ -41,6 +45,12 @@ describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
   let runtime: ReturnType<typeof createRecipientInvitationRuntime>;
   let database: ReturnType<typeof createPostgresRecipientCodeCleanup>;
   let service: ReturnType<typeof createRecipientCodeCleanupService>;
+  let monitor: {
+    record: ReturnType<
+      typeof vi.fn<AuthenticationMaintenanceMonitor['record']>
+    >;
+  };
+  let nextOperationId: ReturnType<typeof vi.fn<() => string>>;
 
   beforeAll(async () => {
     await f.initialize();
@@ -71,13 +81,22 @@ describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
     database = createPostgresRecipientCodeCleanup({
       pool: f.connections(),
       crypto: f.crypto,
+      digests: f.digests,
+      clock: f.clock,
       limits,
     });
+    monitor = {
+      record: vi.fn<AuthenticationMaintenanceMonitor['record']>(() =>
+        Promise.resolve(),
+      ),
+    };
+    nextOperationId = vi.fn(() => randomUUID());
     service = createRecipientCodeCleanupService({
       maintenance: guardRecipientCodeMaintenance(keys),
       database,
       clock: f.clock,
-      nextOperationId: randomUUID,
+      nextOperationId,
+      monitor,
     });
   });
   afterEach(async () => {
@@ -127,6 +146,12 @@ describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
       [saved],
     );
   };
+  const keyStatus = async () =>
+    (
+      await f.admin.query<{ status: string }>(
+        'SELECT status FROM authentication.key_state',
+      )
+    ).rows[0].status;
   const waitForSql = async (pattern: RegExp) => {
     const limit = Date.now() + 4000;
     while (Date.now() < limit) {
@@ -259,12 +284,18 @@ describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
       );
       // 検証できない行の値では起算しないので、期限前の不可逆処理へ進まない。
       await expect(service.cleanOne(scope)).resolves.toEqual({
-        status: 'retained',
+        status: 'quarantined',
       });
       expect(await rowCount(row.codeId)).toBe(1);
+      expect(await keyStatus()).toBe('quarantined');
+      expect(monitor.record).toHaveBeenCalledWith({
+        operation: 'cleanup',
+        code: 'QUARANTINED',
+        oldest: null,
+      });
       f.now = row.expiresAt;
       await expect(service.cleanOne(scope)).resolves.toEqual({
-        status: 'completed',
+        status: 'quarantined',
       });
       await expectComplete(row.codeId);
       expect((await keys.maintenance.find(row.codeId))?.window.dueAt).toBe(
@@ -273,7 +304,7 @@ describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
     },
   );
 
-  it('MAC鍵を取得できない行も残さない', async () => {
+  it('MAC鍵を取得できない行は封鎖せず通知し、期限で除去する', async () => {
     const { row, scope } = await issue();
     f.codeMaterials.delete(`auth-recipient-code-state/v1/${row.codeId}/v1`);
     f.now = row.expiresAt;
@@ -281,6 +312,12 @@ describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
       status: 'completed',
     });
     await expectComplete(row.codeId);
+    expect(await keyStatus()).toBe('active');
+    expect(monitor.record).toHaveBeenCalledWith({
+      operation: 'cleanup',
+      code: 'UNAVAILABLE',
+      oldest: null,
+    });
   });
 
   it('公開読取世代にないMAC世代の終端時刻では起算しない', async () => {
@@ -294,7 +331,7 @@ describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
       [randomUUID()],
     );
     await expect(service.cleanOne(scope)).resolves.toEqual({
-      status: 'retained',
+      status: 'quarantined',
     });
     expect(await rowCount(row.codeId)).toBe(1);
   });
@@ -352,7 +389,7 @@ describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
       await expectComplete(row.codeId);
     });
 
-    it('コード行の待機中はActorを保持する', async () => {
+    it('Lock済みのコード行は待たずskipし、ticketを作らない', async () => {
       const { row, scope } = await issue();
       f.now = row.expiresAt;
       await holder.query('BEGIN');
@@ -360,18 +397,77 @@ describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
         'SELECT 1 FROM authentication.recipient_code WHERE code_id=$1 FOR UPDATE',
         [row.codeId],
       );
-      f.sqls = [];
-      const running = service.cleanOne(scope);
-      const waiter = await waitForSql(/recipient_code .*FOR UPDATE/);
-      await f.waitBlocked(waiter, holderPid);
-      await expect(
-        f.admin.query(
-          'SELECT 1 FROM authentication.actor WHERE actor_id=$1 FOR UPDATE NOWAIT',
-          [scope.recipientActorId],
-        ),
-      ).rejects.toMatchObject({ code: '55P03' });
+      await expect(service.cleanOne(scope)).resolves.toEqual({
+        status: 'skipped',
+      });
+      expect(await keys.maintenance.find(row.codeId)).toBeNull();
       await holder.query('COMMIT');
-      await expect(running).resolves.toEqual({ status: 'completed' });
+      await expect(service.cleanOne(scope)).resolves.toEqual({
+        status: 'completed',
+      });
+    });
+
+    it('key-state→Actor→コードの順にLockし、Actorへ戻らない', async () => {
+      const { row, scope } = await issue();
+      f.now = row.expiresAt;
+      f.sqls = [];
+      await service.cleanOne(scope);
+      const locks = f.sqls
+        .map(
+          ({ sql }) =>
+            /FROM authentication\.(\w+).*FOR (?:UPDATE|SHARE)/.exec(sql)?.[1],
+        )
+        .filter((table) => table !== undefined);
+      expect(locks.slice(0, 3)).toEqual([
+        'key_state',
+        'actor',
+        'recipient_code',
+      ]);
+      // Transactionごとに同じ順序で、コードの次にActorを取りに戻らない。
+      locks.forEach((table, index) => {
+        if (table === 'actor') expect(locks[index - 1]).toBe('key_state');
+      });
+    });
+
+    it('必要な列だけを読み、無関係な列が増えても誤って封鎖しない', async () => {
+      const { row, scope } = await issue();
+      f.now = row.expiresAt;
+      // 列の追加は通常のMigrationで起こる。全列を読むと厳密な形式検証が不一致へ倒れる。
+      for (const table of ['actor', 'recipient_code'])
+        await f.admin.query(
+          `ALTER TABLE authentication.${table} ADD COLUMN synthetic_extra text`,
+        );
+      try {
+        f.sqls = [];
+        await expect(service.cleanOne(scope)).resolves.toEqual({
+          status: 'completed',
+        });
+        expect(await keyStatus()).toBe('active');
+        expect(
+          f.sqls
+            .filter(({ sql }) => /SELECT \*/.test(sql))
+            .map(({ sql }) => sql),
+        ).toEqual([]);
+      } finally {
+        for (const table of ['actor', 'recipient_code'])
+          await f.admin.query(
+            `ALTER TABLE authentication.${table} DROP COLUMN synthetic_extra`,
+          );
+      }
+      await expectComplete(row.codeId);
+    });
+
+    it('除去のLock後に期限前と分かれば削除しない', async () => {
+      const { row, scope } = await issue();
+      await expect(database.remove(scope, row.expiresAt)).resolves.toBe(
+        'retained',
+      );
+      expect(await rowCount(row.codeId)).toBe(1);
+      f.now = row.expiresAt;
+      await expect(database.remove(scope, row.expiresAt)).resolves.toBe(
+        'removed',
+      );
+      expect(await rowCount(row.codeId)).toBe(0);
     });
   });
 
@@ -581,6 +677,776 @@ describe('招待コード1件の清掃（実PG17＋合成Provider）', () => {
       expect(await rowCount(row.codeId)).toBe(1);
       expect(await keys.maintenance.find(row.codeId)).toBeNull();
       await expect(database.absent(row.codeId)).rejects.toThrow();
+    });
+  });
+  /** 実コード利用と同じGroupへの作成要求。 */
+  const create = (code: Parameters<typeof runtime.create>[0]['code']) =>
+    runtime.create({
+      code,
+      groupId: f.groupId,
+      operationId: OperationId.from(`cleanup-${randomUUID()}`),
+      sessionSecret: sessionSecret(10),
+      expectedVersion: 1,
+    });
+  /** 実操作のSQL直前で止め、Actor Lockを保持した接続を作る。 */
+  const pauseAt = (pattern: RegExp) => {
+    const entered = barrier();
+    const resume = barrier();
+    const state = { pid: 0 };
+    f.intercept = async (event, run) => {
+      if (state.pid === 0 && pattern.test(event.sql)) {
+        state.pid = event.pid;
+        entered.release();
+        await resume.entered;
+      }
+      return run();
+    };
+    return { entered: entered.entered, resume: resume.release, state };
+  };
+  const disable = (actorId: string) => f.setActor(actorId, 'disabled');
+  const orphan = async (expiresAt: number, actorId = actors.member) => {
+    const codeId = randomUUID();
+    await keys.allocation.allocate({
+      codeId,
+      recipientActorId: actorId,
+      keyVersion: 'v1',
+      expiresAt,
+    });
+    return { codeId, recipientActorId: actorId };
+  };
+  const reissued = async (times: number) => {
+    for (let index = 0; index < times; index += 1) await issue();
+    return (await f.codes()).sort((a, b) => a.createdAt - b.createdAt);
+  };
+  const purges = async () =>
+    (
+      await f.admin.query<{
+        actor_digest: Buffer | null;
+        code_digest: Buffer | null;
+      }>(
+        "SELECT actor_digest,code_digest FROM authentication.audit_event WHERE action='purge'",
+      )
+    ).rows;
+
+  describe('dueAtの起算と再検証', () => {
+    it.each([
+      ['直前', -1, 'retained'],
+      ['等値', 0, 'completed'],
+      ['後', 1, 'completed'],
+    ])('期限%sの扱い', async (_name, offset, status) => {
+      const { row, scope } = await issue();
+      f.now = row.expiresAt + offset;
+      await expect(service.cleanOne(scope)).resolves.toEqual({ status });
+      expect(await rowCount(row.codeId)).toBe(status === 'retained' ? 1 : 0);
+      expect(await keyStatus()).toBe('active');
+    });
+
+    it('MAC検証済みのActor disabledAtで起算する', async () => {
+      const { row, scope } = await issue();
+      f.now += 1000;
+      await disable(scope.recipientActorId);
+      await expect(service.cleanOne(scope)).resolves.toEqual({
+        status: 'completed',
+      });
+      await expectComplete(row.codeId);
+      expect((await keys.maintenance.find(row.codeId))?.window.dueAt).toBe(
+        f.now,
+      );
+    });
+
+    it('改竄されたActorのdisabledAtでは起算せず封鎖する', async () => {
+      const { row, scope } = await issue();
+      await f.admin.query(
+        "UPDATE authentication.actor SET state='disabled',disabled_at_ms=$2 WHERE actor_id=$1",
+        [scope.recipientActorId, f.now],
+      );
+      await expect(service.cleanOne(scope)).resolves.toEqual({
+        status: 'quarantined',
+      });
+      expect(await rowCount(row.codeId)).toBe(1);
+      expect(await keys.maintenance.find(row.codeId)).toBeNull();
+      expect(await keyStatus()).toBe('quarantined');
+      expect(monitor.record).toHaveBeenCalledWith({
+        operation: 'cleanup',
+        code: 'QUARANTINED',
+        oldest: null,
+      });
+      // 改竄されたdisabledAtは使わず、Providerの期限で除去する。
+      f.now = row.expiresAt;
+      await expect(service.cleanOne(scope)).resolves.toEqual({
+        status: 'quarantined',
+      });
+      await expectComplete(row.codeId);
+      expect((await keys.maintenance.find(row.codeId))?.window.dueAt).toBe(
+        row.expiresAt,
+      );
+    });
+  });
+
+  describe('コード利用はBatchを待たず拒否する（#243の回帰）', () => {
+    it.each([
+      ['期限等値', 0],
+      ['期限後', 1],
+    ])('%sの利用を拒否し、行は清掃まで残る', async (_name, offset) => {
+      const issued = await runtime.issue(issuerSession, f.clock);
+      if (issued.status !== 'issued') throw new Error('合成: 発行失敗');
+      const [row] = await f.codes();
+      f.now = row.expiresAt + offset;
+      expect((await create(issued.code)).status).not.toBe('authenticated');
+      expect(await rowCount(row.codeId)).toBe(1);
+      expect((await f.codes())[0].terminalAt).toBeNull();
+    });
+
+    it('disabled Actorのコード利用を拒否する', async () => {
+      const issued = await runtime.issue(issuerSession, f.clock);
+      if (issued.status !== 'issued') throw new Error('合成: 発行失敗');
+      const [row] = await f.codes();
+      await disable(row.recipientActorId);
+      expect((await create(issued.code)).status).not.toBe('authenticated');
+      expect(await rowCount(row.codeId)).toBe(1);
+    });
+  });
+
+  describe('2接続競合', () => {
+    const actorLockWait = async (blocker: number) => {
+      const waiter = await waitForSql(/authentication\.actor .*FOR UPDATE/);
+      await f.waitBlocked(waiter, blocker);
+    };
+
+    it('再発行のcommitを待ち、旧コードだけを除去して新コードを残す', async () => {
+      const { row, scope } = await issue();
+      f.now = row.expiresAt;
+      const paused = pauseAt(/INSERT INTO authentication\.audit_event/);
+      const issuing = runtime.issue(issuerSession, f.clock);
+      await paused.entered;
+      f.sqls = [];
+      const cleaning = service.cleanOne(scope);
+      await actorLockWait(paused.state.pid);
+      paused.resume();
+      expect((await issuing).status).toBe('issued');
+      await expect(cleaning).resolves.toEqual({ status: 'completed' });
+      await expectComplete(row.codeId);
+      const remaining = await f.codes();
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].codeId).not.toBe(row.codeId);
+      expect(remaining[0].status).toBe('issued');
+    });
+
+    it('取消のcommitを待ち、確定した終端時刻で除去する', async () => {
+      const { row, scope } = await issue();
+      f.now += 5000;
+      const paused = pauseAt(/INSERT INTO authentication\.audit_event/);
+      const revoking = runtime.revoke(issuerSession, row.codeId, f.clock);
+      await paused.entered;
+      f.sqls = [];
+      const cleaning = service.cleanOne(scope);
+      await actorLockWait(paused.state.pid);
+      paused.resume();
+      await revoking;
+      await expect(cleaning).resolves.toEqual({ status: 'completed' });
+      await expectComplete(row.codeId);
+      expect((await keys.maintenance.find(row.codeId))?.window.dueAt).toBe(
+        f.now,
+      );
+    });
+
+    it('消費のcommitを待ち、Invitationを巻き込まずコードを除去する', async () => {
+      await f.seed(f.groupId, actors.owner);
+      const issued = await runtime.issue(issuerSession, f.clock);
+      if (issued.status !== 'issued') throw new Error('合成: 発行失敗');
+      const [row] = await f.codes();
+      const scope = {
+        codeId: row.codeId,
+        recipientActorId: row.recipientActorId,
+      };
+      f.now += 5000;
+      const before = await f.snapshot();
+      const paused = pauseAt(/UPDATE authentication\.recipient_code/);
+      const consuming = create(issued.code);
+      await paused.entered;
+      f.sqls = [];
+      const cleaning = service.cleanOne(scope);
+      await actorLockWait(paused.state.pid);
+      paused.resume();
+      expect((await consuming).status).toBe('authenticated');
+      await expect(cleaning).resolves.toEqual({ status: 'completed' });
+      await expectComplete(row.codeId);
+      // コード清掃はGMのInvitation・成功operation・消費Auditを巻き込まない。
+      const after = await f.snapshot();
+      const count = (snapshot: Record<string, unknown>, name: string) =>
+        (snapshot[name] as unknown[]).length;
+      for (const name of [
+        'group_invitation_record',
+        'group_operation_result_record',
+      ])
+        expect(count(after, name)).toBe(count(before, name) + 1);
+      expect(after.consumeAudit).toHaveLength(1);
+      expect(after['authentication.recipient_code']).toEqual([]);
+    });
+
+    it('除去のcommit前に始まった消費は待ってから拒否される', async () => {
+      await f.seed(f.groupId, actors.owner);
+      const issued = await runtime.issue(issuerSession, f.clock);
+      if (issued.status !== 'issued') throw new Error('合成: 発行失敗');
+      const [row] = await f.codes();
+      f.now = row.expiresAt;
+      const paused = pauseAt(/DELETE FROM authentication\.recipient_code/);
+      const cleaning = service.cleanOne({
+        codeId: row.codeId,
+        recipientActorId: row.recipientActorId,
+      });
+      await paused.entered;
+      f.sqls = [];
+      const consuming = create(issued.code);
+      // 清掃が保持するActor Lockを、消費の接続が実際に待っていることを確かめる。
+      const consumer = await waitForSql(
+        /authentication\.actor .*FOR (?:SHARE|UPDATE)/,
+      );
+      await f.waitBlocked(consumer, paused.state.pid);
+      paused.resume();
+      await expect(cleaning).resolves.toEqual({ status: 'completed' });
+      expect((await consuming).status).not.toBe('authenticated');
+      await expectComplete(row.codeId);
+    });
+  });
+
+  describe('小Batchと再開', () => {
+    it('limit件だけ処理してpendingを返し、次の実行で残りを完了する', async () => {
+      const rows = await reissued(3);
+      f.now = rows[0].expiresAt + 1;
+      const [newest] = rows.slice(-1);
+      await expect(service.run(1)).resolves.toEqual({ status: 'pending' });
+      expect((await f.codes()).length).toBe(2);
+      // 再発行で終端した旧行は発行時刻で終端している。残した最早の対象を監視へ渡す。
+      expect(monitor.record).toHaveBeenLastCalledWith({
+        operation: 'cleanup',
+        code: 'OK',
+        oldest: {
+          dueAt: rows[0].createdAt,
+          deadline: rows[0].createdAt + 86_400_000,
+        },
+      });
+      await expect(service.run(1)).resolves.toEqual({ status: 'pending' });
+      expect((await f.codes()).length).toBe(1);
+      f.now = newest.expiresAt;
+      await expect(service.run(1)).resolves.toEqual({
+        status: 'complete',
+        removed: 1,
+      });
+      await expect(service.run(1)).resolves.toEqual({
+        status: 'complete',
+        removed: 0,
+      });
+    });
+
+    it('上限で切った行の候補を完了扱いにせず、その期限を監視へ渡す', async () => {
+      // 期限前に再発行で終端した行を、時刻をずらして2件作る。
+      await issue();
+      f.now += 1000;
+      await issue();
+      f.now += 1000;
+      await issue();
+      const rows = (await f.codes()).sort((a, b) => a.createdAt - b.createdAt);
+      const secondTerminal = rows[2].createdAt;
+      await expect(service.run(1)).resolves.toEqual({ status: 'pending' });
+      expect(await rowCount(rows[0].codeId)).toBe(0);
+      expect(await rowCount(rows[1].codeId)).toBe(1);
+      expect(monitor.record).toHaveBeenLastCalledWith({
+        operation: 'cleanup',
+        code: 'OK',
+        oldest: {
+          dueAt: secondTerminal,
+          deadline: secondTerminal + 86_400_000,
+        },
+      });
+      await expect(service.run(1)).resolves.toEqual({
+        status: 'complete',
+        removed: 1,
+      });
+      expect(await rowCount(rows[2].codeId)).toBe(1);
+    });
+
+    it('未完了ticketが上限まで返った場合は完了を主張せず、その期限を監視へ渡す', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt;
+      keys.faults.add('before-close');
+      await service.run(10);
+      keys.faults.delete('before-close');
+      const ticket = await keys.maintenance.find(row.codeId);
+      await expect(service.run(1)).resolves.toEqual({ status: 'pending' });
+      expect(monitor.record).toHaveBeenLastCalledWith({
+        operation: 'cleanup',
+        code: 'OK',
+        oldest: ticket!.window,
+      });
+      await expect(service.run(1)).resolves.toEqual({
+        status: 'complete',
+        removed: 0,
+      });
+      await expectComplete(row.codeId);
+    });
+
+    it('期限前だけなら何も変えない', async () => {
+      const { row } = await issue();
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 0,
+      });
+      expect(await rowCount(row.codeId)).toBe(1);
+      expect(await keys.maintenance.find(row.codeId)).toBeNull();
+      expect(monitor.record).toHaveBeenLastCalledWith({
+        operation: 'cleanup',
+        code: 'OK',
+        oldest: null,
+      });
+    });
+
+    it('Lock済みの行はskipして他を進め、完了扱いにしない', async () => {
+      const rows = await reissued(2);
+      f.now = rows[1].expiresAt;
+      await holder.query('BEGIN');
+      await holder.query(
+        'SELECT 1 FROM authentication.recipient_code WHERE code_id=$1 FOR UPDATE',
+        [rows[0].codeId],
+      );
+      await expect(service.run(10)).resolves.toEqual({ status: 'pending' });
+      expect(await rowCount(rows[1].codeId)).toBe(0);
+      expect(await rowCount(rows[0].codeId)).toBe(1);
+      await holder.query('COMMIT');
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 1,
+      });
+    });
+
+    it.each([
+      ['ticket登録直後', 'after-prepare'],
+      ['全世代破棄の途中', 'after-destroy-generation'],
+      ['closure応答喪失', 'after-close'],
+      ['完了の直前', 'before-complete'],
+      ['完了の応答喪失', 'after-complete'],
+    ])(
+      '%sの中断を同operationで再開し、二重ticketを作らない',
+      async (_name, fault) => {
+        const { row } = await issue();
+        f.now = row.expiresAt;
+        keys.faults.add(fault);
+        await expect(service.run(10)).resolves.toEqual({
+          status: 'unavailable',
+        });
+        keys.faults.delete(fault);
+        const before = await keys.maintenance.find(row.codeId);
+        expect(before).not.toBeNull();
+        expect(nextOperationId).toHaveBeenCalledTimes(1);
+        const result = await service.run(10);
+        expect(result).toEqual({
+          status: 'complete',
+          removed: before?.state === 'complete' ? 0 : 1,
+        });
+        await expectComplete(row.codeId);
+        expect(nextOperationId).toHaveBeenCalledTimes(1);
+        expect(
+          await keys.maintenance.byOperation(before!.operationId),
+        ).toHaveLength(1);
+      },
+    );
+  });
+
+  describe('孤立scope', () => {
+    it('期限切れの孤立scopeを閉じる', async () => {
+      const scope = await orphan(f.now);
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 1,
+      });
+      await expectComplete(scope.codeId);
+      expect(await purges()).toEqual([]);
+    });
+
+    it('束縛ActorのLock下のdisabledAtで起算し、期限前でも閉じる', async () => {
+      const scope = await orphan(f.now + 600_000);
+      await disable(scope.recipientActorId);
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 1,
+      });
+      await expectComplete(scope.codeId);
+      expect((await keys.maintenance.find(scope.codeId))?.window.dueAt).toBe(
+        f.now,
+      );
+    });
+
+    it('有効なActorの期限前の孤立scopeは残す', async () => {
+      const scope = await orphan(f.now + 1);
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 0,
+      });
+      expect(await keys.maintenance.find(scope.codeId)).toBeNull();
+    });
+
+    it('束縛Actorの行がない孤立scopeは完了にしない', async () => {
+      const scope = await orphan(f.now, randomUUID());
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'unavailable',
+      });
+      expect(await keys.maintenance.find(scope.codeId)).toBeNull();
+    });
+
+    it('完了済みの孤立scopeはDBへ行かず、再度数えない', async () => {
+      await orphan(f.now);
+      await service.run(10);
+      f.sqls = [];
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 0,
+      });
+      expect(f.sqls.filter(({ sql }) => /FOR UPDATE/.test(sql))).toEqual([]);
+    });
+  });
+
+  describe('列挙の停止', () => {
+    const withMaintenance = (overrides: Partial<typeof keys.maintenance>) =>
+      createRecipientCodeCleanupService({
+        maintenance: guardRecipientCodeMaintenance({
+          lifecycle: keys.lifecycle,
+          maintenance: { ...keys.maintenance, ...overrides },
+        }),
+        database,
+        clock: f.clock,
+        nextOperationId,
+        monitor,
+      });
+
+    it('列挙の停止中も、既知の未達は封鎖して通知する', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt + 86_400_000;
+      keys.faults.add('scope-page-unavailable');
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'quarantined',
+      });
+      expect(await keyStatus()).toBe('quarantined');
+      expect(await rowCount(row.codeId)).toBe(1);
+      expect(monitor.record).toHaveBeenCalledWith({
+        operation: 'cleanup',
+        code: 'OVERDUE',
+        oldest: {
+          dueAt: row.expiresAt,
+          deadline: row.expiresAt + 86_400_000,
+        },
+      });
+    });
+
+    it('Providerが知らない行で止まっても、行の未達は封鎖する', async () => {
+      // Providerへ登録しない発行経路で、列挙にない行を作る。
+      const issued = await f.runtime.issue(sessionSecret(20), f.clock);
+      if (issued.status !== 'issued') throw new Error('合成: 発行失敗');
+      const [row] = await f.codes();
+      f.now = row.expiresAt + 86_400_000;
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'quarantined',
+      });
+      expect(await keyStatus()).toBe('quarantined');
+      expect(await rowCount(row.codeId)).toBe(1);
+      expect(monitor.record).toHaveBeenCalledWith({
+        operation: 'cleanup',
+        code: 'OVERDUE',
+        oldest: {
+          dueAt: row.expiresAt,
+          deadline: row.expiresAt + 86_400_000,
+        },
+      });
+    });
+
+    it('列挙で止まったら、封鎖前の未達でも観測した最早の窓を通知する', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt;
+      keys.faults.add('scope-page-unavailable');
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'unavailable',
+      });
+      expect(await keyStatus()).toBe('active');
+      expect(monitor.record).toHaveBeenLastCalledWith({
+        operation: 'cleanup',
+        code: 'UNAVAILABLE',
+        oldest: {
+          dueAt: row.expiresAt,
+          deadline: row.expiresAt + 86_400_000,
+        },
+      });
+    });
+
+    it('完全性を保証できない列挙を空成功にしない', async () => {
+      keys.faults.add('scope-page-unavailable');
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'unavailable',
+      });
+      expect(monitor.record).toHaveBeenCalledWith({
+        operation: 'cleanup',
+        code: 'UNAVAILABLE',
+        oldest: null,
+      });
+    });
+
+    it('Providerが知らない期限切れ行があれば何も変えず止める', async () => {
+      const issued = await f.runtime.issue(sessionSecret(20), f.clock);
+      if (issued.status !== 'issued') throw new Error('合成: 発行失敗');
+      const [row] = await f.codes();
+      const known = await orphan(row.expiresAt);
+      f.now = row.expiresAt;
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'unavailable',
+      });
+      expect(await rowCount(row.codeId)).toBe(1);
+      expect(await keys.maintenance.find(known.codeId)).toBeNull();
+    });
+
+    it('行の束縛ActorがProviderと違えば止める', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt;
+      await f.admin.query(
+        'UPDATE authentication.recipient_code SET recipient_actor_id=$2 WHERE code_id=$1',
+        [row.codeId, actors.member],
+      );
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'unavailable',
+      });
+      expect(await rowCount(row.codeId)).toBe(1);
+    });
+
+    it('ticketと列挙の版が一致しなければ止める', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt;
+      keys.faults.add('after-prepare');
+      await service.run(10);
+      keys.faults.delete('after-prepare');
+      const stale = withMaintenance({
+        scopePage: async (query) => {
+          const page = await keys.maintenance.scopePage(query);
+          return page.status === 'snapshot'
+            ? {
+                ...page,
+                scopes: page.scopes.map((scope) => ({
+                  ...scope,
+                  inventoryRevision: 'other-revision',
+                })),
+              }
+            : page;
+        },
+      });
+      await expect(stale.run(10)).resolves.toEqual({ status: 'unavailable' });
+      expect(await rowCount(row.codeId)).toBe(1);
+    });
+
+    it('未完了ticketのscopeが列挙になければ止める', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt;
+      keys.faults.add('after-prepare');
+      await service.run(10);
+      keys.faults.delete('after-prepare');
+      const missing = withMaintenance({
+        scopePage: async (query) => {
+          const page = await keys.maintenance.scopePage(query);
+          return page.status === 'snapshot'
+            ? { ...page, scopes: [], total: 0, nextCursor: null }
+            : page;
+        },
+      });
+      await expect(missing.run(10)).resolves.toEqual({
+        status: 'unavailable',
+      });
+      expect(await rowCount(row.codeId)).toBe(1);
+    });
+
+    it('完了済みscopeが列挙から消えても、戻った行を除去できる', async () => {
+      const { row, scope } = await issue();
+      const saved = await saveRow(row.codeId);
+      f.now = row.expiresAt;
+      await service.cleanOne(scope);
+      await restoreRow(saved);
+      const dropped = withMaintenance({
+        scopePage: async (query) => {
+          const page = await keys.maintenance.scopePage(query);
+          return page.status === 'snapshot'
+            ? { ...page, scopes: [], total: 0, nextCursor: null }
+            : page;
+        },
+      });
+      await expect(dropped.cleanOne(scope)).resolves.toEqual({
+        status: 'already-complete',
+      });
+      expect(await rowCount(row.codeId)).toBe(0);
+      await restoreRow(saved);
+      await expect(dropped.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 0,
+      });
+      expect(await rowCount(row.codeId)).toBe(0);
+    });
+
+    it('完了済みticketのscopeと違うActorでは行を除去しない', async () => {
+      const { row, scope } = await issue();
+      const saved = await saveRow(row.codeId);
+      f.now = row.expiresAt;
+      await service.cleanOne(scope);
+      await restoreRow(saved);
+      await expect(
+        service.cleanOne({ ...scope, recipientActorId: actors.member }),
+      ).resolves.toEqual({ status: 'unavailable' });
+      expect(await rowCount(row.codeId)).toBe(1);
+    });
+  });
+
+  describe('24時間未達の封鎖', () => {
+    const day = 86_400_000;
+
+    it('deadline直前は封鎖せず、到達で封鎖して完了を数えない', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt + day - 1;
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 1,
+      });
+      expect(await keyStatus()).toBe('active');
+
+      await f.reset();
+      const later = await issue();
+      f.now = later.row.expiresAt + day;
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'quarantined',
+      });
+      expect(await keyStatus()).toBe('quarantined');
+      expect(monitor.record).toHaveBeenCalledWith({
+        operation: 'cleanup',
+        code: 'OVERDUE',
+        oldest: {
+          dueAt: later.row.expiresAt,
+          deadline: later.row.expiresAt + day,
+        },
+      });
+      await expectComplete(later.row.codeId);
+    });
+
+    it('封鎖は清掃の完了後も維持され、発行を拒否する', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt + day;
+      await service.run(10);
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 0,
+      });
+      expect(await keyStatus()).toBe('quarantined');
+      await expect(runtime.issue(issuerSession, f.clock)).resolves.toEqual({
+        status: 'unavailable',
+      });
+    });
+
+    it('Provider障害でも既知の未達は封鎖する', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt + day;
+      keys.faults.add('before-prepare');
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'quarantined',
+      });
+      expect(await keyStatus()).toBe('quarantined');
+      expect(await rowCount(row.codeId)).toBe(1);
+    });
+
+    it('封鎖できなければ成功も封鎖済みも返さない', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt + day;
+      f.intercept = async (event, run) => {
+        if (/UPDATE authentication\.key_state/.test(event.sql))
+          throw new Error('synthetic-quarantine-failure');
+        return run();
+      };
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'unavailable',
+      });
+      expect(await keyStatus()).toBe('active');
+    });
+
+    it('監視の障害を成功にしない', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt + day;
+      monitor.record.mockRejectedValue(new Error('synthetic-monitor'));
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'unavailable',
+      });
+      expect(await keyStatus()).toBe('quarantined');
+    });
+
+    it('未完了ticketの期限内の再開は封鎖しない', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt;
+      keys.faults.add('before-close');
+      await service.run(10);
+      keys.faults.delete('before-close');
+      f.now = row.expiresAt + day - 1;
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 1,
+      });
+      expect(await keyStatus()).toBe('active');
+    });
+
+    it('未完了ticketの期限超過を封鎖する', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt;
+      keys.faults.add('before-close');
+      await service.run(10);
+      keys.faults.delete('before-close');
+      f.now = row.expiresAt + day;
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'quarantined',
+      });
+      await expectComplete(row.codeId);
+    });
+  });
+
+  describe('Audit', () => {
+    it('行の除去と同じcommitへActor仮名だけのpurgeを保存する', async () => {
+      const { row, scope } = await issue();
+      f.now = row.expiresAt;
+      await service.cleanOne(scope);
+      const rows = await purges();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].actor_digest).not.toBeNull();
+      expect(rows[0].code_digest).toBeNull();
+    });
+
+    it('Audit障害では行を残し、完了を数えず同operationで再開する', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt;
+      let failed = false;
+      f.intercept = async (event, run) => {
+        if (
+          !failed &&
+          event.sql.includes('INSERT INTO authentication.audit_event')
+        ) {
+          failed = true;
+          throw new Error('synthetic-audit-failure');
+        }
+        return run();
+      };
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'unavailable',
+      });
+      expect(await rowCount(row.codeId)).toBe(1);
+      expect(await purges()).toEqual([]);
+      const ticket = await keys.maintenance.find(row.codeId);
+      expect(ticket?.state).toBe('pending');
+      expect(new Set(await destroyed(row.codeId))).toEqual(
+        new Set(['current']),
+      );
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'complete',
+        removed: 1,
+      });
+      expect(await purges()).toHaveLength(1);
+      expect((await keys.maintenance.find(row.codeId))?.operationId).toBe(
+        ticket?.operationId,
+      );
     });
   });
 });

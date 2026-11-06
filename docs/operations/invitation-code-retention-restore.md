@@ -43,23 +43,27 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | 公開経路 | CSRF/Origin/Rate、secret非保存/no-store、旧code拒否、新発行・Invitation作成・本人受諾の実HTTP/Browser |
 | 監視 | overdue/pending/破損/epoch不一致の実配信と封鎖、秘密/直接IDの非収集 |
 
-コード用の除去期限は`recipientCodeRetentionWindow`が計算し、`dueAt`を`expiresAt`・`terminalAt`・Actor側の時点の最早値、`deadline`をその24時間後とする。Actor側の時点は清掃がdisabledAt、Actor削除がpreparedAtである。下記の清掃入口が使い、Actor削除へはまだ接続していない。key-stateの停止契約は[認証Runbook](authentication-retention-restore.md#招待コード拡張の採用設計未実装)に記載する。
+コード用の除去期限は`recipientCodeRetentionWindow`が計算し、`dueAt`を`expiresAt`・`terminalAt`・Actor側の時点の最早値、`deadline`をその24時間後とする。Actor側の時点は清掃がdisabledAt、Actor削除がpreparedAtである。下記の清掃入口が使い（Actor側の時点はdisabledAt）、Actor削除へはまだ接続していない。key-stateの停止契約は[認証Runbook](authentication-retention-restore.md#招待コード拡張の採用設計未実装)に記載する。
 
 本Taskは採用済みの運用設計の文書化であり、上表を実行済みとは扱わない。B4の合成Provider成功も本番Capabilityの証拠ではない。既知の期限未達、外部票不足、MAC/鍵不整合、未知Schema、旧Writer共存、片側復旧のいずれかがあれば成功/開通を停止する。
 
-## #258 コード1件の清掃の実装範囲
+## #259 コード清掃の小Batchと封鎖
 
-[内部入口](../../apps/api/src/shared/application/authentication/recipient-code-cleanup-service.ts)の`cleanOne`が、上記「清掃」の3と4をコード1件について実装する。実PGと合成Providerで検証した。通常main/Dev/Production、Scheduler、公開Routeへは接続していない。
+[内部入口](../../apps/api/src/shared/application/authentication/recipient-code-cleanup-service.ts)が上記「清掃」の1〜5を実装する。`run(limit)`は小Batch、`cleanOne`は同じ経路の1件入口で、#258の最小入口を拡張した。実PGと合成Providerで検証した。通常main/Dev/Production、Scheduler、公開Routeへは接続していない。
 
 | 手順 | 実装の内容 |
 | --- | --- |
-| 対象の確認 | Providerの`scopePage`でcodeId・束縛Actor・期限を確認する。Providerが知らない組合せ、列挙の完全性を保証できない場合は停止する |
-| 起算 | `dueAt`はProviderが保持する`expiresAt`と、MAC検証済みの`terminalAt`の早い方。検証できない行の値では起算しない |
-| 順序 | ticket登録→行除去→全世代closure→コード表の0-row→ticket完了。DB Lockの保持中に保守Portを呼ばない |
-| Lock | key-state共有Lock→Actor `FOR UPDATE`→コード`FOR UPDATE`。MAC不一致や鍵の喪失を理由に行を残さない |
-| 結果 | 完了として数えるのは`completed`だけ。`unavailable`は同じ入力の再実行が同operationで再開する。`already-complete`は再確認で、戻っていた行を除去する |
+| 候補 | 行の候補をLockせずに読んでから、Providerの固定snapshotを全Page読む。行は`allocate`の後にしか現れないので、この順なら未知行を誤検出しない。未完了ticket・行の候補・期限到達またはdisabled Actorの孤立scopeを、最早の期限から`limit`件まで処理する |
+| 停止 | 列挙の完全性を保証できない、Providerが知らない期限到達行、行とProviderの束縛Actorの不一致、未完了ticketが列挙にない、ticketと列挙の全世代版の不一致では、何も進めず`unavailable`とする。ただし停止の前に、未完了ticketと行の候補（Lockしない未検証値。封鎖する方向にだけ使う）の`deadline`到達を確認して封鎖する |
+| 起算 | `dueAt`はProviderの`expiresAt`、MAC検証済みの`terminalAt`、Actor Lock下でMAC検証した`disabledAt`の最早値。検証できない値では起算しない |
+| Lock | key-state共有Lock→Actor `FOR UPDATE`→コード`SKIP LOCKED`。Lock中の行は待たずに`skipped`とし、完了を数えない。除去はLock後のClockで`dueAt`を再検証し、期限前なら削除しない |
+| 順序 | ticket登録→行除去と`purge` Audit（同じcommit）→全世代closure→コード表の0-row→ticket完了。DB Lockの保持中に保守Portを呼ばない |
+| 封鎖 | ticketや候補の`deadline`到達、Record MACまたはActor MACの確定した不一致では`key_state`を`quarantined`にし、固定Code（`OVERDUE`／`QUARANTINED`）を通知する。封鎖を確認できなければ成功も封鎖済みも返さない。封鎖はRestoreだけが解く |
+| 鍵障害 | MAC鍵を取得できず照合できない場合は封鎖せず`UNAVAILABLE`を通知し、Providerが保持する期限で除去する。障害が期限後まで続くと`terminalAt`で起算できず、`deadline`はコードの有効期限（最大10分）分遅れる |
+| 再開 | 中断は同じticketとoperationで再開し、二重ticket・二重closureを作らない。完了済みticketのscopeはProviderの`scopes`で解決するので、列挙が完了済みscopeを残すかに依存しない |
+| 結果 | 件数を返すのは全対象を確認できた`complete`だけ。行の候補が`limit`件を超えた場合や未完了ticketが上限まで返った場合は残件として`pending`にする。`pending`は残件またはskip、`quarantined`は封鎖、`unavailable`は障害で、どれも件数を返さない。監視へは固定Codeと、期限到達のまま残した最早の対象の窓だけを渡す |
 
-結果は固定の4種だけで、codeIdや原因を返さない。次はこの入口に含まない: Actorの`disabledAt`起算、小Batch、孤立scopeの列挙、overdueとMAC不整合の封鎖・通知・監視、2接続競合、清掃Audit。MAC不一致の行は通知なしで除去されるので、改竄の痕跡の扱いは#244-Bで決める。Actor削除は#244-Cが扱う。行のないscopeも同じ経路で閉じるが、列挙と封鎖が揃うまで24時間以内の除去を主張しない。合成Providerの成功を実IAM・破棄運用の証拠にしない。
+結果と通知はcodeIdや原因を含まない。`purge` AuditはActor仮名だけを持ち、コード仮名を持たない（Migrationなし）。行のない孤立scopeの除去ではAuditを書かない。Actor削除は#244-C（#260）が扱う。合成Providerの成功を実IAM・破棄運用・Scheduler・通知配信の証拠にしない。
 
 ## #240 管理Storeから保守へ引き継ぐInventory
 
