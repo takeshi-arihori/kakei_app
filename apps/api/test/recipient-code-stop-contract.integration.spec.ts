@@ -320,7 +320,17 @@ describe('招待コード保守の停止契約（実PG17）', () => {
         'SELECT * FROM authentication.actor WHERE actor_id=$1',
         [actors.member],
       );
-      await expect(deletion().plan(actors.member)).rejects.toBeDefined();
+      // 対照: コードpurposeがなければ同じ入力で計画できる。停止の原因をコードpurposeに限定する。
+      const generations = await removeCodePurposes();
+      await expect(deletion().plan(actors.member)).resolves.toBeDefined();
+      for (const row of generations)
+        await f.admin.query(
+          "INSERT INTO authentication.key_generation(generation_id,purpose,key_version,epoch,searchable,write_required) VALUES($1,$2,'v1',NULL,true,true)",
+          [row.generation_id, row.purpose],
+        );
+      await expect(deletion().plan(actors.member)).rejects.toBeInstanceOf(
+        AuthenticationCryptoUnavailable,
+      );
       expect(
         (
           await f.admin.query(

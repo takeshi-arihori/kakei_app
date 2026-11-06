@@ -54,14 +54,14 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | 手順 | 実装の内容 |
 | --- | --- |
 | 候補 | 行の候補をLockせずに読んでから、Providerの固定snapshotを全Page読む。行は`allocate`の後にしか現れないので、この順なら未知行を誤検出しない。未完了ticket・行の候補・期限到達またはdisabled Actorの孤立scopeを、最早の期限から`limit`件まで処理する |
-| 停止 | 列挙の完全性を保証できない、Providerが知らない期限到達行、行とProviderの束縛Actorの不一致、未完了ticketが列挙にない、ticketと列挙の全世代版の不一致では、何も進めず`unavailable`とする |
+| 停止 | 列挙の完全性を保証できない、Providerが知らない期限到達行、行とProviderの束縛Actorの不一致、未完了ticketが列挙にない、ticketと列挙の全世代版の不一致では、何も進めず`unavailable`とする。ただし停止の前に、未完了ticketと行の候補（Lockしない未検証値。封鎖する方向にだけ使う）の`deadline`到達を確認して封鎖する |
 | 起算 | `dueAt`はProviderの`expiresAt`、MAC検証済みの`terminalAt`、Actor Lock下でMAC検証した`disabledAt`の最早値。検証できない値では起算しない |
 | Lock | key-state共有Lock→Actor `FOR UPDATE`→コード`SKIP LOCKED`。Lock中の行は待たずに`skipped`とし、完了を数えない。除去はLock後のClockで`dueAt`を再検証し、期限前なら削除しない |
 | 順序 | ticket登録→行除去と`purge` Audit（同じcommit）→全世代closure→コード表の0-row→ticket完了。DB Lockの保持中に保守Portを呼ばない |
 | 封鎖 | ticketや候補の`deadline`到達、Record MACまたはActor MACの確定した不一致では`key_state`を`quarantined`にし、固定Code（`OVERDUE`／`QUARANTINED`）を通知する。封鎖を確認できなければ成功も封鎖済みも返さない。封鎖はRestoreだけが解く |
 | 鍵障害 | MAC鍵を取得できず照合できない場合は封鎖せず`UNAVAILABLE`を通知し、Providerが保持する期限で除去する。障害が期限後まで続くと`terminalAt`で起算できず、`deadline`はコードの有効期限（最大10分）分遅れる |
 | 再開 | 中断は同じticketとoperationで再開し、二重ticket・二重closureを作らない。完了済みticketのscopeはProviderの`scopes`で解決するので、列挙が完了済みscopeを残すかに依存しない |
-| 結果 | 件数を返すのは全対象を確認できた`complete`だけ。`pending`は残件またはskip、`quarantined`は封鎖、`unavailable`は障害で、どれも件数を返さない。監視へは固定Codeと、期限到達のまま残した最早の対象の窓だけを渡す |
+| 結果 | 件数を返すのは全対象を確認できた`complete`だけ。行の候補が`limit`件を超えた場合や未完了ticketが上限まで返った場合は残件として`pending`にする。`pending`は残件またはskip、`quarantined`は封鎖、`unavailable`は障害で、どれも件数を返さない。監視へは固定Codeと、期限到達のまま残した最早の対象の窓だけを渡す |
 
 結果と通知はcodeIdや原因を含まない。`purge` AuditはActor仮名だけを持ち、コード仮名を持たない（Migrationなし）。行のない孤立scopeの除去ではAuditを書かない。Actor削除は#244-C（#260）が扱う。合成Providerの成功を実IAM・破棄運用・Scheduler・通知配信の証拠にしない。
 

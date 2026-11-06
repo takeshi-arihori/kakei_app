@@ -738,6 +738,20 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
       expect(await rowCount(row.codeId)).toBe(1);
       expect(await keys.maintenance.find(row.codeId)).toBeNull();
       expect(await keyStatus()).toBe('quarantined');
+      expect(monitor.record).toHaveBeenCalledWith({
+        operation: 'cleanup',
+        code: 'QUARANTINED',
+        oldest: null,
+      });
+      // 改竄されたdisabledAtは使わず、Providerの期限で除去する。
+      f.now = row.expiresAt;
+      await expect(service.cleanOne(scope)).resolves.toEqual({
+        status: 'quarantined',
+      });
+      await expectComplete(row.codeId);
+      expect((await keys.maintenance.find(row.codeId))?.window.dueAt).toBe(
+        row.expiresAt,
+      );
     });
   });
 
@@ -854,8 +868,13 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
         recipientActorId: row.recipientActorId,
       });
       await paused.entered;
+      f.sqls = [];
       const consuming = create(issued.code);
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // 清掃が保持するActor Lockを、消費の接続が実際に待っていることを確かめる。
+      const consumer = await waitForSql(
+        /authentication\.actor .*FOR (?:SHARE|UPDATE)/,
+      );
+      await f.waitBlocked(consumer, paused.state.pid);
       paused.resume();
       await expect(cleaning).resolves.toEqual({ status: 'completed' });
       expect((await consuming).status).not.toBe('authenticated');
@@ -870,13 +889,13 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
       const [newest] = rows.slice(-1);
       await expect(service.run(1)).resolves.toEqual({ status: 'pending' });
       expect((await f.codes()).length).toBe(2);
-      // 残した最早の対象を監視へ渡す。
+      // 再発行で終端した旧行は発行時刻で終端している。残した最早の対象を監視へ渡す。
       expect(monitor.record).toHaveBeenLastCalledWith({
         operation: 'cleanup',
         code: 'OK',
         oldest: {
-          dueAt: expect.any(Number) as number,
-          deadline: expect.any(Number) as number,
+          dueAt: rows[0].createdAt,
+          deadline: rows[0].createdAt + 86_400_000,
         },
       });
       await expect(service.run(1)).resolves.toEqual({ status: 'pending' });
@@ -890,6 +909,33 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
         status: 'complete',
         removed: 0,
       });
+    });
+
+    it('上限で切った行の候補を完了扱いにせず、その期限を監視へ渡す', async () => {
+      // 期限前に再発行で終端した行を、時刻をずらして2件作る。
+      await issue();
+      f.now += 1000;
+      await issue();
+      f.now += 1000;
+      await issue();
+      const rows = (await f.codes()).sort((a, b) => a.createdAt - b.createdAt);
+      const secondTerminal = rows[2].createdAt;
+      await expect(service.run(1)).resolves.toEqual({ status: 'pending' });
+      expect(await rowCount(rows[0].codeId)).toBe(0);
+      expect(await rowCount(rows[1].codeId)).toBe(1);
+      expect(monitor.record).toHaveBeenLastCalledWith({
+        operation: 'cleanup',
+        code: 'OK',
+        oldest: {
+          dueAt: secondTerminal,
+          deadline: secondTerminal + 86_400_000,
+        },
+      });
+      await expect(service.run(1)).resolves.toEqual({
+        status: 'complete',
+        removed: 1,
+      });
+      expect(await rowCount(rows[2].codeId)).toBe(1);
     });
 
     it('期限前だけなら何も変えない', async () => {
@@ -1023,6 +1069,46 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
         nextOperationId,
         monitor,
       });
+
+    it('列挙の停止中も、既知の未達は封鎖して通知する', async () => {
+      const { row } = await issue();
+      f.now = row.expiresAt + 86_400_000;
+      keys.faults.add('scope-page-unavailable');
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'quarantined',
+      });
+      expect(await keyStatus()).toBe('quarantined');
+      expect(await rowCount(row.codeId)).toBe(1);
+      expect(monitor.record).toHaveBeenCalledWith({
+        operation: 'cleanup',
+        code: 'OVERDUE',
+        oldest: {
+          dueAt: row.expiresAt,
+          deadline: row.expiresAt + 86_400_000,
+        },
+      });
+    });
+
+    it('Providerが知らない行で止まっても、行の未達は封鎖する', async () => {
+      // Providerへ登録しない発行経路で、列挙にない行を作る。
+      const issued = await f.runtime.issue(sessionSecret(20), f.clock);
+      if (issued.status !== 'issued') throw new Error('合成: 発行失敗');
+      const [row] = await f.codes();
+      f.now = row.expiresAt + 86_400_000;
+      await expect(service.run(10)).resolves.toEqual({
+        status: 'quarantined',
+      });
+      expect(await keyStatus()).toBe('quarantined');
+      expect(await rowCount(row.codeId)).toBe(1);
+      expect(monitor.record).toHaveBeenCalledWith({
+        operation: 'cleanup',
+        code: 'OVERDUE',
+        oldest: {
+          dueAt: row.expiresAt,
+          deadline: row.expiresAt + 86_400_000,
+        },
+      });
+    });
 
     it('完全性を保証できない列挙を空成功にしない', async () => {
       keys.faults.add('scope-page-unavailable');
@@ -1224,7 +1310,7 @@ describe('招待コードの清掃（実PG17＋合成Provider）', () => {
       expect(await keyStatus()).toBe('quarantined');
     });
 
-    it('完了扱いにしたticketが残っていても、期限内の再開は封鎖しない', async () => {
+    it('未完了ticketの期限内の再開は封鎖しない', async () => {
       const { row } = await issue();
       f.now = row.expiresAt;
       keys.faults.add('before-close');

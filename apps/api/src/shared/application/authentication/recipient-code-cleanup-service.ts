@@ -335,12 +335,13 @@ export const createRecipientCodeCleanupService = (
   };
 
   /** 未完了ticket・行の候補・Provider列挙から、Lockなしで今回の候補を作る。 */
-  const candidates = async (limit: number) => {
-    const now = clock.now();
-    // 行はallocateの後にしか現れないので、先に読めば後のsnapshotは必ず含む。未知行の誤検出を防ぐ。
-    const hints = await database.dueHints(now, limit);
+  const candidates = async (
+    now: number,
+    hints: Awaited<ReturnType<RecipientCodeCleanupDatabase['dueHints']>>,
+    tickets: readonly RecipientCodeDestructionTicket[],
+  ) => {
+    // 行はallocateの後にしか現れないので、先に読んだ行は後のsnapshotに必ず含まれる。未知行の誤検出を防ぐ。
     const scopes = await snapshot();
-    const tickets = await maintenance.pending(limit);
     const selected = new Map<
       string,
       {
@@ -433,19 +434,66 @@ export const createRecipientCodeCleanupService = (
     async run(limit: number): Promise<RecipientCodeCleanupRunResult> {
       const state = newSeal();
       let failed = false;
+      let remaining = false;
+      // 期限到達のまま残した最早の対象。監視へ渡し、残件を隠さない。
+      let oldest: number | null = null;
+      // 停止時だけ監視へ渡す、処理前に観測した最早の期限。
+      let observed: number | null = null;
+      const leave = (dueAt: number) => {
+        remaining = true;
+        oldest = Math.min(oldest ?? dueAt, dueAt);
+      };
+      const windowOf = (dueAt: number | null) =>
+        dueAt === null
+          ? null
+          : recipientCodeRetentionWindow({
+              expiresAt: dueAt,
+              terminalAt: null,
+              actorCutoffAt: null,
+            });
+      const unavailable = async (): Promise<RecipientCodeCleanupRunResult> => {
+        try {
+          await monitor.record({
+            operation: 'cleanup',
+            code: 'UNAVAILABLE',
+            oldest: windowOf(
+              oldest === null || observed === null
+                ? (oldest ?? observed)
+                : Math.min(oldest, observed),
+            ),
+          });
+        } catch {
+          /* 監視障害も許可結果へ変換しない。 */
+        }
+        return { status: confirmed(state) ? 'quarantined' : 'unavailable' };
+      };
       try {
         if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
           throw new RecipientCodeUnavailable();
-        const selected = await candidates(limit);
+        const now = clock.now();
+        // 1件多く読み、上限で切った行を残件として扱う。切った行を完了扱いにしない。
+        const read = await database.dueHints(now, limit + 1);
+        const hints = read.slice(0, limit);
+        if (read.length > limit) leave(read[limit].dueAt);
+        const tickets = await maintenance.pending(limit);
+        // 上限まで返った場合は、続きがある前提で完了を主張しない。
+        if (tickets.length >= limit)
+          leave(tickets[tickets.length - 1].window.dueAt);
+        // 列挙の停止より先に、既知の未達を封鎖する。行の値は未検証なので封鎖する方向にだけ使う。
+        const earliest = [
+          ...tickets.map((ticket) => ticket.window.dueAt),
+          ...hints.map((hint) => hint.dueAt),
+        ].reduce<number | null>(
+          (min, dueAt) => Math.min(min ?? dueAt, dueAt),
+          null,
+        );
+        if (earliest !== null) {
+          observed = earliest;
+          await enforceDeadline(state, windowOf(earliest)!);
+        }
+        const selected = await candidates(now, hints, tickets);
         let removed = 0;
         let attempted = 0;
-        let remaining = false;
-        // 期限到達のまま残した最早の対象。監視へ渡し、残件を隠さない。
-        let oldest: number | null = null;
-        const leave = (dueAt: number) => {
-          remaining = true;
-          oldest = Math.min(oldest ?? dueAt, dueAt);
-        };
         for (const { scope, known, dueAt, hasRow } of selected) {
           try {
             const found = await maintenance.find(scope.codeId);
@@ -466,46 +514,21 @@ export const createRecipientCodeCleanupService = (
             oldest = Math.min(oldest ?? dueAt, dueAt);
           }
         }
+        if (failed || (state.required && !confirmed(state)))
+          return await unavailable();
         if (confirmed(state)) return { status: 'quarantined' };
-        const window =
-          oldest === null
-            ? null
-            : recipientCodeRetentionWindow({
-                expiresAt: oldest,
-                terminalAt: null,
-                actorCutoffAt: null,
-              });
-        if (failed || state.required) {
-          await monitor
-            .record({
-              operation: 'cleanup',
-              code: 'UNAVAILABLE',
-              oldest: window,
-            })
-            .catch(() => {
-              /* 監視障害も許可結果へ変換しない。 */
-            });
-          return { status: 'unavailable' };
-        }
+        // 封鎖も障害もなく完了した対象は、残件の最古から外す。
+        if (!remaining) oldest = null;
         await monitor.record({
           operation: 'cleanup',
           code: 'OK',
-          oldest: window,
+          oldest: windowOf(oldest),
         });
         return remaining
           ? { status: 'pending' }
           : { status: 'complete', removed };
       } catch {
-        try {
-          await monitor.record({
-            operation: 'cleanup',
-            code: 'UNAVAILABLE',
-            oldest: null,
-          });
-        } catch {
-          /* 監視障害も許可結果へ変換しない。 */
-        }
-        return { status: 'unavailable' };
+        return unavailable();
       }
     },
   };
