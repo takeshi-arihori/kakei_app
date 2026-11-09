@@ -50,7 +50,9 @@ LabelはPublic RepositoryのIssue一覧・検索・横断分類に使い、Priva
 - Scope: `scope: group-management`、`scope: expense-recording`、`scope: settlement`、`scope: web`、`scope: api`、`scope: data`、`scope: security`、`scope: tooling`、`scope: ci`、`scope: repo`。該当する責務境界を複数付与できる。
 - Flag: `flag: breaking-change`、`flag: migration`、`flag: decision-required`、`flag: security-review`、`flag: blocked-external`。該当する注意事項がある場合だけ付与する。
 
-ADR Issueは`work: adr`とIssueタイトルの`adr:` prefix（scopeを付ける場合は`adr(<scope>):`）で識別し、Private ProjectではWork Type=`ADR`にする。`scope:*`／`flag:*`は通常どおり使用する。ADR IssueもTaskと同じく、関係するEpicのsub-issueにしてEpicのTask一覧へ載せる。変更種別はIssueタイトルのConventional prefixへ記録し、`priority:*`、`status:*`、`phase:*`、`area:*`等のProject Fieldと重複するLabelは作らない。
+ADR IssueはPrivate ProjectでWork Type=`ADR`にする。ADR IssueもTaskと同じく、関係するEpicのsub-issueにしてEpicのTask一覧へ載せる。
+
+`priority:*`、`status:*`、`phase:*`、`area:*`等のProject Fieldと重複するLabelは作らない。
 
 カテゴリは色でも識別する。`work:*`は紫系、`scope:*`は青系、`flag:*`は注意度が分かる黄〜赤系とする。代表的な検索例は次のとおり。
 
@@ -59,6 +61,18 @@ is:issue label:"work: epic"
 is:issue label:"work: task" label:"scope: repo"
 is:issue label:"work: adr"
 ```
+
+## Issueタイトル
+
+Issueタイトルは`<種別>(<scope>): <内容>`とし、種別でEpic／Task／ADRを見分けられるようにする。scopeは省略できる。
+
+| 種別 | 例 |
+| --- | --- |
+| `epic` | `epic(auth): Googleログインから登録済み宛先のGroup招待・参加までを成立させる` |
+| `task` | `task(auth): Restore時の全招待コード破棄と旧Writer拒否を実装する` |
+| `adr` | `adr(auth): Googleログイン試行・内部Actor・保存型Sessionを採用する` |
+
+`feat`／`fix`／`docs`等の変更種別はIssueタイトルに書かず、Branch名、Commit、PRタイトルに書く（[Delivery Workflow](delivery-workflow.md)）。Close済みでもEpicのTask一覧に載るIssueは同じ形式に揃え、Epic本文の一覧のタイトルも合わせる。
 
 ## イベントと繰越
 
