@@ -73,7 +73,7 @@ I1 Red Test ──▶ I2 Implementation ──▶ I3 Green / Refactor
 | 確認 | 行う場所 | 回数 |
 | --- | --- | --- |
 | 既存Epic／Taskとの重複 | D0 | 要求ごとに1回 |
-| Epicの目的、Task名、Dependencies | D4 | Epicごとに1回。変更時だけ更新 |
+| Epicの目的、Task一覧、Dependencies | D4 | Epicごとに1回。Taskの追加・取り下げ時に更新し、Task Close時はチェックボックスだけ更新 |
 | Taskの現状調査 | I0の`pre-investigation` | Taskごとに1回 |
 | Taskの詳細記入とReady判定 | I0 | Taskごとに1回 |
 | 独立Planning評価 | D3 | 起動条件に該当する場合だけ |

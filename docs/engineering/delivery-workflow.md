@@ -30,19 +30,70 @@ Private GitHub Project
 
 Epicは1つの成果または能力を表し、複数の独立Taskを束ねる。単一の小さなDeliverableのためだけにEpicを作らない。
 
-本文に記録するのは次だけとする。Project／Phase／Area／Priority／StatusはProjectのFieldへ置く。
+本文は次の4節だけとし、[Epic Template](../../.github/ISSUE_TEMPLATE/epic.yml)の順に書く。Owner／Project／Phase／Area／Priority／StatusはAssigneeとProjectのFieldへ置く。
 
-- 目的と期待成果
-- Owner
-- Scope／Out of scope（必要な場合）
-- Task名とDependencies
-- Decision Check／Related ADR
+1. 目的・完了したらできること
+2. Scope／Out of scope
+3. Taskと依存関係
+4. Decision Check／Related ADR
+
+### Taskと依存関係の書き方
+
+Epicには、Epicを完了させるのに必要なTaskを**すべて**列挙する。
+
+```text
+- [ ] #301 adr: 精算の確定方式を決める
+- [ ] #302 task: 精算の集約と値オブジェクトを実装する ← #301
+- [ ] #303 task: 精算を確定するUse Caseを実装する ← #302
+```
+
+- 1行に1 Task。Issue番号、Task名、`←`の後に依存Taskを書く。依存がなければ`←`を省略する。
+- 列挙したTaskはすべてEpicのsub-issueにする。必須の依存はGitHubのblocked_byにも保存する。
+- Issue未作成の「後続候補」を本文に置かない。必要になった時点でTask Issueを作り、一覧へ追加する。
+- 設計結果でTask構成が決まらない場合は、設計TaskまたはADRだけを列挙し、その完了時に後続Taskを作って一覧へ追加する。
+- Taskを取り下げる場合はIssueを`not planned`でCloseし、一覧から行を消す。
+- チェックボックスはTaskのClose状態と一致させる。GitHubは自動で更新しないため、TaskをCloseした作業の中でEpicのチェックボックスも更新する。経過、Review結果、日付付きの追記は書かない（[Issue・PR本文](#issuepr本文)）。
+
+### Epicの完了
+
+一覧のTaskとsub-issueが**すべてClose**するまでEpicをCloseしない。Epicの目的がまだ満たされない場合は、不足するTaskを起票して一覧へ追加する。目的の一部を別のEpicへ移す場合は、Scope／Out of scopeを書き換え、移したTaskを新しいEpicのsub-issueへ付け替える。
+
+### Epicの作成前
 
 新規Epicを作る前に既存Epicとの重複・包含関係を確認する。Task名は設計結果で変わってよい。設計結果でTask構成が変わる場合は、後続Taskを先に確定しない。
 
+## Epic・Taskの分け方
+
+Taskは1つのPRで届けられ、単独で検証できる成果の大きさにする。層をまたぐ大きな機能は、次の順を目安に分ける。必要な層だけを使い、層の名前と責務は[Backend](backend.md)と[Frontend](frontend.md)を正とする。
+
+| 順 | 単位 | 成果と検証 |
+| --- | --- | --- |
+| 1 | ADR／設計 | 未決DecisionのADR、または設計文書。Ownerの採否 |
+| 2 | Domain | Entity、Value Object、Aggregate、Domain Service。Unit Test |
+| 3 | Application | Use CaseとPort。FakeのPortを使うTest |
+| 4 | Infrastructure | Repository等のAdapter。実PostgreSQLの結合Test、競合Test |
+| 5 | Presentation | GraphQL／HTTPの公開契約と接続。契約Test |
+| 6 | Web | 画面。Component Test、Playwright E2E |
+
+- 決まっていないDecisionがあれば、1のTaskを先に置き、後続Taskをそれに依存させる。
+- 後続Taskは依存Taskが完了してから着手する（Code依存はMerge済み、Decision依存はADRがAccepted）。未Mergeの前提へのCode依存は[PR依存関係Gate](pr-dependency-gate.md)のStacked PRに従う。
+- 1つの層でもPRサイズの目安を超える場合は、縦に切る（例: 1件の正常系→境界・競合→清掃）。
+
+例:
+
+```text
+epic: 精算を確定できるようにする
+- [ ] #301 adr: 精算の確定方式を決める
+- [ ] #302 task: 精算の集約と値オブジェクトを実装する ← #301
+- [ ] #303 task: 精算を確定するUse Caseを実装する ← #302
+- [ ] #304 task: 精算RepositoryをPostgreSQLで実装する ← #303
+- [ ] #305 task: 精算確定のGraphQL Mutationを公開する ← #304
+- [ ] #306 task: 精算確定画面を実装する ← #305
+```
+
 ## Task
 
-Taskは原則として1人が短期間で完了できる、独立して検証可能な1 Deliverableとする。複数の独立成果や長期作業は分割する。
+Taskは原則として1人が短期間で完了できる、独立して検証可能な1 Deliverableとする。複数の独立成果や長期作業は分割する。1つのTaskをさらに分ける場合は、元のTaskを親にせず、新しいTaskを同じEpicのsub-issueとして一覧へ追加し、元のTaskは`not planned`でCloseする（Epic→Taskの2階層を保つ）。
 
 Epicの分解時と単一Taskの起票時は、Task名、親Epic（ある場合）、Dependencies、依存するDecisionだけを記録し、`Backlog`で保存する。残りは[Engineering Loop](engineering-loop.md)のI0で一度だけ書く。
 
@@ -175,7 +226,7 @@ Stacked PRでは`origin/develop`を直接のBase Branchへ置き換える。Code
 
 | 対象 | 書くこと | 書かないこと |
 | --- | --- | --- |
-| Epic | 目的、Owner、Task名、Dependencies、Decision Check | 進捗、Status、完了報告（進捗はProjectに置く） |
+| Epic | 目的、Scope／Out of scope、全Taskの一覧とDependencies、Decision Check | 進捗の説明、Status、完了報告、未起票の後続候補（進捗はチェックボックスとProjectに置く） |
 | Task | Owner、Requirement、Done Criteria、Scope、Dependencies、Decision、検証方針、PR URL | Reviewの結果、作業の経過 |
 | PR | PR Templateの項目、Reviewの要約（内容は[独立Review](implementation-review.md)のEvidence） | 下記のログ |
 
@@ -191,7 +242,7 @@ Issue、PRのどちらにも次を載せない。Commentへ移すこともしな
 - Ownerの承認・例外: 日付と内容を1行で。必要なら根拠へのLinkを付ける
 - 中断・停止: 現在の状態、未解決Finding、解消条件、次の1手を数行で
 
-既存のIssue・PRの本文は、このRuleのために遡って書き換えない。
+Close済みのIssue・PRの本文は、このRuleのために遡って書き換えない。Open中のEpicは、上の4節の形式へ書き換える。書き換えで消える経過は、Close済みTask、PR、Commit履歴に残っているものだけとする。
 
 ## ADR
 

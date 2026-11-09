@@ -1,10 +1,35 @@
 name: Task
 description: 1〜2日で検証できる単一成果
 title: "task: "
+labels: ["work: task"]
 body:
   - type: markdown
     attributes:
       value: "このRepositoryはPublicです。公開確認済みの情報だけを記入してください。Notionへのアクセスは不要です。Epicの分解時と単一Taskの起票時はタイトル、親Epic（ある場合）、Dependencies、依存するDecisionだけを書き、他の欄は「着手時に記入」とします。依存するDecisionはRelated ADR欄に書き、Decision Checkは未確定なら「未確認」を選びます。Reviewの結果や作業の経過は本文に書きません。"
+  - type: input
+    id: epic
+    attributes:
+      label: 親Epic
+      description: sub-issueにも設定し、EpicのTask一覧へ追加する。単独Taskなら「なし」
+      placeholder: "#202"
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: 主に変更する層
+      description: 分け方は docs/engineering/delivery-workflow.md の「Epic・Taskの分け方」
+      multiple: true
+      options:
+        - ADR／設計
+        - Domain
+        - Application
+        - Infrastructure
+        - Presentation
+        - Web
+        - docs／Tooling／CI
+    validations:
+      required: false
   - type: textarea
     id: requirement
     attributes:
@@ -23,7 +48,7 @@ body:
     id: planning
     attributes:
       label: Planning
-      description: Owner、親Epic、Dependencies、影響範囲。ProjectのFieldにある値は書かない
+      description: Owner、Dependencies、影響範囲。ProjectのFieldにある値は書かない
     validations:
       required: true
   - type: dropdown
