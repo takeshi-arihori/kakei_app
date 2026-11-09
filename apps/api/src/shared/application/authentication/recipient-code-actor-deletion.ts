@@ -24,7 +24,7 @@ export interface RecipientCodeDeletionDatabase extends Pick<
 /** 削除Serviceへ状況を渡す口。期限未達と封鎖の判断は削除Serviceが所有する。 */
 export interface RecipientCodeDeletionObserver {
   /**
-   * 観測したコードの窓を渡す。未達なら削除Serviceが封鎖する。
+   * 未完了のコードの窓を渡す。未達なら削除Serviceが封鎖する。完了済みticketの窓は渡さない。
    * @param window 登録前の推定、または登録済みticketの窓。
    * @throws Error 封鎖を確認できない場合。処理を止める。
    */
@@ -139,9 +139,16 @@ export const createRecipientCodeActorDeletion = (
           terminalAt: null,
           actorCutoffAt: preparedAt,
         });
+        let found;
+        try {
+          found = await maintenance.find(known.codeId);
+        } catch (error) {
+          await observer.window(estimated);
+          throw error;
+        }
         // Actor LockやMACの障害でも、Providerが保持する期限の未達は隠さない。
-        await observer.window(estimated);
-        const found = await maintenance.find(known.codeId);
+        // 完了済みticketは期限内に閉じた証拠なので、古い窓を未達として渡さない。
+        if (found?.state !== 'complete') await observer.window(estimated);
         if (
           found !== null &&
           found.inventoryRevision !== known.inventoryRevision
@@ -167,14 +174,14 @@ export const createRecipientCodeActorDeletion = (
           window,
           expected: found,
         });
-        await observer.window(ticket.window);
+        if (ticket.state === 'pending') await observer.window(ticket.window);
       });
     },
     async finish({ operationId, actorId }, observer) {
       const verified = new Set<string>();
       const tickets = await maintenance.byOperation(operationId);
       await everyItem(tickets, async (ticket) => {
-        await observer.window(ticket.window);
+        if (ticket.state === 'pending') await observer.window(ticket.window);
         const [bound] = await maintenance.scopes(ticket);
         if (bound.recipientActorId !== actorId) reject();
         // 完了済みでも、Restoreや競合で戻った行を残さない。

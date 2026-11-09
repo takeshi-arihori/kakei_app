@@ -54,6 +54,8 @@ export interface AuthenticationDisabledActor {
   readonly ticket: AuthenticationDestructionTicket;
   /** コード用途の初期化済み。コード参加なしのServiceはCompleteへ進まない。 */
   readonly recipientCodesProvisioned: boolean;
+  /** 無効化の時点で封鎖中。コード参加の再開でも封鎖の事実を失わない。 */
+  readonly keyStateQuarantined: boolean;
 }
 
 /** 不可逆な削除意思とDB無効化/除去を結び付けるPort。 */

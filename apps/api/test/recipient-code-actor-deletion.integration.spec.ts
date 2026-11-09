@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { Client } from 'pg';
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -9,6 +11,7 @@ import {
   vi,
 } from 'vitest';
 
+import { OperationId } from '../src/group-management/application/group-repository.js';
 import type { AuthenticationMaintenanceMonitor } from '../src/shared/application/authentication/authentication-maintenance-ports.js';
 import { createAuthenticationDeletionService } from '../src/shared/application/authentication/authentication-deletion-service.js';
 import { createRecipientInvitationRuntime } from '../src/recipient-invitation-runtime.js';
@@ -23,6 +26,7 @@ import { syntheticAuthenticationManagedKeys } from '../src/shared/infrastructure
 import { syntheticRecipientCodeManagedKeys } from '../src/shared/infrastructure/authentication/test/recipient-code-maintenance-fixtures.js';
 import {
   actors,
+  barrier,
   RecipientInvitationFixture,
   sessionSecret,
 } from './support/recipient-invitation-fixture.js';
@@ -40,6 +44,7 @@ const issuer = sessionSecret(20);
 
 describe('Actor削除へのコード参加（実PG17＋合成Provider）', () => {
   const f = new RecipientInvitationFixture(url);
+  const holder = new Client({ connectionString: url });
   let codeKeys: ReturnType<typeof syntheticRecipientCodeManagedKeys>;
   let managed: ReturnType<typeof syntheticAuthenticationManagedKeys>;
   let ledger: ReturnType<typeof syntheticAuthenticationLedger>;
@@ -55,8 +60,14 @@ describe('Actor削除へのコード参加（実PG17＋合成Provider）', () =>
 
   beforeAll(async () => {
     await f.initialize();
+    await holder.connect();
+    await holder.query(`SET search_path TO ${f.schema}`);
+  });
+  afterEach(async () => {
+    await holder.query('ROLLBACK');
   });
   afterAll(async () => {
+    await holder.end();
     await f.dispose();
   });
   const compose = (participating: boolean) => {
@@ -186,6 +197,39 @@ describe('Actor削除へのコード参加（実PG17＋合成Provider）', () =>
     recipientActorId: row.recipientActorId,
   });
 
+  /** 実コード利用と同じGroupへの作成要求。呼び直すと同じoperationの再送になる。 */
+  const createInput = (code: Parameters<typeof runtime.create>[0]['code']) => ({
+    code,
+    groupId: f.groupId,
+    operationId: OperationId.from(`deletion-${randomUUID()}`),
+    sessionSecret: sessionSecret(10),
+    expectedVersion: 1,
+  });
+  /** 実操作のSQL直前で止め、Actor Lockを保持した接続を作る。 */
+  const pauseAt = (pattern: RegExp) => {
+    const entered = barrier();
+    const resume = barrier();
+    const state = { pid: 0 };
+    f.intercept = async (event, run) => {
+      if (state.pid === 0 && pattern.test(event.sql)) {
+        state.pid = event.pid;
+        entered.release();
+        await resume.entered;
+      }
+      return run();
+    };
+    return { entered: entered.entered, resume: resume.release, state };
+  };
+  const waitForSql = async (pattern: RegExp) => {
+    const limit = Date.now() + 4000;
+    while (Date.now() < limit) {
+      const found = f.sqls.find((event) => pattern.test(event.sql));
+      if (found) return found.pid;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    throw new Error('合成: SQL未到達');
+  };
+
   it('全世代のclosureと0-rowまで確定し、別Actorのコードを巻き込まない', async () => {
     const code = await issue();
     await codeKeys.allocation.allocate({
@@ -225,28 +269,32 @@ describe('Actor削除へのコード参加（実PG17＋合成Provider）', () =>
     expect(await intentStates()).toEqual(['complete']);
   });
 
-  it('GM Invitation・成功結果・消費Auditを変えず、認証からGM Tableを参照しない', async () => {
+  it('実消費で作られたGM Invitation・成功結果・消費Auditとproof鍵を変えず、成功再送できる', async () => {
     await f.seed(f.groupId, actors.owner);
-    await issue();
+    const issued = await runtime.issue(issuer, f.clock);
+    if (issued.status !== 'issued') throw new Error('合成: 発行失敗');
+    const input = createInput(issued.code);
+    const result = await runtime.create(input);
+    expect(result.status).toBe('authenticated');
     const before = await f.snapshot();
-    f.sqls = [];
-    expect((await service.begin(actorId)).status).toBe('complete');
-    const after = await f.snapshot();
     for (const name of [
-      'group_aggregate_record',
-      'group_participant_record',
       'group_invitation_record',
-      'group_membership_history_record',
-      'group_invitation_history_record',
       'group_operation_result_record',
-      'group_actor_access_index',
-      'group_operation_locator_v2',
-      'group_recipient_invitation_audit_record',
       'consumeAudit',
     ])
-      expect(after[name]).toEqual(before[name]);
-    expect(after['authentication.recipient_code']).toEqual([]);
+      expect(before[name]).not.toEqual([]);
+    const proofs = new Map(f.proofMaterials);
+    f.sqls = [];
+    expect((await service.begin(actorId)).status).toBe('complete');
     expect(f.sqls.filter((e) => /\bgroup_/.test(e.sql))).toEqual([]);
+    const after = await f.snapshot();
+    for (const name of Object.keys(before))
+      if (name !== 'authentication.recipient_code')
+        expect(after[name]).toEqual(before[name]);
+    expect(after['authentication.recipient_code']).toEqual([]);
+    expect(f.proofMaterials).toEqual(proofs);
+    // 宛先Actorの削除とコード行の除去の後も、保存世代で同じ最小結果を再送する。
+    await expect(runtime.create(input)).resolves.toEqual(result);
   });
 
   it('Prepared後の遅延allocateと鍵rotationをProviderが拒否する', async () => {
@@ -276,6 +324,78 @@ describe('Actor削除へのコード参加（実PG17＋合成Provider）', () =>
     expect(
       (await codeKeys.lifecycle.inventory(code.codeId)).generations,
     ).toHaveLength(1);
+  });
+
+  it('封鎖後でActorが有効な区間の発行は失敗し、コード行を増やさない', async () => {
+    const code = await issue();
+    codeKeys.faults.add('before-prepare');
+    const pending = await service.begin(actorId);
+    expect(pending.status).toBe('unavailable');
+    expect(await actorState()).toBe('active');
+    expect((await runtime.issue(issuer, f.clock)).status).not.toBe('issued');
+    expect((await f.codes()).map((row) => row.codeId)).toEqual([code.codeId]);
+    codeKeys.faults.clear();
+    expect((await service.resume(beganOperation(pending))).status).toBe(
+      'complete',
+    );
+    await expectClosed(code.codeId);
+  });
+
+  it('Complete済みの再照合はticketの版を変えず、窓の経過後も封鎖しない', async () => {
+    const code = await issue();
+    const result = await service.begin(actorId);
+    expect(result.status).toBe('complete');
+    const ticket = await codeKeys.maintenance.find(code.codeId);
+    f.now += 3 * day;
+    expect((await service.resume(beganOperation(result))).status).toBe(
+      'complete',
+    );
+    expect(await codeKeys.maintenance.find(code.codeId)).toEqual(ticket);
+    expect(await keyStatus()).toBe('active');
+  });
+
+  describe('2接続の競合', () => {
+    const actorLockWait = async (blocker: number) => {
+      const waiter = await waitForSql(/authentication\.actor .*FOR UPDATE/);
+      await f.waitBlocked(waiter, blocker);
+    };
+
+    it('別接続がコード行をLock中なら待たずに止まり、解放後の再開で完了する', async () => {
+      const code = await issue();
+      await holder.query('BEGIN');
+      await holder.query(
+        'SELECT 1 FROM authentication.recipient_code WHERE code_id=$1 FOR UPDATE',
+        [code.codeId],
+      );
+      const pending = await service.begin(actorId);
+      expect(pending.status).toBe('unavailable');
+      expect(await actorState()).toBe('active');
+      expect(await codeKeys.maintenance.find(code.codeId)).toBeNull();
+      await holder.query('ROLLBACK');
+      expect((await service.resume(beganOperation(pending))).status).toBe(
+        'complete',
+      );
+      await expectClosed(code.codeId);
+    });
+
+    it('消費のcommitを待ち、Invitationを残してコードと全世代を閉じる', async () => {
+      await f.seed(f.groupId, actors.owner);
+      const issued = await runtime.issue(issuer, f.clock);
+      if (issued.status !== 'issued') throw new Error('合成: 発行失敗');
+      const paused = pauseAt(/UPDATE authentication\.recipient_code/);
+      const consuming = runtime.create(createInput(issued.code));
+      await paused.entered;
+      f.sqls = [];
+      const deleting = service.begin(actorId);
+      await actorLockWait(paused.state.pid);
+      paused.resume();
+      expect((await consuming).status).toBe('authenticated');
+      expect((await deleting).status).toBe('complete');
+      await expectClosed(issued.codeId);
+      const after = await f.snapshot();
+      expect(after.group_invitation_record).toHaveLength(1);
+      expect(after.consumeAudit).toHaveLength(1);
+    });
   });
 
   describe('清掃との競合', () => {
@@ -340,6 +460,31 @@ describe('Actor削除へのコード参加（実PG17＋合成Provider）', () =>
         state: 'complete',
         adoptingOperationIds: [result.operationId],
         window: owned?.window,
+      });
+    });
+
+    it('期限内に清掃が閉じたコードは、窓の経過後の削除でも認証を封鎖しない', async () => {
+      const code = await issue();
+      f.now = code.expiresAt;
+      expect((await cleanup.cleanOne(scopeOf(code))).status).toBe('completed');
+      f.now += 2 * day;
+      expect((await service.begin(actorId)).status).toBe('complete');
+      expect(await keyStatus()).toBe('active');
+    });
+
+    it('採用の応答喪失でも採用を二重に記録しない', async () => {
+      const code = await issue();
+      const owned = await cleanupOwned(code);
+      codeKeys.faults.add('after-prepare');
+      const pending = await service.begin(actorId);
+      expect(pending.status).toBe('unavailable');
+      codeKeys.faults.clear();
+      expect((await service.resume(beganOperation(pending))).status).toBe(
+        'complete',
+      );
+      expect(await codeKeys.maintenance.find(code.codeId)).toMatchObject({
+        operationId: owned.operationId,
+        adoptingOperationIds: [pending.operationId],
       });
     });
 
@@ -431,6 +576,37 @@ describe('Actor削除へのコード参加（実PG17＋合成Provider）', () =>
           'complete',
         );
         await expectClosed(code.codeId);
+      },
+    );
+
+    it.each([
+      'after-prepare',
+      'inventory',
+      'before-close',
+      'verify-closure',
+      'before-complete',
+      'after-complete',
+    ])(
+      '%sの障害では外部Completeせず、同operationで二重ticketなく再開する',
+      async (fault) => {
+        const code = await issue();
+        codeKeys.faults.add(fault);
+        const pending = await service.begin(actorId);
+        expect(pending.status).toBe('unavailable');
+        expect(await intentStates()).toEqual(
+          fault === 'after-prepare' ? [] : ['prepared'],
+        );
+        expect(monitor.record).not.toHaveBeenCalledWith(
+          expect.objectContaining({ code: 'OK' }),
+        );
+        codeKeys.faults.clear();
+        expect((await service.resume(beganOperation(pending))).status).toBe(
+          'complete',
+        );
+        await expectClosed(code.codeId);
+        expect(
+          await codeKeys.maintenance.byOperation(beganOperation(pending)),
+        ).toHaveLength(1);
       },
     );
 
@@ -552,6 +728,59 @@ describe('Actor削除へのコード参加（実PG17＋合成Provider）', () =>
       expect(result.status).toBe('quarantined');
       expect(await keyStatus()).toBe('quarantined');
       await expectClosed(code.codeId);
+    });
+  });
+
+  describe('封鎖の引き継ぎ', () => {
+    const tamper = (codeId: string) =>
+      f.admin.query(
+        "UPDATE authentication.recipient_code SET state_mac=decode(repeat('00',32),'hex') WHERE code_id=$1",
+        [codeId],
+      );
+
+    it('改竄の検出後に行を除去してから止まっても、再開は成功と報告しない', async () => {
+      const code = await issue();
+      await tamper(code.codeId);
+      codeKeys.faults.add('before-close');
+      const pending = await service.begin(actorId);
+      expect(pending.status).toBe('unavailable');
+      expect(await rowCount(code.codeId)).toBe(0);
+      codeKeys.faults.clear();
+      monitor.record.mockClear();
+      expect((await service.resume(beganOperation(pending))).status).toBe(
+        'quarantined',
+      );
+      await expectClosed(code.codeId);
+      expect(monitor.record).not.toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'OK' }),
+      );
+    });
+
+    it('改竄の検出後にDB Completeの応答を失っても、再開は成功と報告しない', async () => {
+      const code = await issue();
+      await tamper(code.codeId);
+      let lost = false;
+      f.intercept = async (event, run) => {
+        const answer = await run();
+        if (
+          !lost &&
+          event.sql.startsWith('UPDATE authentication.deletion_intent')
+        ) {
+          lost = true;
+          throw new Error('synthetic-response-lost');
+        }
+        return answer;
+      };
+      const pending = await service.begin(actorId);
+      expect(lost).toBe(true);
+      expect(pending.status).toBe('unavailable');
+      monitor.record.mockClear();
+      expect((await service.resume(beganOperation(pending))).status).toBe(
+        'quarantined',
+      );
+      expect(monitor.record).not.toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'OK' }),
+      );
     });
   });
 

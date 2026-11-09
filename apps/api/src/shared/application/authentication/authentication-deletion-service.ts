@@ -320,7 +320,13 @@ export const createAuthenticationDeletionService = (
       )
         throw new AuthenticationCryptoUnavailable();
       await enforceDeadline();
-      if (missed || codeMismatch) return { status: 'quarantined', operationId };
+      // 確定した不一致は再開で再観測できないので、durableな封鎖からも成功を止める。
+      if (
+        missed ||
+        codeMismatch ||
+        (options.recipientCodes !== undefined && disabled.keyStateQuarantined)
+      )
+        return { status: 'quarantined', operationId };
       await options.monitor.record({
         operation: 'deletion',
         code: 'OK',

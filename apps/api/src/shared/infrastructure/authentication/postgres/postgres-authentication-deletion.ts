@@ -263,6 +263,7 @@ export const createPostgresAuthenticationDeletion = (
           actorId: target.actorId,
           ticket,
           recipientCodesProvisioned: state.recipientCodesProvisioned,
+          keyStateQuarantined: state.quarantined,
         });
       });
     },

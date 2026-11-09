@@ -70,6 +70,7 @@ const readState = async (
     codeLookupWrite: string;
     codeMacWrite: string;
     recipientCodesProvisioned: boolean;
+    quarantined: boolean;
   }
 > => {
   const stateResult = await connection.query(
@@ -182,6 +183,7 @@ const readState = async (
     codeMacWrite: additionalPurposes.length
       ? singleWrite('recipient-code-state-mac')
       : '',
+    quarantined: state.status === 'quarantined',
     recipientCodesProvisioned:
       sets.has('recipient-code-lookup') || sets.has('recipient-code-state-mac'),
   });
@@ -269,7 +271,7 @@ export const readAuthenticationCleanupKeyState = (
  * 既存の削除AdapterはSessionとIdentityだけを扱うので、コード用途の初期化後も動く（ADR D6）。
  * コード用途の有無を返し、コード参加なしの削除を呼出し側が止められるようにする。
  * @param connection 削除が所有するTransaction接続。
- * @returns 通常運転またはquarantinedの共有Lock付き世代と、コード用途の有無。コード世代は含まない。
+ * @returns 通常運転またはquarantinedの共有Lock付き世代、コード用途の有無、封鎖の有無。コード世代は含まない。
  * @throws 未初期化/Restore中、未知用途、不正State、鍵世代不足。
  */
 export const readAuthenticationDeletionKeyState = (
@@ -277,6 +279,7 @@ export const readAuthenticationDeletionKeyState = (
 ): Promise<
   AuthenticationStoreKeyState & {
     /** コード用途の鍵世代が1つでも登録されている。 */ readonly recipientCodesProvisioned: boolean;
+    /** 封鎖中。再開でも封鎖の事実を失わない。 */ readonly quarantined: boolean;
   }
 > => readIgnoringRecipientCodePurposes(connection);
 

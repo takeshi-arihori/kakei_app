@@ -21,6 +21,7 @@ describe('認証Actor削除の不可逆な境界', () => {
   const fixture = () => {
     const events: string[] = [];
     const provisioned = { value: false };
+    const keyStateQuarantined = { value: false };
     let record: AuthenticationDeletionRecord | null = {
       kind: 'actor-deletion',
       operationId,
@@ -75,6 +76,7 @@ describe('認証Actor削除の不可逆な境界', () => {
             actorId,
             ticket,
             recipientCodesProvisioned: provisioned.value,
+            keyStateQuarantined: keyStateQuarantined.value,
           };
         });
       },
@@ -162,6 +164,7 @@ describe('認証Actor削除の不可逆な境界', () => {
       monitor,
       service,
       provisioned,
+      keyStateQuarantined,
       reset: () => {
         record = null;
       },
@@ -374,6 +377,41 @@ describe('認証Actor削除の不可逆な境界', () => {
         code: 'UNAVAILABLE',
         oldest: null,
       });
+    });
+    it('封鎖中の再開は不一致を再観測できなくても成功と報告しない', async () => {
+      const { f, codes } = codeFixture();
+      f.keyStateQuarantined.value = true;
+      expect(
+        (await f.service(undefined, 2000, codes).resume(operationId)).status,
+      ).toBe('quarantined');
+      expect(f.events).toContain('external-complete');
+      expect(f.monitor.record).not.toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'OK' }),
+      );
+    });
+    it('コード参加なしの削除は従来どおり封鎖中でも完了を返す', async () => {
+      const f = fixture();
+      f.keyStateQuarantined.value = true;
+      expect((await f.service().resume(operationId)).status).toBe('complete');
+    });
+    it('Complete済みの再照合では古いコードの窓で封鎖しない', async () => {
+      const { f, codes } = codeFixture();
+      expect(
+        (await f.service(undefined, 2000, codes).resume(operationId)).status,
+      ).toBe('complete');
+      f.events.length = 0;
+      f.monitor.record.mockClear();
+      codes.register.mockImplementation(async (_input, observer) => {
+        await observer.window({ dueAt: 500, deadline: 500 + 86_400_000 });
+      });
+      expect(
+        (await f.service(undefined, 90_000_000, codes).resume(operationId))
+          .status,
+      ).toBe('complete');
+      expect(f.events).not.toContain('quarantine');
+      expect(f.monitor.record).not.toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'OVERDUE' }),
+      );
     });
     it('コード用途があるのに参加しないServiceはPreparedへ進まない', async () => {
       const f = fixture();

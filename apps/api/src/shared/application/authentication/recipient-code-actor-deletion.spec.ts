@@ -270,6 +270,25 @@ describe('Actor削除へのコードticket参加', () => {
       ).toEqual(codes);
     });
 
+    it('完了済みticketの窓は未達としてobserverへ渡さない', async () => {
+      const code = await allocate();
+      await register();
+      await finish();
+      expect(await keys.maintenance.find(code)).toMatchObject({
+        state: 'complete',
+      });
+      observer.window.mockClear();
+      await register();
+      expect(observer.window).not.toHaveBeenCalled();
+    });
+
+    it('findの障害ではProviderの期限を渡してから止まる', async () => {
+      await allocate(randomUUID(), actorId, 'v1', preparedAt - 2000);
+      keys.faults.add('find');
+      await unavailable(register());
+      expect(observer.window).toHaveBeenCalledWith(window(preparedAt - 2000));
+    });
+
     it('完了済みticketは充足済みとして採用し、再作成しない', async () => {
       const code = await allocate();
       const owner = randomUUID();
@@ -421,6 +440,15 @@ describe('Actor削除へのコードticket参加', () => {
       await unavailable(finish());
       expect((await keys.maintenance.find(codes[0]))?.state).toBe('pending');
       expect((await keys.maintenance.find(codes[1]))?.state).toBe('complete');
+    });
+
+    it('完了済みticketの窓は再検証でもobserverへ渡さない', async () => {
+      await allocate();
+      await register();
+      await finish();
+      observer.window.mockClear();
+      await finish();
+      expect(observer.window).not.toHaveBeenCalled();
     });
 
     it('完了済みticketでも0-rowを確認できなければ止まる', async () => {

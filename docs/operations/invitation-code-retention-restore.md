@@ -77,7 +77,7 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | Complete前提 | `byOperation`の全ticketが完了していて、その全closureを今回の実行で検証済みで、再snapshotの全scopeが同じ全世代版のticketと一致し、Actorのコード行が0件であること。Providerの知らない行が残れば進まない |
 | 採用 | 別operationの未完了ticketは採用し、採用をdurableに記録して窓を前倒しする。延長しない。closureは常に所有operationへ束縛し、完了済みticketは充足済みとして、所有operationのclosureと全世代を再検証する |
 | 清掃との競合 | 清掃は未完了ticketを、所有者に関係なく所有operationのまま再開する（Proposal 2b）。清掃は独自の永続operationを持たないので採用を記録しない。清掃が削除所有のticketを完了した場合も、削除の再開が閉じた世代と0-rowを再検証する |
-| 封鎖 | 削除またはコードticketの`deadline`到達、Record MACの確定した不一致では`key_state`を`quarantined`にする。除去とCompleteは続けるが、結果は`quarantined`で`OK`を通知しない。コード1件の遅延でも認証全体が止まり、解除はRestoreだけが持つ |
+| 封鎖 | 削除または未完了コードticketの`deadline`到達、Record MACの確定した不一致では`key_state`を`quarantined`にする。完了済みticketの窓は未達の根拠にしない。除去とCompleteは続けるが、結果は`quarantined`で`OK`を通知しない。封鎖中の再開も同じで、再開で不一致を再観測できなくても成功と報告しない。コード1件の遅延でも認証全体が止まり、解除はRestoreだけが持つ |
 | 停止 | 列挙の不完全、版不一致、Lock中の行、Provider/SQL/Audit障害、commit応答喪失、別Actorのticketでは外部Completeをappendせず`unavailable`とする |
 | 構成の確認 | コード用途があるのにコード参加なしの構成、またはコード用途がないのにコード参加ありの構成はPrepared前に止まる。Prepared済みの再開で食い違った場合はCompleteしない |
 
