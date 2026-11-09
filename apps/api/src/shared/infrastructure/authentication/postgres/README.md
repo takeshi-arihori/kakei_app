@@ -76,7 +76,7 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 
 `limits`はLock/statement/transactionの正のmillisecondsを要求し、PostgreSQL17のSET LOCAL相当とCallbackの実時間上限を設定する。AbortSignalまたはTransaction上限でCallbackが戻らない場合も受付をsealし接続を破棄する。切断時のPG Transaction abortにより途中DMLを残さず、遅延Callbackのqueryを拒否する。PGのerror Eventを持つPool/接続Wrapperは`on/removeListener`も転送し、queryがない間のtransaction_timeout/切断を所有者の中断へ接続する。破棄中のsocket errorも原因を公開せず受け止める。COMMIT送信後は確定済みの可能性を保持してunavailableとし、Callbackを自動再実行しない。接続取得自体の待機上限は注入Pool側の責務であり、本番Pool/Provider応答時間の保証は未実証。固定Alertだけを通知し、通知例外/SQL詳細/入力値を返さない。
 
-専用`readRecipientCodeKeyState`と`readRecipientCodeManagementKeyState`、コード保守用の`readRecipientCodeMaintenanceKeyState`だけがSchema8のコード2用途を受理する。旧通常Writer/保守/Restoreの未知用途拒否は維持する。既存の認証清掃が使う`readAuthenticationCleanupKeyState`だけはコード2用途を結果に含めず無視し、未知用途は拒否する（#259、ADR D6）。コード2用途を受理するReaderのうち`readRecipientCodeMaintenanceKeyState`だけが`quarantined`でも読め、利用受付の入口には使わない。呼出元はコードの内部清掃Adapterだけで、通常入口とコードRuntimeへの未接続は`architecture-dependencies.spec.ts`で検査する。新しい鍵世代の初期化、旧Writer/Restoreとの公開切替、実GM Adapter、実コード消費/両Audit、清掃/Restore、HTTP/Dev/mainへの接続を今回の内部leaseで完成扱いにしない。
+専用`readRecipientCodeKeyState`と`readRecipientCodeManagementKeyState`、コード保守用の`readRecipientCodeMaintenanceKeyState`だけがSchema8のコード2用途を受理する。旧通常Writer/保守/Restoreの未知用途拒否は維持する。既存の認証清掃が使う`readAuthenticationCleanupKeyState`と、既存のActor削除が使う`readAuthenticationDeletionKeyState`だけはコード2用途を結果に含めず無視し、未知用途は拒否する（#259、#260、ADR D6）。`readAuthenticationDeletionKeyState`はコード用途の有無だけを返し、コード参加なしの構成を止める判断に使う。コード2用途を受理するReaderのうち`readRecipientCodeMaintenanceKeyState`だけが`quarantined`でも読め、利用受付の入口には使わない。呼出元はコードの内部清掃Adapterだけで、通常入口とコードRuntimeへの未接続は`architecture-dependencies.spec.ts`で検査する。新しい鍵世代の初期化、旧Writer/Restoreとの公開切替、実GM Adapter、実コード消費/両Audit、清掃/Restore、HTTP/Dev/mainへの接続を今回の内部leaseで完成扱いにしない。
 
 `recipient-code-transaction-scopes.spec.ts`は偽証跡/参照差/二重消費/未await/別本文/受付終了を検証する。`recipient-code-leases.integration.spec.ts`は専用PG17のSuite所有Schemaで実Actor/Session/コードMAC/Lock/2接続競合/期限/SQL故障/rollback/COMMIT応答喪失/cancelを検証する。GM key-state/Table/業務保存、コード消費WriterとコードAuditはTest-onlyの合成参加者で、実GM保存は#242、コード消費とInvitation作成/両Auditの共通業務atomicityは#243のEvidenceが必要。公開契約・Provider・保守/復旧・Production Gateを解除しない。
 
@@ -122,7 +122,7 @@ commit前障害は全rollbackを試みるが、ProviderのNonce割当はburnし�
 - `inspect`はActor MACと行のMACを検証した`disabledAt`と`terminalAt`だけを返す。形式不正・公開読取世代外・確定した不一致は`mismatch`、鍵障害は`unverifiable`で、どちらも値を起算に使わない。MAC不一致と鍵障害の区別にはコード暗号Portの`checkRecord`を使う。
 - `remove`はLock後のClockで`dueAt`を再検証し、`record_version`のCASで行を除去する。同じcommitへ`purge` Audit（Actor仮名だけ）を保存する。行がなければ何も書かない。
 - `dueHints`と`disabledHints`はLockしない候補で、判断の根拠にしない。`quarantine`は既存清掃と共有する`quarantineAuthenticationKeyState`を使う。
-- `absent`はコード表だけを照合する。
+- `absent`はコード表だけを照合する。`actorAbsent`はActor削除のComplete前提で、Providerの知らない行も検出する（#260）。
 - ActorとコードはSQLで列を明示して読む。将来の列を読み込まず、列の追加でコード行の厳密な形式検証を不一致（封鎖）へ倒さない。
 
 各操作は別Transactionで、保守Portの呼出しをDB Lockの保持中に行わない。`recipient-code-cleanup.integration.spec.ts`が実PG17でLock順、SKIP LOCKED、期限境界、disabledAt、MAC不一致と封鎖、再発行・取消・消費との2接続競合、小Batch、孤立scope、列挙の停止、24時間未達、SQL・Audit・Provider障害、COMMIT応答喪失、部分世代、復元行、key-stateを検証する。Providerは合成で、実Providerの耐久性・破棄の証拠にしない。

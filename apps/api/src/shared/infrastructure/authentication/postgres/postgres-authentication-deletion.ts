@@ -27,7 +27,7 @@ import {
   authenticationDatabaseRow,
 } from './authentication-database-values.js';
 import {
-  readAuthenticationMaintenanceKeyState,
+  readAuthenticationDeletionKeyState,
   type AuthenticationStoreKeyState,
 } from './authentication-key-state.js';
 import { prepareAuthenticationDestruction } from './authentication-maintenance-values.js';
@@ -51,6 +51,10 @@ import {
   authenticationIdentityColumns,
   authenticationSessionColumns,
 } from './authentication-columns.js';
+
+type DeletionKeyState = Awaited<
+  ReturnType<typeof readAuthenticationDeletionKeyState>
+>;
 
 const fail = (): never => {
   throw new AuthenticationCryptoUnavailable();
@@ -84,13 +88,13 @@ export const createPostgresAuthenticationDeletion = (
   const run = async <T>(
     operation: (
       connection: AuthenticationQueryConnection,
-      state: AuthenticationStoreKeyState,
+      state: DeletionKeyState,
     ) => Promise<T>,
   ): Promise<T> => {
     const result = await transactions.run(async (connection) =>
       operation(
         connection,
-        await readAuthenticationMaintenanceKeyState(connection),
+        await readAuthenticationDeletionKeyState(connection),
       ),
     );
     return result.status === 'committed' ? result.value : fail();
@@ -156,7 +160,11 @@ export const createPostgresAuthenticationDeletion = (
           keyVersion,
         });
         if (digest.keyVersion !== keyVersion) return fail();
-        return { keyVersion, digest: Uint8Array.from(digest.bytes) };
+        return {
+          keyVersion,
+          digest: Uint8Array.from(digest.bytes),
+          recipientCodesProvisioned: state.recipientCodesProvisioned,
+        };
       });
     },
     async disable(intent) {
@@ -251,7 +259,11 @@ export const createPostgresAuthenticationDeletion = (
           now,
           subjects: { actorId: target.actorId },
         });
-        return Object.freeze({ actorId: target.actorId, ticket });
+        return Object.freeze({
+          actorId: target.actorId,
+          ticket,
+          recipientCodesProvisioned: state.recipientCodesProvisioned,
+        });
       });
     },
     async remove(intent, disabled) {

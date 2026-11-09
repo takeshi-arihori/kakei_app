@@ -52,6 +52,8 @@ export interface AuthenticationDisabledActor {
   readonly actorId: string;
   /** Sessionの再Sealまで終えた後の破棄対象ticket。 */
   readonly ticket: AuthenticationDestructionTicket;
+  /** コード用途の初期化済み。コード参加なしのServiceはCompleteへ進まない。 */
+  readonly recipientCodesProvisioned: boolean;
 }
 
 /** 不可逆な削除意思とDB無効化/除去を結び付けるPort。 */
@@ -67,6 +69,8 @@ export interface AuthenticationDeletionDatabase {
       keyVersion: string;
       /** Actor IDを直接公開しない32-byte値。 */
       digest: Uint8Array;
+      /** コード用途の初期化済み。コード参加なしのServiceはPrepared前に止まる。 */
+      recipientCodesProvisioned: boolean;
     }>
   >;
   /**

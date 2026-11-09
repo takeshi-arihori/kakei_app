@@ -43,7 +43,7 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | 公開経路 | CSRF/Origin/Rate、secret非保存/no-store、旧code拒否、新発行・Invitation作成・本人受諾の実HTTP/Browser |
 | 監視 | overdue/pending/破損/epoch不一致の実配信と封鎖、秘密/直接IDの非収集 |
 
-コード用の除去期限は`recipientCodeRetentionWindow`が計算し、`dueAt`を`expiresAt`・`terminalAt`・Actor側の時点の最早値、`deadline`をその24時間後とする。Actor側の時点は清掃がdisabledAt、Actor削除がpreparedAtである。下記の清掃入口が使い（Actor側の時点はdisabledAt）、Actor削除へはまだ接続していない。key-stateの停止契約は[認証Runbook](authentication-retention-restore.md#招待コード拡張の採用設計未実装)に記載する。
+コード用の除去期限は`recipientCodeRetentionWindow`が計算し、`dueAt`を`expiresAt`・`terminalAt`・Actor側の時点の最早値、`deadline`をその24時間後とする。Actor側の時点は清掃がdisabledAt、Actor削除がpreparedAtである。下記の清掃入口（Actor側の時点はdisabledAt）と[Actor削除の別入口](#260-actor削除へのコード参加)（Actor側の時点はpreparedAt）が使う。key-stateの停止契約は[認証Runbook](authentication-retention-restore.md#招待コード拡張の採用設計未実装)に記載する。
 
 本Taskは採用済みの運用設計の文書化であり、上表を実行済みとは扱わない。B4の合成Provider成功も本番Capabilityの証拠ではない。既知の期限未達、外部票不足、MAC/鍵不整合、未知Schema、旧Writer共存、片側復旧のいずれかがあれば成功/開通を停止する。
 
@@ -63,7 +63,25 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | 再開 | 中断は同じticketとoperationで再開し、二重ticket・二重closureを作らない。完了済みticketのscopeはProviderの`scopes`で解決するので、列挙が完了済みscopeを残すかに依存しない |
 | 結果 | 件数を返すのは全対象を確認できた`complete`だけ。行の候補が`limit`件を超えた場合や未完了ticketが上限まで返った場合は残件として`pending`にする。`pending`は残件またはskip、`quarantined`は封鎖、`unavailable`は障害で、どれも件数を返さない。監視へは固定Codeと、期限到達のまま残した最早の対象の窓だけを渡す |
 
-結果と通知はcodeIdや原因を含まない。`purge` AuditはActor仮名だけを持ち、コード仮名を持たない（Migrationなし）。行のない孤立scopeの除去ではAuditを書かない。Actor削除は#244-C（#260）が扱う。合成Providerの成功を実IAM・破棄運用・Scheduler・通知配信の証拠にしない。
+結果と通知はcodeIdや原因を含まない。`purge` AuditはActor仮名だけを持ち、コード仮名を持たない（Migrationなし）。行のない孤立scopeの除去ではAuditを書かない。Actor削除は下記の#260が扱う。合成Providerの成功を実IAM・破棄運用・Scheduler・通知配信の証拠にしない。
+
+## #260 Actor削除へのコード参加
+
+[内部入口](../../apps/api/src/shared/application/authentication/recipient-code-actor-deletion.ts)が[ADR](../adr/recipient-code-maintenance-key-inventory.md)のD2の別ticket方式を実装する。Ledger/Witnessの形式は変えず、削除operationへ束縛したコード専用ticketの全世代closureと0-rowを削除Completeの前提に加える。実PGと合成Providerで検証した。通常main/Dev/Production、Scheduler、公開Routeへは接続しない。
+
+| 手順 | 実装の内容 |
+| --- | --- |
+| 順序 | 既存のticket→外部Preparedの後に、`allocate`封鎖→固定snapshot→コードticket登録→Actor/Session/Identityの無効化・除去→既存の鍵破棄→各コードの行除去と`purge` Audit→全世代closure→コード表の0-row→再snapshotの照合→外部Complete |
+| 起算 | `dueAt`はProviderの`expiresAt`、MAC検証済みの`terminalAt`、`preparedAt`の最早値。Actorの`disabledAt`は使わない |
+| 再開 | 同じoperationで封鎖（冪等）と列挙を再実行して不足分だけを登録する。二重ticketや、既に閉じた世代の再作成はしない |
+| Complete前提 | `byOperation`の全ticketが完了していて、その全closureを今回の実行で検証済みで、再snapshotの全scopeが同じ全世代版のticketと一致し、Actorのコード行が0件であること。Providerの知らない行が残れば進まない |
+| 採用 | 別operationの未完了ticketは採用し、採用をdurableに記録して窓を前倒しする。延長しない。closureは常に所有operationへ束縛し、完了済みticketは充足済みとして、所有operationのclosureと全世代を再検証する |
+| 清掃との競合 | 清掃は未完了ticketを、所有者に関係なく所有operationのまま再開する（Proposal 2b）。清掃は独自の永続operationを持たないので採用を記録しない。清掃が削除所有のticketを完了した場合も、削除の再開が閉じた世代と0-rowを再検証する |
+| 封鎖 | 削除またはコードticketの`deadline`到達、Record MACの確定した不一致では`key_state`を`quarantined`にする。除去とCompleteは続けるが、結果は`quarantined`で`OK`を通知しない。コード1件の遅延でも認証全体が止まり、解除はRestoreだけが持つ |
+| 停止 | 列挙の不完全、版不一致、Lock中の行、Provider/SQL/Audit障害、commit応答喪失、別Actorのticketでは外部Completeをappendせず`unavailable`とする |
+| 構成の確認 | コード用途があるのにコード参加なしの構成、またはコード用途がないのにコード参加ありの構成はPrepared前に止まる。Prepared済みの再開で食い違った場合はCompleteしない |
+
+GM Invitation・過去Actor参照・成功結果・proof鍵は対象外で、認証からGM Tableや他Contextの鍵を参照しない。Restore（#245）はコード専用Portで検証する。合成Providerの成功を実Providerの線形化・耐久性・IAMの証拠にしない。
 
 ## #240 管理Storeから保守へ引き継ぐInventory
 

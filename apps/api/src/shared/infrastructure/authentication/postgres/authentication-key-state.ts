@@ -69,6 +69,7 @@ const readState = async (
     codeMac: readonly string[];
     codeLookupWrite: string;
     codeMacWrite: string;
+    recipientCodesProvisioned: boolean;
   }
 > => {
   const stateResult = await connection.query(
@@ -181,6 +182,8 @@ const readState = async (
     codeMacWrite: additionalPurposes.length
       ? singleWrite('recipient-code-state-mac')
       : '',
+    recipientCodesProvisioned:
+      sets.has('recipient-code-lookup') || sets.has('recipient-code-state-mac'),
   });
 };
 
@@ -242,9 +245,17 @@ export const readAuthenticationMaintenanceKeyState = (
 ): Promise<AuthenticationStoreKeyState> =>
   readState(connection, ['active', 'rotating', 'quarantined']);
 
+const readIgnoringRecipientCodePurposes = (
+  connection: AuthenticationQueryConnection,
+) =>
+  readState(connection, ['active', 'rotating', 'quarantined'], [], true, [
+    'recipient-code-lookup',
+    'recipient-code-state-mac',
+  ]);
+
 /**
  * 既存の認証清掃はコード行を扱わないので、コード用途の初期化前後で同じ結果にする（ADR D6）。
- * 通常認証Store、Actor削除、Restoreのreaderはこの許容を持たない。
+ * 通常認証StoreとRestoreのreaderはこの許容を持たない。Actor削除は専用readerを使う。
  * @param connection 清掃が所有するTransaction接続。
  * @returns 通常運転またはquarantinedの共有Lock付き世代。コード世代は含まない。
  * @throws 未初期化/Restore中、未知用途、不正State、鍵世代不足。
@@ -252,10 +263,22 @@ export const readAuthenticationMaintenanceKeyState = (
 export const readAuthenticationCleanupKeyState = (
   connection: AuthenticationQueryConnection,
 ): Promise<AuthenticationStoreKeyState> =>
-  readState(connection, ['active', 'rotating', 'quarantined'], [], true, [
-    'recipient-code-lookup',
-    'recipient-code-state-mac',
-  ]);
+  readIgnoringRecipientCodePurposes(connection);
+
+/**
+ * 既存の削除AdapterはSessionとIdentityだけを扱うので、コード用途の初期化後も動く（ADR D6）。
+ * コード用途の有無を返し、コード参加なしの削除を呼出し側が止められるようにする。
+ * @param connection 削除が所有するTransaction接続。
+ * @returns 通常運転またはquarantinedの共有Lock付き世代と、コード用途の有無。コード世代は含まない。
+ * @throws 未初期化/Restore中、未知用途、不正State、鍵世代不足。
+ */
+export const readAuthenticationDeletionKeyState = (
+  connection: AuthenticationQueryConnection,
+): Promise<
+  AuthenticationStoreKeyState & {
+    /** コード用途の鍵世代が1つでも登録されている。 */ readonly recipientCodesProvisioned: boolean;
+  }
+> => readIgnoringRecipientCodePurposes(connection);
 
 /**
  * 利用受付を閉じる。隔離済みとRestore中は状態を変えず、封鎖済みとして扱う。

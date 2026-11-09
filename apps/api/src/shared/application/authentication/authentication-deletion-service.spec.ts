@@ -13,12 +13,14 @@ import type {
   AuthenticationVerifiedDestruction,
 } from './authentication-maintenance-ports.js';
 import { createAuthenticationDeletionService } from './authentication-deletion-service.js';
+import type { RecipientCodeActorDeletion } from './recipient-code-actor-deletion.js';
 
 const operationId = '11111111-1111-4111-8111-111111111111';
 const actorId = '22222222-2222-4222-8222-222222222222';
 describe('認証Actor削除の不可逆な境界', () => {
   const fixture = () => {
     const events: string[] = [];
+    const provisioned = { value: false };
     let record: AuthenticationDeletionRecord | null = {
       kind: 'actor-deletion',
       operationId,
@@ -61,11 +63,19 @@ describe('認証Actor削除の不可逆な境界', () => {
     };
     const database: AuthenticationDeletionDatabase = {
       plan: () =>
-        Promise.resolve({ keyVersion: 'v1', digest: new Uint8Array(32) }),
+        Promise.resolve({
+          keyVersion: 'v1',
+          digest: new Uint8Array(32),
+          recipientCodesProvisioned: provisioned.value,
+        }),
       disable: () => {
         return Promise.resolve().then(() => {
           events.push('disable-commit');
-          return { actorId, ticket };
+          return {
+            actorId,
+            ticket,
+            recipientCodesProvisioned: provisioned.value,
+          };
         });
       },
       remove: () => {
@@ -127,8 +137,13 @@ describe('認証Actor削除の不可逆な境界', () => {
       },
     };
     const monitor = { record: vi.fn(() => Promise.resolve(undefined)) };
-    const service = (newOperationId = () => operationId, now = 2000) =>
+    const service = (
+      newOperationId = () => operationId,
+      now = 2000,
+      recipientCodes?: RecipientCodeActorDeletion,
+    ) =>
       createAuthenticationDeletionService({
+        recipientCodes,
         database,
         cleanup,
         keys,
@@ -146,6 +161,7 @@ describe('認証Actor削除の不可逆な境界', () => {
       ledger,
       monitor,
       service,
+      provisioned,
       reset: () => {
         record = null;
       },
@@ -169,6 +185,220 @@ describe('認証Actor削除の不可逆な境界', () => {
       'external-complete',
       'db-complete',
     ]);
+  });
+  describe('コードticketの参加', () => {
+    const codeFixture = () => {
+      const f = fixture();
+      f.provisioned.value = true;
+      const codes = {
+        register: vi.fn<RecipientCodeActorDeletion['register']>(() => {
+          f.events.push('code-register');
+          return Promise.resolve();
+        }),
+        finish: vi.fn<RecipientCodeActorDeletion['finish']>(() => {
+          f.events.push('code-finish');
+          return Promise.resolve();
+        }),
+      };
+      return { f, codes };
+    };
+    const input = { operationId, actorId, preparedAt: 1000 };
+
+    it('Prepared後に登録し、全コードの完了確認の後だけ外部Completeする', async () => {
+      const { f, codes } = codeFixture();
+      expect(
+        await f.service(undefined, 2000, codes).resume(operationId),
+      ).toEqual({ status: 'complete', operationId });
+      expect(f.events).toEqual([
+        'latest',
+        'code-register',
+        'disable-commit',
+        'remove-commit',
+        'zero-row',
+        'destroy',
+        'verify-all-versions',
+        'zero-row',
+        'code-finish',
+        'latest',
+        'external-complete',
+        'db-complete',
+      ]);
+      expect(codes.register.mock.calls[0][0]).toEqual(input);
+      expect(codes.finish.mock.calls[0][0]).toEqual(input);
+    });
+    it('Prepared前の受付ではコード参加を始めない', async () => {
+      const { f, codes } = codeFixture();
+      f.reset();
+      const events: string[] = [];
+      const append = f.ledger.append.bind(f.ledger);
+      f.ledger.append = (head, next) => {
+        events.push(codes.register.mock.calls.length + '-registers');
+        return append(head, next);
+      };
+      await f.service(undefined, 2000, codes).begin(actorId);
+      expect(events[0]).toBe('0-registers');
+      expect(codes.register).toHaveBeenCalled();
+    });
+    it('登録の障害ではActorを無効化せず成功にしない', async () => {
+      const { f, codes } = codeFixture();
+      codes.register.mockRejectedValue(new Error('synthetic'));
+      expect(
+        (await f.service(undefined, 2000, codes).resume(operationId)).status,
+      ).toBe('unavailable');
+      expect(f.events).not.toContain('disable-commit');
+      expect(f.monitor.record).not.toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'OK' }),
+      );
+    });
+    it('完了確認の障害では外部Completeせず、再開で完了する', async () => {
+      const { f, codes } = codeFixture();
+      codes.finish.mockRejectedValueOnce(new Error('synthetic'));
+      expect(
+        (await f.service(undefined, 2000, codes).resume(operationId)).status,
+      ).toBe('unavailable');
+      expect(f.events).not.toContain('external-complete');
+      expect(
+        (await f.service(undefined, 2000, codes).resume(operationId)).status,
+      ).toBe('complete');
+      expect(f.events).toContain('external-complete');
+    });
+    it('コードの窓が先に期限切れなら削除の窓が未達でも封鎖し、その窓を通知する', async () => {
+      const { f, codes } = codeFixture();
+      const oldest = { dueAt: 500, deadline: 500 + 86_400_000 };
+      codes.register.mockImplementation(async (_input, observer) => {
+        await observer.window(oldest);
+      });
+      expect(
+        (await f.service(undefined, 86_400_500, codes).resume(operationId))
+          .status,
+      ).toBe('quarantined');
+      expect(f.events).toContain('quarantine');
+      expect(f.monitor.record).toHaveBeenCalledWith({
+        operation: 'deletion',
+        code: 'OVERDUE',
+        oldest,
+      });
+      expect(f.events).toContain('external-complete');
+    });
+    it('後から観測した早い窓を最早の窓として採用する', async () => {
+      const { f, codes } = codeFixture();
+      const oldest = { dueAt: 500, deadline: 500 + 86_400_000 };
+      codes.register.mockImplementation(async (_input, observer) => {
+        await observer.window({ dueAt: 800, deadline: 800 + 86_400_000 });
+        await observer.window(oldest);
+      });
+      await f.service(undefined, 86_400_500, codes).resume(operationId);
+      expect(f.monitor.record).toHaveBeenCalledWith({
+        operation: 'deletion',
+        code: 'OVERDUE',
+        oldest,
+      });
+    });
+    it('コードの窓が削除の窓より遅ければ起算を延ばさない', async () => {
+      const { f, codes } = codeFixture();
+      codes.register.mockImplementation(async (_input, observer) => {
+        await observer.window({ dueAt: 9000, deadline: 9000 + 86_400_000 });
+      });
+      expect(
+        (await f.service(undefined, 86_401_000, codes).resume(operationId))
+          .status,
+      ).toBe('quarantined');
+      expect(f.monitor.record).toHaveBeenCalledWith({
+        operation: 'deletion',
+        code: 'OVERDUE',
+        oldest: { dueAt: 1000, deadline: 86_401_000 },
+      });
+    });
+    it('期限内のコード窓では封鎖しない', async () => {
+      const { f, codes } = codeFixture();
+      codes.register.mockImplementation(async (_input, observer) => {
+        await observer.window({ dueAt: 500, deadline: 500 + 86_400_000 });
+      });
+      expect(
+        (await f.service(undefined, 86_400_499, codes).resume(operationId))
+          .status,
+      ).toBe('complete');
+      expect(f.events).not.toContain('quarantine');
+    });
+    it('照合の不一致では封鎖し、除去は続けて成功として報告しない', async () => {
+      const { f, codes } = codeFixture();
+      codes.register.mockImplementation(async (_input, observer) => {
+        await observer.integrity('mismatch');
+      });
+      expect(
+        (await f.service(undefined, 2000, codes).resume(operationId)).status,
+      ).toBe('quarantined');
+      expect(f.events).toContain('quarantine');
+      expect(f.events).toContain('external-complete');
+      expect(f.monitor.record).toHaveBeenCalledWith({
+        operation: 'deletion',
+        code: 'QUARANTINED',
+        oldest: null,
+      });
+      expect(f.monitor.record).not.toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'OK' }),
+      );
+    });
+    it('不一致の通知失敗でも封鎖を取り消さない', async () => {
+      const { f, codes } = codeFixture();
+      f.monitor.record.mockRejectedValueOnce(new Error('synthetic'));
+      codes.register.mockImplementation(async (_input, observer) => {
+        await observer.integrity('mismatch');
+      });
+      expect(
+        (await f.service(undefined, 2000, codes).resume(operationId)).status,
+      ).toBe('quarantined');
+    });
+    it('封鎖を確認できなければ照合の不一致で完了しない', async () => {
+      const { f, codes } = codeFixture();
+      f.cleanup.quarantine = () => Promise.resolve(false);
+      codes.register.mockImplementation(async (_input, observer) => {
+        await observer.integrity('mismatch');
+      });
+      expect(
+        (await f.service(undefined, 2000, codes).resume(operationId)).status,
+      ).toBe('unavailable');
+      expect(f.events).not.toContain('external-complete');
+    });
+    it('鍵障害の照合不能は封鎖せず固定Codeで通知する', async () => {
+      const { f, codes } = codeFixture();
+      codes.register.mockImplementation(async (_input, observer) => {
+        await observer.integrity('unverifiable');
+      });
+      expect(
+        (await f.service(undefined, 2000, codes).resume(operationId)).status,
+      ).toBe('complete');
+      expect(f.events).not.toContain('quarantine');
+      expect(f.monitor.record).toHaveBeenCalledWith({
+        operation: 'deletion',
+        code: 'UNAVAILABLE',
+        oldest: null,
+      });
+    });
+    it('コード用途があるのに参加しないServiceはPreparedへ進まない', async () => {
+      const f = fixture();
+      f.provisioned.value = true;
+      f.reset();
+      expect((await f.service().begin(actorId)).status).toBe('unavailable');
+      expect(f.events).not.toContain('external-prepared');
+    });
+    it('コード用途がないのに参加するServiceはPreparedへ進まない', async () => {
+      const { f, codes } = codeFixture();
+      f.provisioned.value = false;
+      f.reset();
+      expect(
+        (await f.service(undefined, 2000, codes).begin(actorId)).status,
+      ).toBe('unavailable');
+      expect(f.events).not.toContain('external-prepared');
+    });
+    it('Prepared済みの再開でも、コード用途があるのに参加しないならCompleteしない', async () => {
+      const f = fixture();
+      f.provisioned.value = true;
+      expect((await f.service().resume(operationId)).status).toBe(
+        'unavailable',
+      );
+      expect(f.events).not.toContain('external-complete');
+    });
   });
   it('期限内にComplete済みの操作を翌日再照合しても新しい未達にしない', async () => {
     const f = fixture();

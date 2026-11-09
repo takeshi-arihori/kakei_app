@@ -324,6 +324,41 @@ describe('ticketの所有・採用・window（ADR D3）', () => {
   });
 });
 
+describe('完了済みticketのclosure再検証', () => {
+  const completed = async () => {
+    const { f, guard, allocate } = setup();
+    await allocate(1);
+    const { ticket } = await guard.prepare({
+      scope: scopeOf(1),
+      operationId: cleanup,
+      window: windowAt(1000),
+      expected: null,
+    });
+    return { f, guard, ticket };
+  };
+  it('未完了ticketは再検証を拒否する', async () => {
+    const { guard, ticket } = await completed();
+    await expect(guard.verifyComplete(ticket)).rejects.toBeInstanceOf(
+      RecipientCodeUnavailable,
+    );
+  });
+  it('所有operationのclosureを冪等に再検証し、偽closureを拒否する', async () => {
+    const { f, guard, ticket } = await completed();
+    const done = await guard.complete(ticket, await guard.close(ticket));
+    await expect(guard.verifyComplete(done)).resolves.toBeUndefined();
+    const forged = guardRecipientCodeMaintenance({
+      maintenance: f.maintenance,
+      lifecycle: {
+        ...f.lifecycle,
+        verifyClosure: () => Promise.resolve(false),
+      },
+    });
+    await expect(forged.verifyComplete(done)).rejects.toBeInstanceOf(
+      RecipientCodeUnavailable,
+    );
+  });
+});
+
 describe('全世代closureと完了（ADR D3）', () => {
   const prepared = async (
     overrides: Parameters<typeof setup>[0] = {},
