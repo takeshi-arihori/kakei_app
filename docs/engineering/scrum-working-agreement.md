@@ -46,18 +46,18 @@ Sprint開始前はCurrent SprintとSprint Boardが空でも正常。Sprintの範
 
 LabelはPublic RepositoryのIssue一覧・検索・横断分類に使い、Private ProjectのStatus、Priority、Phase、Area等を重複管理しない。名前は小文字の`category: value`形式とし、各Labelへ用途が分かるDescriptionを設定する。
 
-- Work: `work: epic`、`work: task`。Epic／Taskへ原則1つだけ付与する。
+- Work: `work: epic`、`work: task`、`work: adr`。Epic／Task／ADRへ1つだけ付与する。Issue Templateが自動で付ける。
 - Scope: `scope: group-management`、`scope: expense-recording`、`scope: settlement`、`scope: web`、`scope: api`、`scope: data`、`scope: security`、`scope: tooling`、`scope: ci`、`scope: repo`。該当する責務境界を複数付与できる。
 - Flag: `flag: breaking-change`、`flag: migration`、`flag: decision-required`、`flag: security-review`、`flag: blocked-external`。該当する注意事項がある場合だけ付与する。
 
-ADR Issueには`work:*`を付与しない。Public RepositoryではIssueタイトルの`docs(adr):` prefix、Private Projectに所属する場合はWork Type=`ADR`でも識別し、`scope:*`／`flag:*`は通常どおり使用する。変更種別はIssueタイトルのConventional prefixへ記録し、`priority:*`、`status:*`、`phase:*`、`area:*`等のProject Fieldと重複するLabelは作らない。
+ADR Issueは`work: adr`とIssueタイトルの`adr:` prefix（scopeを付ける場合は`adr(<scope>):`）で識別し、Private ProjectではWork Type=`ADR`にする。`scope:*`／`flag:*`は通常どおり使用する。ADR IssueもTaskと同じく、関係するEpicのsub-issueにしてEpicのTask一覧へ載せる。変更種別はIssueタイトルのConventional prefixへ記録し、`priority:*`、`status:*`、`phase:*`、`area:*`等のProject Fieldと重複するLabelは作らない。
 
 カテゴリは色でも識別する。`work:*`は紫系、`scope:*`は青系、`flag:*`は注意度が分かる黄〜赤系とする。代表的な検索例は次のとおり。
 
 ```text
 is:issue label:"work: epic"
 is:issue label:"work: task" label:"scope: repo"
-is:issue in:title "docs(adr):"
+is:issue label:"work: adr"
 ```
 
 ## イベントと繰越

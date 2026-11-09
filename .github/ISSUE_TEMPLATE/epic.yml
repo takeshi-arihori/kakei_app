@@ -1,29 +1,41 @@
 name: Epic
 description: 複数Taskで届ける成果・能力
 title: "epic: "
+labels: ["work: epic"]
 body:
   - type: markdown
     attributes:
-      value: "Public Repositoryです。未分類・要編集・非公開情報を入力しないでください。単一の1〜2日作業にはTaskを使用します。進捗は本文に書かず、Projectに置きます。"
+      value: "Public Repositoryです。未分類・要編集・非公開情報を入力しないでください。単一の1〜2日作業にはTaskを使用します。Epicには目的・範囲・全Taskの一覧と依存関係だけを書き、経過や進捗の説明は書きません。一覧のTaskがすべてCloseするまでEpicはCloseしません。書き方は docs/engineering/delivery-workflow.md のEpicの節に従います。"
   - type: textarea
-    id: requirement
+    id: goal
     attributes:
-      label: 目的
-      description: なぜ必要か、期待成果
+      label: 目的・完了したらできること
+      description: なぜ必要か。完了したら誰が何をできるようになるか
     validations:
       required: true
   - type: textarea
-    id: planning
+    id: scope
+    attributes:
+      label: Scope／Out of scope
+      description: 含むもの、含まないもの（別Epicへ回すものはそのEpic番号）
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
     attributes:
       label: Taskと依存関係
-      description: Owner、Task名、依存関係、Task IssueのURL。Taskの詳細と、ProjectのFieldにある値は書かない
+      description: "Epicを完了させるTaskをすべて列挙する。全行をsub-issueにし、依存は`←`で書く。未起票の候補は書かない。ADR／設計 → Domain → Application → Infrastructure → Presentation → Webの順を目安に分ける"
+      placeholder: |
+        - [ ] #301 adr: 精算の確定方式を決める
+        - [ ] #302 task: 精算の集約と値オブジェクトを実装する ← #301
+        - [ ] #303 task: 精算を確定するUse Caseを実装する ← #302
     validations:
       required: true
   - type: textarea
     id: decision
     attributes:
       label: Decision Check・Related ADR
-      description: 未確認／方針変更なし／方針変更あり、理由、GitHub ADRへのリンク。必要DecisionがAcceptedになるまでReadyにしない
+      description: 未確認／方針変更なし／方針変更あり、理由、ADRへのリンク。必要DecisionがAcceptedになるまで依存TaskをReadyにしない
     validations:
       required: true
   - type: checkboxes

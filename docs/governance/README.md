@@ -6,7 +6,7 @@ Notionは読み書きしない。2026-09-05のOwner承認と切替実施結果�
 
 | 情報 | 正本 |
 | --- | --- |
-| Epicの目的、Task名、依存、Owner。TaskのRequirement、Done Criteria、依存、Owner、PR URL | GitHub Issue本文 |
+| Epicの目的、Scope、全Taskの一覧と依存。TaskのRequirement、Done Criteria、依存、Owner、PR URL | GitHub Issue本文 |
 | 進捗、Status、Sprint、Story Points、優先度、分類 | [Private Project #9](https://github.com/users/takeshi-arihori/projects/9)のField |
 | 現行仕様・業務Rule・設計・運用文書 | このRepositoryの`develop` |
 | Decision本文・Status・履歴 | docs/adr。承認と切替実行の証跡は関連Issue |
