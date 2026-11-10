@@ -57,10 +57,10 @@ Witness修復は真正な同headとFailure domainの運用証拠を確認する�
 | --- | --- | --- | --- | --- | --- |
 | 通常認証Store（既存Reader） | 受理 | 拒否 | 拒否 | 拒否 | 拒否 |
 | 既存の清掃Reader（#259） | 受理 | 受理 | 拒否 | 無視して受理 | 拒否 |
-| 既存の削除Reader | 受理 | 受理 | 拒否 | 拒否 | 拒否 |
+| 既存の削除Reader（#260） | 受理 | 受理 | 拒否 | 無視して受理し、有無だけを返す | 拒否 |
 | コード発行・消費 | 受理 | 拒否 | 拒否 | 必須 | 拒否 |
-| コード保守Reader（呼出元はコードの内部清掃だけ） | 受理 | 受理 | 拒否 | 必須 | 拒否 |
+| コード保守Reader（呼出元はコードの内部清掃とActor削除参加が共有するAdapterだけ） | 受理 | 受理 | 拒否 | 必須 | 拒否 |
 
-`quarantined`から`active`へ戻す更新はRestoreの`restoring`限定CASだけが持つ。これらは旧Writerを止める契約で、コードを除去する機能ではない。コードの清掃は[内部入口](invitation-code-retention-restore.md#259-コード清掃の小batchと封鎖)が持ち、Actor削除でのコード除去は未実装である。既存の清掃Readerは#259でコードpurposeを無視して読むようにした（[ADR](../adr/recipient-code-maintenance-key-inventory.md)のD6）。既存の削除Readerはコードpurposeの初期化後に止まったままで、拡張は#260の範囲である。コードpurposeの初期化は未実装である。
+`quarantined`から`active`へ戻す更新はRestoreの`restoring`限定CASだけが持つ。これらは旧Writerを止める契約で、コードを除去する機能ではない。コードの清掃は[内部入口](invitation-code-retention-restore.md#259-コード清掃の小batchと封鎖)が持ち、Actor削除でのコード除去は[Actor削除の別入口](invitation-code-retention-restore.md#260-actor削除へのコード参加)が持つ。どちらも通常入口へはwireしない。既存の清掃Readerは#259、既存の削除Readerは#260でコードpurposeを無視して読むようにした（[ADR](../adr/recipient-code-maintenance-key-inventory.md)のD6）。削除Readerはコードpurposeの有無を返し、コード用途があるのにコード参加なしで構成した削除をPrepared前に止める。コードpurposeの初期化は未実装である。
 
 現行Runbookがコードを既に扱うとは主張しない。GM Invitation/成功operationとの共通commitを片側SchemaのRestoreで巻き戻さず、全Context復旧点/Checkpoint整合を検証するまで開通しない。新たな本番Capabilityと実証は同設計のB4/Production Gateに残す。

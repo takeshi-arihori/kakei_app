@@ -98,6 +98,12 @@ export interface GuardedRecipientCodeMaintenance {
     ticket: RecipientCodeDestructionTicket,
   ): Promise<RecipientCodeMacKeyClosure>;
   /**
+   * 完了済みticketの全世代closureを、所有operationへ束縛して再検証する。破棄済みなら冪等に応答が戻る。
+   * @param ticket 完了済みticket。採用側の確認でもoperationIdは所有operationを使う。
+   * @throws RecipientCodeUnavailable 未完了、全世代版の不一致、偽closure、部分世代、Provider障害。
+   */
+  verifyComplete(ticket: RecipientCodeDestructionTicket): Promise<void>;
+  /**
    * DB 0-rowを確認した呼出し側がticketを完了する。closureは完了直前にも再検証する。
    * @param ticket 未完了の最新版ticket。
    * @param closure 同じ所有operationと全世代版へ束縛したclosure。
@@ -344,6 +350,14 @@ export const guardRecipientCodeMaintenance = (options: {
     for (const generation of await generationsOf(ticket))
       if (generation.lifecycle !== 'destroyed') reject();
   };
+  /** closureは採用経由でも常に所有operationへ束縛する（ADR D3）。 */
+  const closeOwned = (ticket: RecipientCodeDestructionTicket) =>
+    lifecycle.closeAllGenerations({
+      codeId: ticket.codeId,
+      operationId: ticket.operationId,
+      inventoryRevision: ticket.inventoryRevision,
+      deadlineAt: ticket.window.deadline,
+    });
   return {
     blockActor: (recipientActorId) =>
       failClosed(async () => {
@@ -500,17 +514,18 @@ export const guardRecipientCodeMaintenance = (options: {
       failClosed(async () => {
         const current = pendingTicketOf(ticket);
         await generationsOf(current);
-        const closure = closureOf(
-          await lifecycle.closeAllGenerations({
-            codeId: current.codeId,
-            operationId: current.operationId,
-            inventoryRevision: current.inventoryRevision,
-            deadlineAt: current.window.deadline,
-          }),
-          current,
-        );
+        const closure = closureOf(await closeOwned(current), current);
         await assertClosed(current, closure);
         return closure;
+      }),
+    verifyComplete: (ticket) =>
+      failClosed(async () => {
+        const current = ticketOf(ticket);
+        if (current.state !== 'complete') reject();
+        await assertClosed(
+          current,
+          closureOf(await closeOwned(current), current),
+        );
       }),
     complete: (ticket, closure) =>
       failClosed(async () => {

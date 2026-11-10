@@ -50,13 +50,14 @@ GM key-state準備/保存証跡と認証の消費WriterはInfrastructure/Composi
 
 ## コード保守のPort契約（#266）
 
-[Accepted ADR](../../../../../../docs/adr/recipient-code-maintenance-key-inventory.md)のD1/D3/D4/D5に対応する契約で、Actor削除統合の実装はここに含まない。`AuthenticationKeyScope`・DEK Port・codec・`authenticationMaintenanceScope`は変更しない。通常main/Dev/Productionと`recipient-invitation-runtime.ts`へwireしない（`architecture-dependencies.spec.ts`で検査する）。
+[Accepted ADR](../../../../../../docs/adr/recipient-code-maintenance-key-inventory.md)のD1/D3/D4/D5に対応する契約で、Actor削除統合は`recipient-code-actor-deletion.ts`（D2）が持つ。`AuthenticationKeyScope`・DEK Port・codec・`authenticationMaintenanceScope`は変更しない。通常main/Dev/Productionと`recipient-invitation-runtime.ts`へwireしない（`architecture-dependencies.spec.ts`で検査する）。
 
 | 部品 | 責務と限界 |
 | --- | --- |
 | `recipient-code-maintenance-ports.ts` | コード専用の`RecipientCodeKeyScope`、1 ticket=1 codeIdの票、保守Port（`blockActor`/`scopePage`/`prepare`/`find`/`pending`/`byOperation`/`scopes`/`complete`）。Providerが満たす契約を定義する |
 | `recipient-code-maintenance-guard.ts` | Portの応答を信頼せず検証する入口。全世代を閉じる`close`も持つ。検証失敗とProvider障害は固定の`RecipientCodeUnavailable`へ揃え、原因を外へ出さない |
 | `recipient-code-cleanup-service.ts` | コード清掃の内部入口（#258、#259）。`run`が小Batch、`cleanOne`が1件。ticket→行除去→全世代closure→0-row→完了の順で進め、未達と確定した不一致では封鎖する。`dueAt`到達と0-rowはここで確認し、範囲は[Runbook](../../../../../../docs/operations/invitation-code-retention-restore.md#259-コード清掃の小batchと封鎖)に記載する |
+| `recipient-code-actor-deletion.ts` | Actor削除へのコード参加（#260）。`register`が封鎖→固定snapshot→ticket登録、`finish`が行除去→全世代closure→0-row→再snapshotの照合を行う。範囲は[Runbook](../../../../../../docs/operations/invitation-code-retention-restore.md#260-actor削除へのコード参加)に記載する |
 | `recipient-code-key-lifecycle.ts` | `allocate`はActorへ束縛する。封鎖後とticket登録済みcodeIdへの追加`allocate`は、同一Descriptorの再確認と再MACを含めて`unavailable`とする |
 
 ticketの規則は次のとおり。
@@ -67,4 +68,4 @@ ticketの規則は次のとおり。
 - 完了済みticketの`prepare`は窓を動かさず、採用だけを記録する`satisfied`を返す。
 - closureの`operationId`は採用経由でも常に所有operationとする。guardは`verifyClosure`に加えて全世代の`destroyed`も照合する。DB 0-rowと`dueAt`到達の確認はguardの外で、`recipient-code-cleanup-service`が行う。完了済みticketのscopeは`scopes`で解決し、`scopePage`が完了済みscopeを残すかに依存しない。
 
-`scopePage`は票のないscopeも含む固定snapshotを返す。guardは件数、重複、Actor条件、cursorの発行元をPageをまたいで検証し、完全性を保証できない`unavailable`を空の成功へ読み替えない。ただしProviderが全件を隠して空のsnapshotを主張する嘘はguardでは検出できず、完全列挙と封鎖の線形化は実ProviderのProduction Gateに残る。Actor削除でCompleteの前に再snapshotと`byOperation`を照合する処理はCの範囲とする。
+`scopePage`は票のないscopeも含む固定snapshotを返す。guardは件数、重複、Actor条件、cursorの発行元をPageをまたいで検証し、完全性を保証できない`unavailable`を空の成功へ読み替えない。ただしProviderが全件を隠して空のsnapshotを主張する嘘はguardでは検出できず、完全列挙と封鎖の線形化は実ProviderのProduction Gateに残る。Actor削除は外部Completeの前に再snapshotと`byOperation`を照合する（`recipient-code-actor-deletion.ts`）。

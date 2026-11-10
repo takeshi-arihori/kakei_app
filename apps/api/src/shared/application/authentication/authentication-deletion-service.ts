@@ -13,6 +13,10 @@ import {
   authenticationRetentionState,
   type AuthenticationRetentionWindow,
 } from './authentication-retention-policy.js';
+import type {
+  RecipientCodeActorDeletion,
+  RecipientCodeDeletionObserver,
+} from './recipient-code-actor-deletion.js';
 
 /** 結果不明でも不可逆意思の再開IDを失わない削除結果。 */
 export interface AuthenticationDeletionResult {
@@ -66,8 +70,15 @@ export const createAuthenticationDeletionService = (
     newOperationId: () => string;
     /** 退役世代も含むActor削除専用HMAC。 */
     deletedActor: (actorId: string, keyVersion: string) => Promise<Uint8Array>;
+    /** コード用途の初期化済み環境だけ渡す。有無がDBと食い違えば削除を進めない。 */
+    recipientCodes?: RecipientCodeActorDeletion;
   }>,
 ) => {
+  /** コード用途があるのに参加しない削除は、コードを残してCompleteするので止める。 */
+  const assertRecipientCodeParticipation = (provisioned: boolean) => {
+    if (provisioned !== (options.recipientCodes !== undefined))
+      throw new AuthenticationCryptoUnavailable();
+  };
   const quarantineIntegrity = async (): Promise<never> => {
     if (!(await options.cleanup.quarantine()))
       throw new AuthenticationCryptoUnavailable();
@@ -109,16 +120,24 @@ export const createAuthenticationDeletionService = (
   ): Promise<AuthenticationDeletionResult> => {
     let validatedOperationId: string | null = null;
     let window: AuthenticationRetentionWindow | null = null;
+    /** 削除の窓より早い可能性があるコードticketの最早の窓。 */
+    let codeWindow: AuthenticationRetentionWindow | null = null;
     let deadlineApplies = false;
     let missed = false;
     let sealed = false;
     let reported = false;
+    let codeMismatch = false;
+    const earliestWindow = () =>
+      codeWindow !== null && window !== null && codeWindow.dueAt < window.dueAt
+        ? codeWindow
+        : window;
     const enforceDeadline = async () => {
+      const earliest = earliestWindow();
       if (
         !deadlineApplies ||
-        window === null ||
+        earliest === null ||
         (!missed &&
-          authenticationRetentionState(window, options.clock.now()) !==
+          authenticationRetentionState(earliest, options.clock.now()) !==
             'overdue')
       )
         return;
@@ -131,10 +150,42 @@ export const createAuthenticationDeletionService = (
         await options.monitor.record({
           operation: 'deletion',
           code: 'OVERDUE',
-          oldest: window,
+          oldest: earliest,
         });
         reported = true;
       }
+    };
+    const codeObserver: RecipientCodeDeletionObserver = {
+      window: async (observed) => {
+        if (codeWindow === null || observed.dueAt < codeWindow.dueAt)
+          codeWindow = observed;
+        await enforceDeadline();
+      },
+      integrity: async (kind) => {
+        if (kind === 'unverifiable') {
+          await options.monitor.record({
+            operation: 'deletion',
+            code: 'UNAVAILABLE',
+            oldest: null,
+          });
+          return;
+        }
+        if (!sealed) {
+          sealed = await options.cleanup.quarantine();
+          if (!sealed) throw new AuthenticationCryptoUnavailable();
+        }
+        if (codeMismatch) return;
+        codeMismatch = true;
+        try {
+          await options.monitor.record({
+            operation: 'deletion',
+            code: 'QUARANTINED',
+            oldest: null,
+          });
+        } catch {
+          /* 封鎖が確認済みなら監視障害でその状態を取り消さない。 */
+        }
+      },
     };
     try {
       validatedOperationId = uuid(operationId);
@@ -210,7 +261,14 @@ export const createAuthenticationDeletionService = (
         });
         return { status: 'quarantined', operationId };
       }
+      const codeInput = {
+        operationId,
+        actorId: identityScopes[0].keyScopeId,
+        preparedAt: record.preparedAt,
+      };
+      await options.recipientCodes?.register(codeInput, codeObserver);
       const disabled = await options.database.disable(intent);
+      assertRecipientCodeParticipation(disabled.recipientCodesProvisioned);
       const ticket = disabled.ticket;
       if (
         ticket.operationId !== operationId ||
@@ -242,6 +300,7 @@ export const createAuthenticationDeletionService = (
         !(await options.cleanup.absent(scopes))
       )
         throw new AuthenticationCryptoUnavailable();
+      await options.recipientCodes?.finish(codeInput, codeObserver);
       let latest = await options.ledger.latest();
       let complete = options.ledger.intent(latest, operationId);
       if (complete === null) throw new AuthenticationCryptoUnavailable();
@@ -261,7 +320,13 @@ export const createAuthenticationDeletionService = (
       )
         throw new AuthenticationCryptoUnavailable();
       await enforceDeadline();
-      if (missed) return { status: 'quarantined', operationId };
+      // 確定した不一致は再開で再観測できないので、durableな封鎖からも成功を止める。
+      if (
+        missed ||
+        codeMismatch ||
+        (options.recipientCodes !== undefined && disabled.keyStateQuarantined)
+      )
+        return { status: 'quarantined', operationId };
       await options.monitor.record({
         operation: 'deletion',
         code: 'OK',
@@ -366,6 +431,7 @@ export const createAuthenticationDeletionService = (
         if (matches.length === 1) return resume(matches[0]);
         operationId = uuid(options.newOperationId());
         const plan = await options.database.plan(actorId);
+        assertRecipientCodeParticipation(plan.recipientCodesProvisioned);
         const preparedAt = options.clock.now();
         window = { dueAt: preparedAt, deadline: preparedAt + 86_400_000 };
         authenticationRetentionState(window, preparedAt);

@@ -1,5 +1,6 @@
 import type { AuthenticationDigests } from '../../../application/authentication/authentication-digest-ports.js';
 import type { AuthenticationClock } from '../../../application/authentication/authentication-ports.js';
+import type { RecipientCodeDeletionDatabase } from '../../../application/authentication/recipient-code-actor-deletion.js';
 import type { RecipientCodeCleanupDatabase } from '../../../application/authentication/recipient-code-cleanup-service.js';
 import type { RecipientCodeCrypto } from '../../../application/authentication/recipient-code-crypto-ports.js';
 import type { RecipientCodeKeyScope } from '../../../application/authentication/recipient-code-maintenance-ports.js';
@@ -90,7 +91,7 @@ const lockCode = async (
 /**
  * コード清掃のPG境界。Pool全体のqueryやTransaction制御を外へ渡さない。
  * @param options 接続取得能力、MAC検証、purge Audit、Lock後Clock、Lockと実行の上限。
- * @returns コード清掃Use Caseが使うDB境界。
+ * @returns コード清掃とActor削除のUse Caseが使うDB境界。
  */
 export const createPostgresRecipientCodeCleanup = (
   options: Readonly<{
@@ -108,7 +109,7 @@ export const createPostgresRecipientCodeCleanup = (
     /** Actor Lockを無期限に待たない上限。 */
     limits: AuthenticationTransactionLimits;
   }>,
-): RecipientCodeCleanupDatabase => {
+): RecipientCodeCleanupDatabase & RecipientCodeDeletionDatabase => {
   const tx = createAuthenticationTransactions(
     options.pool,
     createAuthenticationTransactionScopes(),
@@ -213,6 +214,15 @@ export const createPostgresRecipientCodeCleanup = (
         const found = await connection.query(
           'SELECT 1 FROM authentication.recipient_code WHERE code_id=$1 LIMIT 1',
           [authenticationUuid(codeId)],
+        );
+        return found.rows.length === 0;
+      }),
+    actorAbsent: (recipientActorId) =>
+      run(async (connection) => {
+        await readRecipientCodeMaintenanceKeyState(connection);
+        const found = await connection.query(
+          'SELECT 1 FROM authentication.recipient_code WHERE recipient_actor_id=$1 LIMIT 1',
+          [authenticationUuid(recipientActorId)],
         );
         return found.rows.length === 0;
       }),
