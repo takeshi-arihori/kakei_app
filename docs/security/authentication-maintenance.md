@@ -48,6 +48,8 @@ OperatorがTrafficと他の認証／保守Writerを外部fenceで閉じてから
 
 移行completionは同じDB Adapter所有のfenceに結び付け、同TransactionのActor／Identity／Alias／鍵State／Intent／全Credentialの型付きTLV fingerprintを保持する。activateは所有completion、現在fingerprint、Credential 0-row、Prepared Intentなし、外部publicationの再検証を要求する。Auditは認証判断のfingerprintに含めない。復旧の各SQL操作は外部閉鎖をcommit前にも確認する。初回隔離はManifestのkey-state版と現DB版の完全一致を外部制御で確認し、固定Manifest／runへ進行版をDB外でdurable登録する。再試行の進行済み版はこの登録と公開epochへ照合し、単なる下限一致やrestoring flagだけで許可しない。中断・応答喪失で既発行epoch／Nonce／破棄を戻さず、同runのforward-fixで再検証する。openの応答喪失・開通後の監視失敗でも同runで外部を再閉鎖してverifyClosedし、DB封鎖と両方を確認した場合だけquarantinedを返す。どちらか未確認ならunavailableとする。
 
+招待コードと全Context整合証跡への拡張は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted、未実装）が定める。Manifestへの`recoveryPointId`の追加、受理版のallowlist、証跡の検証時点（P1〜P3）、`evidenceDigest`の範囲、コード表の0-rowを`activate`の前提へ加えることを含む。本節の契約は、その実装までは現行のままである。
+
 ## Done CriteriaとEvidence
 
 | 契約 | 検証 |

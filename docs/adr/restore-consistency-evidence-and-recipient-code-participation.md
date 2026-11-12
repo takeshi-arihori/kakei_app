@@ -1,12 +1,13 @@
 # Restoreの全Context整合証跡と招待コード参加の契約
 
-- Status: **Proposed（Ownerの採否待ち。採否までAcceptedとして扱わない）**
+- Status: **Accepted（設計。実装・個別Ready・Production有効化は別Gate）**
 - Proposed Date: 2026-11-11（Asia/Tokyo）
-- Decision Owner: Project Owner
+- Accepted Date: 2026-11-12（Asia/Tokyo）
+- Decision Owner: Project Owner（2026-11-12、会話承認。論点1〜8と副論点A・Bを推奨どおり採用）
 - Decision / Design Task: [#278](https://github.com/takeshi-arihori/kakei_app/issues/278)。後続実装は[#245](https://github.com/takeshi-arihori/kakei_app/issues/245)（分割案は本書の末尾）
 - Epic: [#202](https://github.com/takeshi-arihori/kakei_app/issues/202)
 - Decision Check: 方針変更あり（RestoreのPort契約、Manifest、`evidenceDigest`の意味、Providerへの要求を決める）
-- Supplements / Amends: 下の[既存Decisionとの関係](#既存decisionとの関係)に示す。採否まで既存ADR本文とStatusは変更しない
+- Supplements / Amends: 下の[既存Decisionとの関係](#既存decisionとの関係)に示す。既存ADRの本文とStatusは変更しない
 - 基準: develop `bff5d7e`（2026-11-10）
 
 ## Problem / Context
@@ -36,7 +37,7 @@ Accepted設計は、Restoreで全招待コードを破棄し、全Contextの同�
 
 通常`main`／Dev／HTTP／Productionへは接続しない。合成入力の成功を本番Capabilityの証拠にしない。証跡Providerが注入されない構成は、開通せず隔離する。
 
-## Decision（推奨案。Ownerの採否が必要）
+## Decision（Accepted。2026-11-12にOwnerが推奨案を採用）
 
 各論点は、推奨、代替案、理由、Trade-offの順に示す。論点1〜4は一組で、片方だけを採ると整合しない箇所がある（組合せは[論点の依存](#論点の依存と一括採否)）。
 
@@ -62,7 +63,7 @@ Trade-off: 認証側がPortの形を決めるので、GMのRestore設計はこ�
 
 **推奨（案2B）**: 信頼済みBackup catalogが全Contextで共通の`recoveryPointId`（UUIDv4）を発行し、`AuthenticationBackupManifest`へFieldとして追加する。GM側のcatalog entryも同じIDを持つ。証跡は、このIDと一致する復旧点について検証されたものだけを受理する。IDの欠落、不一致、複数一致は隔離する。
 
-Fieldが必須なのは`schemaVersion`が11（コード用途を持つ構成）のManifestだけである。6のManifestには存在せず、あれば拒否する（6は、コード機能が未接続の間だけ証跡を要求しない。論点6）。ここで`schemaVersion`は、Manifestの「対応済みDB Schemaの版」であり、現行Codeは認証のMigration番号と対応づけて6を比較している（番号との対応はTask I0で再確認する）。Manifestのcodecは受理するField名を固定列挙しているので、Fieldの追加はManifest書式の変更であり、論点6のallowlistと同じTaskで行う。Ledger／Witnessの書式は変えない。
+Fieldが必須なのは`schemaVersion`が11（コード用途を持つ構成）のManifestだけである。6のManifestには存在せず、あれば拒否する（6は、コード機能が未接続の間だけ証跡を要求しない。論点6）。ここで`schemaVersion`は、Manifestの「対応済みDB Schemaの版」であり、現行Codeは認証のMigration番号と対応づけて6を比較している（番号との対応はTask I0で再確認する）。Manifestのcodecは受理するField名を固定列挙しているので、Fieldの追加はManifest書式の変更である。Fieldの追加と、codecとPG AdapterのManifest検査での受理は、分割案のTask 1で行う。受理版を`{6, 11}`へ広げるのはTask 2である。Ledger／Witnessの書式は変えない。
 
 | 代替 | 利点 | 不採用または劣後の理由 |
 | --- | --- | --- |
@@ -96,12 +97,12 @@ Trade-off: `evidenceDigest`の中身の定義が変わるが、過去のrecovery
 
 **推奨（案4B）**: 3回検証する（P1、P2、P3）。「GM head」とは、`recoveryPointId`に束縛された、GM側の検証対象状態のrevisionを指す。証跡が成立する前提として、P1から開通までの間、GM側のWriterが同じDB外のrun fenceで閉じられていることを要求し、閉じられていない場合は証跡Adapterが検証済み証跡を返さない（GMの変更が認証のfenceの外で進み得る構成を許さない）。
 
-- **P1（epoch公開の前）**: Ledger latest検証と削除再適用の後、`publishEpoch`の前に証跡Portを呼ぶ。epochの公開は戻せないので、整合が取れない復旧点でepochを消費しない。
+- **P1（削除再適用の前）**: Ledger latest検証とActor票照合の後、削除再適用の前に証跡Portを呼ぶ（下の順序表の手順4）。削除の再適用とコードの全世代破棄、epochの公開はいずれも戻せないので、整合が取れない復旧点ではその前に止める。
 - **P2（recovery checkpointのappendの直前）**: `migrateIdentity`が認証のfingerprint digestを返した後、`evidenceDigest`を計算する前に、同じrunで再検証する。P1と`recoveryPointId`、Ledger head、`consistencyDigest`が一致することを確認し、P2の結果が`evidenceDigest`へ入る（論点3）。P1とP2の間にGM側のheadが進んでいれば、P1の証跡を使い回さず隔離する。
 - **P3（recovery checkpointのappendの後、`activate`の前）**: 同じrunで再検証し、`consistencyDigest`、`recoveryPointId`、GM headがP2から不変であることを確認する。不一致なら開通せず、再閉鎖して隔離する。`open`のCASが比較するのは認証側のLedger entryのdigestだけなので、GM側の鮮度はP3とfence前提で担保する。P3から`open`までの窓は、GM側Writerのfenceが閉じている前提と、認証側のfence・DB封鎖に依る。
 - **証跡の失効**: 時刻ではなく、`runId`と、証跡Adapterのregistryの発行世代への束縛で決める。別runのhandle、registryの再作成後のhandle、一度消費したhandleは拒否する。時計の出所に依存しない。P1、P2、P3はそれぞれ別のhandleを要求する（前の検証のhandleを使い回さない）。
 
-Attempt／Session／コード行の破棄は、証跡の成否にかかわらず行う（破棄は常に安全側のため）。証跡で止めるのは、epochの公開と開通だけである。
+証跡で止めるのは、P1では削除再適用とAttempt／Session／コード行の破棄、epochの公開と開通、P2・P3では開通である。P1が失敗した場合は、手順5へ進まずに隔離する。DBとTrafficは閉じたままで、破棄はP1が成立した後の再試行（既存の規則どおり同runの再試行を含む）で行う（削除意思はDB外のLedgerに残るので失われない）。破棄の中身は証跡によって変わらない。
 
 #### Restoreの全体順序（推奨案）
 
@@ -110,7 +111,7 @@ Attempt／Session／コード行の破棄は、証跡の成否にかかわらず
 | 1 | `close`、`verifyClosed` | 既存。外部fenceのUTCを`dueAt`の起点にする（論点7） |
 | 2 | 35日検査、構成確認、`isolate` | 構成確認は論点6。不可逆な操作の前に止める |
 | 3 | Ledger latest、Actor票の全件照合 | 既存 |
-| 4 | **P1**（整合証跡） | 不足、不一致は隔離。epochを公開しない |
+| 4 | **P1**（整合証跡） | 不足、不一致は隔離。削除再適用と破棄へ進まず、epochを公開しない |
 | 5 | 削除再適用、Attempt／Session破棄、コードticket登録・全世代破棄、再snapshot | コードは論点5、7。再snapshotが先と違えば隔離 |
 | 6 | `publishEpoch`、`migrateIdentity` | 公開は戻せない。以降は同runのforward-fix |
 | 7 | **P2**、`evidenceDigest`の計算 | P1と不一致、handleの失効は隔離 |
@@ -125,12 +126,13 @@ V16〜V18の項目を、後続Taskの受入条件へ対応づける。
 | --- | --- | --- | --- |
 | 35日超、未来のBackup | 手順2 | 何も変更せず隔離。epochを公開しない | 既存、1の回帰 |
 | stale／fork／片側Witness（認証Ledger） | 手順3 | 隔離。既存の検証 | 既存、1の回帰 |
-| 証跡の不足、Context欠落、`recoveryPointId`の不一致、Port未注入 | P1 | 隔離。epoch未公開 | 1 |
+| 証跡の不足、Context欠落、`recoveryPointId`の不一致、Port未注入 | P1 | 隔離。削除再適用、Attempt／Session破棄、コードticketの登録と破棄、epochの公開を行わない（不可逆な操作の前に隔離） | 1 |
 | GM側のheadが進んだ、`consistencyDigest`または`recoveryPointId`の不一致、handleの失効 | P2 | 隔離。epoch公開済みで開通せず、recovery checkpointはappendしない。同runで再開できる | 1 |
 | 同上（P2から変化した） | P3 | recovery entryはappend済みだが、`activate`と`open`を呼ばず再閉鎖して隔離する。append済みのentryは開通の証拠でない。再開時はP1〜P3を再実行する | 1 |
 | 同runの再開で`dueAt`が変わらない。閉鎖済みで起算の記録がない（記録の喪失）場合は、初回として扱わず、起算し直さず隔離を維持する。別runは前倒しのみで採用する | 手順1、5 | `dueAt`と`deadline`は延びない | 2 |
 | Restore所有（または採用した）ticketが`deadline`へ到達した | 手順5〜9 | `OVERDUE`を固定Codeで通知する。`quarantined`の根拠にしない。restoring中は既に受付を閉じているので、追加の封鎖はしない。開通は全closure、0-row、証跡が揃った場合に限る | 2 |
 | 構成の不一致（論点6の表） | 手順2 | 不可逆な操作の前に隔離 | 2 |
+| Manifestの`recoveryPointId`がv11で欠落、v6で存在、または証跡で複数一致 | 手順2、P1 | 不可逆な操作の前に隔離 | 1 |
 | inventoryに束縛できないコード行、列挙の不完全、再snapshotの不一致 | 手順5 | 隔離（`unavailable`）。開通しない | 2 |
 | コード表が0-rowでない、`activate`の失敗 | 手順9 | 開通せず、同runで再閉鎖して隔離 | 2 |
 | `open`の応答喪失、開通後の監視失敗 | 手順9 | 既存の規則（同runで再閉鎖し、DB封鎖と両方を確認した場合だけ`quarantined`） | 既存、1・2の回帰 |
@@ -138,7 +140,7 @@ V16〜V18の項目を、後続Taskの受入条件へ対応づける。
 
 | 代替 | 判断 |
 | --- | --- |
-| 4A: 破棄の前にも検証する | 破棄は証跡を必要としないので不採用。破棄を遅らせると、不整合なBackupの旧コードが残る期間が延びる |
+| 4A: 破棄を証跡の成否に依らず先に行い、P1を破棄の後に置く | Proposal時点の案。2026-11-12の対処方針1で不採用とした。削除の再適用と全世代破棄は戻せないので、整合しない復旧点ではその前に止める。P1で止めても受付は閉じたままなので、旧コードは使えない |
 | 4C: 開通直前の1回だけ | 劣後。整合しない復旧点でepochを公開してしまい、同runでのforward-fixしかできなくなる。P2だけでは開通前の取違えは防げるが、epochの無駄な消費は防げない |
 
 Trade-off: Portの呼出しが3回（再開時はさらに）になり、証跡Providerの応答が遅い／失敗する場合は隔離になる。呼出しの失敗は証跡不足として扱い、成功扱いにしない。
@@ -176,7 +178,7 @@ Trade-off: fenceがWriterを実際にdrainしていることに依存する。�
   表は上から最初に一致した行を採用する。どの行にも一致しなければ、既定の行として隔離する（例: 版6、コード表なし、コード用途なし、コード参加あり、未接続）。「コード機能の接続」は独立した設定値にせず、Compositionが**コード用途のPortを実際に組み立てるか**（コード用途の鍵世代の構成とコード参加のService設定）から導出する。つまり、Compositionが組み立てたのに「未接続」と判定される経路を作らない。「未接続」は既定値であり、唯一の免除条件でもある。コード機能を接続するTaskは、接続と同時に、証跡必須の最小版を6より大きくするか、v6をallowlistから外す。
 
   v6の「コード行」は、コード表の存在で検出する（v6のDBにコード表はない）。BackupのDBをその版のまま復旧するので、Restoreは版を上げず、復旧後の前進Migrationは通常の運用で適用する（本ADRの範囲外）。
-- **整合証跡の要否（Ownerの採否が必要な副論点）**: 証跡の要否はManifestの版だけで決めない。Manifestは非秘密Metadataで、物理Backupの真正性が未証明の間は、運用者の選択（35日以内の古い版）で版を下げられるためである。Service設定の「証跡必須の最小版」（現在は11）と「コード機能の接続」（未接続／接続済み）で判定し、Manifestを下げても要求が下がらないようにする。推奨は、v6の免除を**コード機能が未接続の間だけの暫定**とすることである。コード機能を通常のmain／Dev／Productionへ接続するTaskのReady条件に、「v6をallowlistから外す、または証跡を必須にする」を置く（上の表の「接続済み」の行）。v6にはコード消費とGM Invitation作成の共通commitがなく、接続前は既存のRestoreの契約を変えないためである。免除を置かない案（v6でも常に証跡必須）は、GM側の証跡Providerが実在するまで、現行のRestoreが開通できなくなる。Ownerが、この暫定免除と失効条件を採るかを判断する。
+- **整合証跡の要否（副論点A。2026-11-12に推奨どおり採用）**: 証跡の要否はManifestの版だけで決めない。Manifestは非秘密Metadataで、物理Backupの真正性が未証明の間は、運用者の選択（35日以内の古い版）で版を下げられるためである。Service設定の「証跡必須の最小版」（現在は11）と「コード機能の接続」（未接続／接続済み）で判定し、Manifestを下げても要求が下がらないようにする。推奨は、v6の免除を**コード機能が未接続の間だけの暫定**とすることである。コード機能を通常のmain／Dev／Productionへ接続するTaskのReady条件に、「v6をallowlistから外す、または証跡を必須にする」を置く（上の表の「接続済み」の行）。v6にはコード消費とGM Invitation作成の共通commitがなく、接続前は既存のRestoreの契約を変えないためである。免除を置かない案（v6でも常に証跡必須）は、GM側の証跡Providerが実在するまで、現行のRestoreが開通できなくなる。Ownerは、この暫定免除と失効条件を採用した。
 
 | 代替 | 判断 |
 | --- | --- |
@@ -192,7 +194,7 @@ Trade-off: 版を足すたびにRestoreのTestとallowlistの更新が要る。
 - **所有operation**: Restoreのコードticketは`runId`を所有operationとする。1 ticket=1 codeId、未完了ticketは高々1つの規則（[鍵inventory ADR](recipient-code-maintenance-key-inventory.md) D3）を保つ。別operation（清掃、Actor削除）が所有する未完了ticketは採用して重複作成せず、採用はdurableに記録し、窓は前倒しだけで延長しない。closureは常に所有operationへ束縛する。再開は`pending`／`byOperation`／`scopes`で行う。
 - **起算**: `dueAt`はRestoreのrunが**最初に**外部fenceを閉じたUTCとし、そのrunの開始時にdurableに記録した値で固定する。記録先は、DB Backupと独立した外部のrun所有状態（`AuthenticationRestoreControl`が`close(runId)`で所有するfence）とする。最初の`close`が閉鎖UTCを記録し、再開時はその記録を読み、`close`の再実行で上書きしない。Controlは、fenceの閉鎖と閉鎖UTCの記録を**単一のatomic操作**で行い、閉鎖UTCはControl側の信頼できる時刻源で採る（呼出し側の時刻を使わない）。「閉鎖済みで記録がない」状態は、初回ではなく記録の喪失として扱い、起算し直さず隔離する。これにより、初回のcloseと、記録を失った再開を区別できる。ticketの登録（手順5）はその後なので、ticketを持つ前から記録は存在する。記録が見つからない状態で再開した場合は、新しいUTCで起算し直さず、隔離を維持する。この能力（閉鎖UTCの記録と取得）をControlへ追加することは、Task 2の成果に含める。同runの再開や`close`の再実行で更新しない（再開のたびに再計算すると`deadline`を延ばせるため）。`deadline`はその24時間後とする。行自身の`expiresAt`／`terminalAt`は使わない。Backupは最大35日前の時点であり、行の期限は多くが過ぎている。行の期限で起算すると、Restoreが始まった瞬間にoverdue（`deadline`到達）と判定してしまう。Restoreは期限遵守の監視ではなく、復旧した全件の破棄である。D3の起算規則に、Restore固有の1行を足す補足になる。
 - **再開と新しいrun**: 別run（失敗した前のrun）の未完了コードticketは、新しいrunが採用し、`dueAt`は前倒しだけで延長しない（前のrunの起点が早ければそれを維持する）。
-- **deadline到達の扱い（Ownerの採否が必要な副論点）**: Restore所有のticketが`deadline`へ達した場合は、固定Code（`OVERDUE`）を通知し、`quarantined`の根拠にはしない。Restoreは封鎖を解く唯一の経路なので、Restore自身の遅延で封鎖すると、解除できない自己参照になるためである。代わりに、`deadline`の延長は上記のとおり起こらず、開通は全closure、0-row、整合証跡が揃った場合に限る。「遅延したRestoreを開通させず、新しいrunでも解消できない」状態は、`OVERDUE`の通知と運用判断（Production Gate）に委ねる。この扱いがR5の封鎖契約を弱めると判断する場合は、Ownerが別の規則を決める。
+- **deadline到達の扱い（副論点B。2026-11-12に推奨どおり採用）**: Restore所有のticketが`deadline`へ達した場合は、固定Code（`OVERDUE`）を通知し、`quarantined`の根拠にはしない。Restoreは封鎖を解く唯一の経路なので、Restore自身の遅延で封鎖すると、解除できない自己参照になるためである。代わりに、`deadline`の延長は上記のとおり起こらず、開通は全closure、0-row、整合証跡が揃った場合に限る。「遅延したRestoreを開通させず、新しいrunでも解消できない」状態は、`OVERDUE`の通知と運用判断（Production Gate）に委ねる。Ownerはこの扱いを推奨どおり採用した。設計上の帰結として、Restore所有（またはRestoreが採用した）ticketについては、restoring中に限り、24時間以内の鍵破棄を封鎖で強制しない（restoring中は受付を閉じているので旧コードは使えない）。清掃とActor削除が自ら進めるticketの24時間期限と封鎖契約は変えない。
 - **未知のコード行**: restoreしたDBにコード行があり、Providerのinventory（`scopes`／`scopePage`）に対応scopeがない場合は、止める（`unavailable`、隔離を維持）。行を消して通すことも、検証できないまま残すこともしない。信頼済みinventoryに束縛できない行は、全世代の鍵の破棄を証明できない。inventoryに完了済みscopeが残る場合は、Providerの`scopes`で解決する（#259／#260と同じ）。
 - **行のないscope**: Providerが知るscopeで、restoreしたDBに行がないものも、同じticketで全世代を破棄する（`allocate`後にrollbackされた孤立scopeを含む）。
 - **0-row**: コード表の0-rowを、`activate`の前提（現行のAttempt／Session 0-rowと同じ）とfingerprintの対象へ加える。ticket完了の確認と、全closureの検証は、今回の実行で行う。
@@ -236,13 +238,13 @@ Trade-off: 必須集合の設定が誤ると、Contextの欠落を検出でき�
 ## Consequences
 
 - Restoreは、コード用途を持つ構成で、整合証跡が不足、不一致、失効、Context欠落、Portの未注入のいずれかであれば開通せず隔離する。これは既存の方針（不足時は隔離）の具体化である。
-- 実GM Adapterが存在しない現状では、v11のRestoreは実環境で開通できない。これは意図した状態で、GMのRestore設計Task（Review Trigger）が実装されるまで続く。
+- 実GM Adapterが存在しない現状では、v11のRestoreは実環境で開通できない。これは意図した状態である。#245の後続Taskは合成の証跡で検証して完了とする。GM側のRestore検証は別の設計Taskとし、置き場所はEpic #202ではなくProduction Gate側（[ADR #55](snapshot-revision-security-and-retention.md)系のRetention／Restore）とする。Epic #202は、合成証跡での内部実装までで閉じる。
 - 合成のcatalog、Provider、証跡の成功は、本番のCapabilityの証拠ではない。
 - 残Risk: Ledger／Witnessはコードclosureと整合そのものを検証しない（D2の限界を継承）。証跡Providerが誤った「整合」を返す経路は、CompositionのregistryとGM側の検証の実装に依る。物理Backupとcatalogの真正性、全Provider同時rollbackは、既存のProduction Gateのままである。
 
 ## Implementation
 
-本ADRは文書だけである。Code、SQL、公開APIは変更しない。承認同期（別PR）の対象は次のとおり。
+本ADRは文書だけである。Code、SQL、公開APIは変更しない。承認同期では、次の採用済み文書へ「#278の採用設計（未実装）」として参照を追加した。現行実装の記述は書き換えていない。
 
 - [運用設計](../operations/invitation-code-retention-restore.md)のBackup Restoreの手順2／3／4／6／7と受入Evidence表
 - [設計契約R5](../security/invitation-code-lifecycle.md#r5-保持削除復旧公開)とV17／V18のTrace
@@ -250,18 +252,18 @@ Trade-off: 必須集合の設定が誤ると、Contextの欠落を検出でき�
 - [認証保守契約](../security/authentication-maintenance.md)のManifest、Restoreと開通条件、fingerprint
 - [ADR一覧](README.md)のStatus
 
-## #245の分割案（採否後のPlanningへの入力）
+## #245の分割案（Planningへの入力）
 
-#245は、独立成果が複数あり、2人日／5SPとPRの目安（約500行）を超える。近い前例は#260（3人日／8SP、約2,200行）である。次を推奨する。実際の起票、見積り、元の#245の`not planned`でのClose、Epic一覧への追加は、採否後のPlanningで行う。
+#245は、独立成果が複数あり、2人日／5SPとPRの目安（約500行）を超える。近い前例は#260（3人日／8SP、約2,200行）である。次を推奨する。実際の起票、見積り、元の#245の`not planned`でのClose、Epic一覧への追加、GM側のRestore検証の設計Taskの起票は、Planningで行う。
 
 | 順 | Task案 | 成果 | 依存 |
 | --- | --- | --- | --- |
-| 1 | task(auth): Restoreへ全Context整合証跡の要求を追加する | 証跡Port（発行はAdapter側のregistry）、`recoveryPointId`、`evidenceDigest`の束縛（v6も値が変わるのでgoldenと回帰Testを更新）、P1／P2／P3、必須Context集合、不足／stale／fork／Context欠落での隔離。証跡の要否はManifestの版だけでなく、Service設定の「証跡必須の最小版」と「コード機能の接続」で判定する（論点6）。**構成確認**（論点6の表）はTask 2で入れる。Task 1ではService設定の「証跡必須の最小版」と受理版だけで判定し、コード参加の有無は見ない。**Test入口**: ServiceのOptionとして受理版とallowlistを注入できるようにし、Task 1のTestはServiceレベルで、証跡Portの合成Adapterと、受理版11を注入したTest専用の構成（fakeのcontrol／ledger／database）で検証する。実PG AdapterとCompositionの受理版は6のままで、既存のv6の実PG回帰を維持する。本番のallowlistには11を入れない | 本ADRのAccepted |
-| 2 | task(auth): Restoreへ全招待コード破棄とコード用途の鍵状態を参加させる | 実PG Adapterとallowlistを`{6, 11}`へ広げ、`recoveryPointId`のManifest Field、公開世代のコード用途、構成確認（論点6の表）、Restore ticket／closure／0-row（`dueAt`の固定と、Controlへの閉鎖UTCの記録・取得能力、再開、別runの採用を含む）、`activate`とfingerprintの拡張。v11は証跡を必須にして受理する（Task 1の判定による）。実PGで、v6／v11の両方の回帰と、コード行のあるBackupの全破棄を検証する | 1 |
+| 1 | task(auth): Restoreへ全Context整合証跡の要求を追加する | 証跡Port（発行はAdapter側のregistry）、`recoveryPointId`（ManifestのField、証跡との一致検査、ManifestのcodecとPG AdapterのManifest検査でのFieldの受理。v11で必須、v6では不在）、`evidenceDigest`の束縛（v6も値が変わるのでgoldenと回帰Testを更新）、P1／P2／P3、必須Context集合、不足／stale／fork／Context欠落での隔離。証跡の要否はManifestの版だけでなく、Service設定で判定する（論点6）。そのうちTask 1は「証跡必須の最小版」を、Task 2は「コード機能の接続」の導出と構成確認を入れる。**構成確認**（論点6の表）はTask 2で入れる。Task 1ではService設定の「証跡必須の最小版」と受理版だけで判定し、コード参加の有無は見ない。**Test入口**: ServiceのOptionとして受理版とallowlistを注入できるようにし、Task 1のTestはServiceレベルで、証跡Portの合成Adapterと、受理版11を注入したTest専用の構成（fakeのcontrol／ledger／database）で検証する。v11での`recoveryPointId`の必須・欠落・複数一致はこの構成で検証し、実PGでは「v6でFieldなしは受理、v6でFieldありは拒否」を検証する。実PG AdapterとCompositionの受理版は6のまま（Fieldの受理だけを入れる）で、既存のv6の実PG回帰を維持する。本番のallowlistには11を入れない | 本ADRのAccepted |
+| 2 | task(auth): Restoreへ全招待コード破棄とコード用途の鍵状態を参加させる | 実PG Adapterとallowlistの受理schema版を`{6, 11}`へ広げ、公開世代のコード用途、構成確認（論点6の表）、Restore ticket／closure／0-row（`dueAt`の固定と、Controlへの閉鎖UTCの記録・取得能力、再開、別runの採用を含む）、`activate`とfingerprintの拡張。v11は証跡を必須にして受理する（Task 1の判定による）。実PGで、v6／v11の両方の回帰と、コード行のあるBackupの全破棄を検証する | 1 |
 
 順序の理由: コード参加を先に入れると、「コードを受理するが整合証跡なしで開通できるRestore」が一時的にdevelopへ入る。証跡の要求を先に入れ、コードの受理を最初から証跡必須にして入れる。それぞれが単独で検証できる。見積りはTask起票時に再評価し、2が目安を超えるなら「ticket／closure／0-row」と「Manifest版／公開世代／構成確認」へ縦に分ける。
 
-採用案による変更:
+採用案による変更（採否前に示した参考。Ownerは推奨案を採用した）:
 
 | 論点の採否 | 分割案への影響 |
 | --- | --- |
@@ -278,15 +280,17 @@ Trade-off: 必須集合の設定が誤ると、Contextの欠落を検出でき�
 ## Review Trigger
 
 - Ledger／Witnessの形式を変える必要が生じた場合（案3C）。
-- GMにRestoreの実装Taskが必要になった場合（本ADRの証跡Portに対応するGM側の検証。論点1、8）。
+- GM側のRestore検証の設計Task（Production Gate側）で、本ADRの証跡Port契約（論点1、2、4、8）と合わない点が見つかった場合。
 - Providerの完全列挙を保証できない場合、またはfenceがWriterのdrainを保証できない場合（論点5、7）。
 - Persistenceを持つContextが増える場合（論点8の必須集合）。
 - 新しいMigrationで認証Schemaの版が進む場合（論点6のallowlist）。
-- 本ADRの採否前に、Restore、Manifest、`evidenceDigest`、公開世代、コードRecordの鍵用途を変更するPRが出る場合。
+- 本ADRの採用範囲を超えて、Restore、Manifest、`evidenceDigest`、公開世代、コードRecordの鍵用途を変更する必要が生じた場合。
 
 ## Owner Decision / History
 
 - 2026-11-11: Proposedとして作成した。Ownerの採否は未取得。論点1〜8のそれぞれについて採否（推奨案か代替案か）を、[#278](https://github.com/takeshi-arihori/kakei_app/issues/278)に記録する。
 - 論点1〜8に加え、Ownerの明示判断が要る副論点は2つ: 論点6のv6免除（コード機能が未接続の間だけの暫定とする失効条件）と、論点7のRestore所有ticketの`deadline`到達の扱い（`OVERDUE`通知とし、封鎖の根拠にしない）。
-- Authorから分離したSecurity Review（本ADRのDraft PRで実施）のpassを、採否の前提とする。
-- 本ADRはAcceptedではない。採否前に#245をReadyにしない。
+- Authorから分離したSecurity Reviewを採否の前提とし、[PR #279](https://github.com/takeshi-arihori/kakei_app/pull/279)の独立Review（code／test／security）はすべてpassした。PR #279はProposedのままdevelopへMergeされた。
+- 2026-11-12: 親Agent（#245側のSession）の問い「ADR #278の推奨案（論点1〜8）を採用しますか？」と、同じ返信の本文で示した補足「論点とは別に採否が必要な副論点が2つあります。採用の際はこれらも推奨どおりでよいかをあわせて確認してください。」（副論点A: 整合証跡の要否をManifestの版だけでなくService設定の「証跡必須の最小版」でも判定する。副論点B: Restore所有のticketが期限に達した場合は`OVERDUE`を通知するが封鎖の根拠にはしない）に対し、Project Ownerが「採用する」と回答した。例外なしの回答なので、論点1〜8と副論点A・Bを推奨どおり採用したものとして記録する。副論点への言及はOwnerの文言自体にはない。同日、本ADRの作成Sessionでも採用の確認に「はい」と回答した。
+- 同じく2026-11-12、Ownerは採用前に示した3点の対処方針に「推奨方法で進めて。」と回答した: P1の位置を順序表どおりに直す、`recoveryPointId`の担当をTask 1へ寄せる、GM側のRestore検証をProduction Gate側の別の設計Taskとする。本承認同期で反映した。対処1に伴い、論点4の「証跡で止めるもの」の文と代替4Aの行も同じ順序に揃えた。対処2に伴い、論点2のField追加の担当も分割案に揃えた。
+- 親Agentによる会話承認の転記であり、Owner本人のGitHub上の承認操作を主張しない（[#233](https://github.com/takeshi-arihori/kakei_app/issues/233)の前例と同じ）。承認範囲は本ADRの設計まで。#245の分割・個別Ready、PRのReady化／Merge、Production有効化は含まない。
