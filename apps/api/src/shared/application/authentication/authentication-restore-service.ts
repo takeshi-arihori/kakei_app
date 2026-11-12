@@ -264,6 +264,7 @@ export const createAuthenticationRestoreService = (
         for (let attempt = 0; attempt < 3; attempt += 1) {
           await checkActorTickets(head);
           // P1: 削除再適用、破棄、epoch公開は戻せないので、その前に整合を確認する。
+          const p1Head = options.ledger.head(head);
           const p1 =
             requirement === null ? null : await prove(requirement, runId, head);
           head = await applyDeletions(fence, head);
@@ -318,6 +319,14 @@ export const createAuthenticationRestoreService = (
           );
           if (digest.length !== 32) return fail();
           const expected = options.ledger.head(head);
+          // P2はP1とLedger headの一致も要求する。このrunの削除Complete append等で
+          // headが進んでいれば隔離せず、手順3（Actor票照合とP1）からやり直す。
+          if (
+            p1 !== null &&
+            (p1Head.sequence !== expected.sequence ||
+              p1Head.hash !== expected.hash)
+          )
+            continue;
           // P2: append直前のheadで再検証し、P1から変化していれば開通しない。
           const p2 =
             requirement === null ? null : await prove(requirement, runId, head);

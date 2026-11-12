@@ -20,6 +20,20 @@ describe('Backup ManifestのrecoveryPointId', () => {
     ).toThrow(AuthenticationCryptoUnavailable);
   });
 
+  it('境界の版10もFieldなしだけを受理する', () => {
+    expect(
+      authenticationManifestObject({ ...base, schemaVersion: 10 })
+        .recoveryPointId,
+    ).toBeUndefined();
+    expect(() =>
+      authenticationManifestObject({
+        ...base,
+        schemaVersion: 10,
+        recoveryPointId,
+      }),
+    ).toThrow(AuthenticationCryptoUnavailable);
+  });
+
   it('版11以上はUUIDv4のFieldを必須にする', () => {
     expect(
       authenticationManifestObject({
