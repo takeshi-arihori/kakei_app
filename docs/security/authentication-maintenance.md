@@ -40,6 +40,8 @@ fresh challengeに束縛されたCheckpoint／Witnessのattestationを別Verifie
 
 OperatorがTrafficと他の認証／保守Writerを外部fenceで閉じてからBackupを戻す。復旧DBのactive flagを開通根拠にしない。Manifestは信頼済みBackup catalogから渡すMetadata契約であり、本Adapterは物理Backupの署名・真正性を検証するProviderではない。未来・不正・35日超を拒否し、35日等値は対象とする。
 
+外部制御は、runの初回`close`でfence閉鎖と閉鎖UTCのdurable記録を単一のatomic操作で行う。閉鎖UTCは外部制御側の信頼できる時刻源で採り、呼出し側の時刻を使わない。同runの再開や`close`の再実行（開通後の再閉鎖を含む）では記録を作成・更新しない。Restoreは`close`と`verifyClosed`の直後、DB隔離の前に`closedAt`で記録を取得し、閉鎖済みで記録がない（喪失）、不正値、取得失敗のいずれかなら初回とみなさず、DBを変更せずに同runで再閉鎖して隔離する。記録の`dueAt`の起点としての利用は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)の論点7に従い、コード破棄の実装で行う。
+
 外部所有fence確認 → Manifestの全Metadata検査／key_state排他Lock／Writer drain／restoring CAS → 最新Ledger検証・適用と未完了削除再開 → 全Attempt／Sessionのdurable ticket登録・全行／全DEK除去 → 外部revision CASで新epoch公開・再確認 → 保持Identityの旧鍵Seal停止／独立新DEK・Nonce世代で再Seal → 全required Alias再構築、重複・破損・Actor MAC検査 → 最新head再検証 → recovery checkpoint条件付きappend／Witness一致 → DB active CAS → 同run／epoch／revision／headへの外部Traffic open CASの順とする。
 
 削除再適用は真正なLedger binding下で行い、既にDestroyedのIdentityを復号必須にしない。保持Identityは復号・本人一意性を必須とする。未完了Actor票はProvider所有の固定snapshot cursorで全Pageを先行照合し、1,000件の先頭だけで打ち切らない。集合／版／inventoryの途中変更、別Provider cursor、重複operation、繰返cursor、空の中間Pageは拒否する。真の末尾だけnextCursor=nullとし、全件照合後に不可逆DB変更へ進む。全9用途の鍵Stateを検証し、公開されたLedger MAC書込世代とVerifierの現行世代も一致させる。新headが到着したら最大3回再適用し、収束しなければ隔離する。
@@ -48,7 +50,7 @@ OperatorがTrafficと他の認証／保守Writerを外部fenceで閉じてから
 
 移行completionは同じDB Adapter所有のfenceに結び付け、同TransactionのActor／Identity／Alias／鍵State／Intent／全Credentialの型付きTLV fingerprintを保持する。activateは所有completion、現在fingerprint、Credential 0-row、Prepared Intentなし、外部publicationの再検証を要求する。Auditは認証判断のfingerprintに含めない。復旧の各SQL操作は外部閉鎖をcommit前にも確認する。初回隔離はManifestのkey-state版と現DB版の完全一致を外部制御で確認し、固定Manifest／runへ進行版をDB外でdurable登録する。再試行の進行済み版はこの登録と公開epochへ照合し、単なる下限一致やrestoring flagだけで許可しない。中断・応答喪失で既発行epoch／Nonce／破棄を戻さず、同runのforward-fixで再検証する。openの応答喪失・開通後の監視失敗でも同runで外部を再閉鎖してverifyClosedし、DB封鎖と両方を確認した場合だけquarantinedを返す。どちらか未確認ならunavailableとする。
 
-招待コードと全Context整合証跡への拡張は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted、未実装）が定める。Manifestへの`recoveryPointId`の追加、受理版のallowlist、証跡の検証時点（P1〜P3）、`evidenceDigest`の範囲、コード表の0-rowを`activate`の前提へ加えることを含む。本節の契約は、その実装までは現行のままである。
+招待コードと全Context整合証跡への拡張は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）が定める。上の閉鎖UTCの記録・取得と喪失の隔離以外は未実装である。Manifestへの`recoveryPointId`の追加、受理版のallowlist、証跡の検証時点（P1〜P3）、`evidenceDigest`の範囲、コード表の0-rowを`activate`の前提へ加えることを含む。本節の契約は、その実装までは現行のままである。
 
 ## Done CriteriaとEvidence
 
