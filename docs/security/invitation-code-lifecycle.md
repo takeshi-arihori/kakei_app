@@ -139,6 +139,8 @@ Actor削除の対象inventoryへ全recipient-code Record/鍵を追加し、既�
 
 Restoreは[運用設計](../operations/invitation-code-retention-restore.md)に従い、全コード/全MAC鍵世代を列挙して破棄し、新epochをDB外で公開する。認証Schemaだけの復旧/全Session破棄だけでGroupの成功operationやInvitationを巻き戻せると判断しない。全Contextで同じ整合した復旧点、既存GM削除Ledger/Checkpoint、認証Ledgerと独立Witnessを検証し、不足時はTrafficを閉じたままにする。
 
+このRestoreの契約（全Context整合証跡のPort、復旧点の同一性、検証時点、Manifestの版、Restoreのコードticket）は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）が定める。V17／V18の内部部分は#245の後続Taskが合成の証跡で検証し、実GM側の検証と本番部分はProduction Gateに残る。
+
 後続HTTPは同一Origin/有効Session/変更CSRF/厳格入力/総量上限/共有Rateを必要とする。コードをURL/履歴/referrer/Analytics/Console/例外/Log/端末の永続Storageへ置かない。発行/入力Responseはno-store、画面で秘密値を消去し、コピーは明示操作だけ。一般のAccount/コード列挙やcode→Profile照会を提供しない。
 
 公開APIのPath/Schema/数値Rate/HTTP status、Groupの存在非開示と処理時間差の検証、Pending一覧のread policy、Proxy/Ingressは後続Taskで確定する。その契約/実Security証拠が揃うまで内部PortをHTTPへwireしない。既存4認証HTTP APIの仕様変更やProduction有効化を本設計に含めない。

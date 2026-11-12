@@ -4,7 +4,7 @@ Decision本文はこのディレクトリで管理する。Owner承認、関連T
 
 | Decision | Status | 関係・証拠 |
 | --- | --- | --- |
-| [Restoreの全Context整合証跡と招待コード参加の契約](restore-consistency-evidence-and-recipient-code-participation.md) | **Proposed**（Ownerの採否待ち） | [#278](https://github.com/takeshi-arihori/kakei_app/issues/278)。Supplements 招待コードADR・鍵inventory ADR・認証保護保存ADR。後続は[#245](https://github.com/takeshi-arihori/kakei_app/issues/245)の分割。Security Review passが採否の前提。既存ADR本文とStatusは変更しない |
+| [Restoreの全Context整合証跡と招待コード参加の契約](restore-consistency-evidence-and-recipient-code-participation.md) | Accepted（設計。実装・個別Ready・Production有効化は別Gate） | [#278](https://github.com/takeshi-arihori/kakei_app/issues/278)。2026-11-12 Owner会話承認「採用する」（論点1〜8と副論点A・Bを推奨どおり）。Supplements 招待コードADR・鍵inventory ADR・認証保護保存ADR。後続は[#245](https://github.com/takeshi-arihori/kakei_app/issues/245)の分割。GM側のRestore検証はProduction Gate側の別の設計Task |
 | [招待コードのLifecycle・保護保存・原子的消費](invitation-code-lifecycle-and-protected-storage.md) | Accepted（詳細設計） | [設計Task #233](https://github.com/takeshi-arihori/kakei_app/issues/233)。2026-10-27 Owner会話承認「はいお願いします。」。10分/一Actor一つ/不可逆検索値/共通commit/清掃・Restore。承認同期のdevelop統合・個別Ready・Production Gateは維持 |
 | [招待コード保守の鍵inventory・ticket・Actor削除参加](recipient-code-maintenance-key-inventory.md) | Accepted（設計。実装・個別Readyは別Gate） | [#244](https://github.com/takeshi-arihori/kakei_app/issues/244)、分割[#257](https://github.com/takeshi-arihori/kakei_app/issues/257)〜[#260](https://github.com/takeshi-arihori/kakei_app/issues/260)。Supplements 招待コードADR。2026-11-04 Owner会話承認（D2は別ticket方式） |
 | [認証Cookieと外部SDK Cookieの共存](authentication-cookie-coexistence.md) | Accepted（検査範囲のみ） | [#219](https://github.com/takeshi-arihori/kakei_app/issues/219)。2026-10-25 Owner会話承認。非認証Cookie値を解釈せず無視、認証Cookie/総量/制御文字の検査を維持。独立Security/実Google検証は別Gate |

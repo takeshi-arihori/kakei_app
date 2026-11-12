@@ -64,3 +64,5 @@ Witness修復は真正な同headとFailure domainの運用証拠を確認する�
 `quarantined`から`active`へ戻す更新はRestoreの`restoring`限定CASだけが持つ。これらは旧Writerを止める契約で、コードを除去する機能ではない。コードの清掃は[内部入口](invitation-code-retention-restore.md#259-コード清掃の小batchと封鎖)が持ち、Actor削除でのコード除去は[Actor削除の別入口](invitation-code-retention-restore.md#260-actor削除へのコード参加)が持つ。どちらも通常入口へはwireしない。既存の清掃Readerは#259、既存の削除Readerは#260でコードpurposeを無視して読むようにした（[ADR](../adr/recipient-code-maintenance-key-inventory.md)のD6）。削除Readerはコードpurposeの有無を返し、コード用途があるのにコード参加なしで構成した削除をPrepared前に止める。コードpurposeの初期化は未実装である。
 
 現行Runbookがコードを既に扱うとは主張しない。GM Invitation/成功operationとの共通commitを片側SchemaのRestoreで巻き戻さず、全Context復旧点/Checkpoint整合を検証するまで開通しない。新たな本番Capabilityと実証は同設計のB4/Production Gateに残す。
+
+[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted、未実装）は、このRunbookのBackup復旧を次のように拡張する。Manifestの受理版を`{6, 11}`のallowlistにし、v11では全Context共通の`recoveryPointId`と整合証跡を必須にする。公開世代へコード2用途を加える。`evidenceDigest`は認証のfingerprint digestに、コード破棄の検証結果と整合証跡を加えた値にする（Ledger／Witnessの書式は変えない）。上の「Backup復旧の順序」は、実装されるまで現行（schema v6、コード用途で停止）のままである。
