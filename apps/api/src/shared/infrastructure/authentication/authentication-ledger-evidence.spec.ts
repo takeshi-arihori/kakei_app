@@ -191,6 +191,31 @@ describe('認証Ledgerの独立証跡検証', () => {
       }),
     ).rejects.toThrow();
   });
+  it('ManifestのrecoveryPointIdを列挙して扱い、受理版6ではFieldありを拒否する', async () => {
+    const f = fixture();
+    const manifest = {
+      createdAt: 1000,
+      schemaVersion: 6,
+      keyStateVersion: 1,
+      epoch: operationId,
+      checkpoint: { sequence: 0, hash: '0'.repeat(64) },
+    };
+    await expect(f.evidence.latest(manifest)).resolves.toBeDefined();
+    await expect(
+      f.evidence.latest({
+        ...manifest,
+        recoveryPointId: '44444444-4444-4444-8444-444444444444',
+      }),
+    ).rejects.toThrow();
+    // 版11の書式は正しくても、受理版（6）の外なので拒否する。
+    await expect(
+      f.evidence.latest({
+        ...manifest,
+        schemaVersion: 11,
+        recoveryPointId: '44444444-4444-4444-8444-444444444444',
+      }),
+    ).rejects.toThrow();
+  });
   it('Provider attestationの検証失敗をMACだけで補わない', async () => {
     const f = fixture();
     const evidence = createAuthenticationLedgerEvidence({

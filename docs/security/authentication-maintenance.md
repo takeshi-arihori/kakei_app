@@ -30,7 +30,7 @@ Canonical bodyは既存認証TLV（1-byte ordinal、1-byte presence、4-byte big
 
 - 共通: `kakei_app`、`auth-deletion-ledger/v1`、`authentication/v1`、sequence十進文字列、previousHash小文字hex、kind、operation UUIDv4、MAC keyVersion。
 - actor-deletion末尾: actorDigestKeyVersion、32-byte actorDigest、preparedAt十進文字列、record version十進文字列、prepared／complete、opaque targetReference。
-- recovery末尾: epoch UUIDv4、completedAt十進文字列、32-byte evidenceDigest。
+- recovery末尾: epoch UUIDv4、completedAt十進文字列、32-byte evidenceDigest。evidenceDigestは移行fingerprint digestそのものではなく、[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md) 論点3の固定順序・長さ前置書式（tag `restore-evidence/v1`、fingerprint、コード参加presence、整合証跡presenceと`consistencyDigest`／`recoveryPointId`／Context名）のSHA-256である。Ledgerは不透明な32-byteとして保存し、書式は変えない。
 
 MACは専用256-bit鍵のHMAC-SHA256、entry hashはTLV(`auth-checkpoint/v1`, body, MAC)のSHA256。全Fieldをstrict own data propertyでCopyし、未知Field・Getter・型・不正時刻／UUID／長さを拒否する。専用MACの自所有material Copyは使用後に消去する。既存Envelope／AADの形式は変更しない。
 
@@ -48,7 +48,9 @@ OperatorがTrafficと他の認証／保守Writerを外部fenceで閉じてから
 
 移行completionは同じDB Adapter所有のfenceに結び付け、同TransactionのActor／Identity／Alias／鍵State／Intent／全Credentialの型付きTLV fingerprintを保持する。activateは所有completion、現在fingerprint、Credential 0-row、Prepared Intentなし、外部publicationの再検証を要求する。Auditは認証判断のfingerprintに含めない。復旧の各SQL操作は外部閉鎖をcommit前にも確認する。初回隔離はManifestのkey-state版と現DB版の完全一致を外部制御で確認し、固定Manifest／runへ進行版をDB外でdurable登録する。再試行の進行済み版はこの登録と公開epochへ照合し、単なる下限一致やrestoring flagだけで許可しない。中断・応答喪失で既発行epoch／Nonce／破棄を戻さず、同runのforward-fixで再検証する。openの応答喪失・開通後の監視失敗でも同runで外部を再閉鎖してverifyClosedし、DB封鎖と両方を確認した場合だけquarantinedを返す。どちらか未確認ならunavailableとする。
 
-招待コードと全Context整合証跡への拡張は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted、未実装）が定める。Manifestへの`recoveryPointId`の追加、受理版のallowlist、証跡の検証時点（P1〜P3）、`evidenceDigest`の範囲、コード表の0-rowを`activate`の前提へ加えることを含む。本節の契約は、その実装までは現行のままである。
+招待コードと全Context整合証跡への拡張は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）が定める。Manifestへの`recoveryPointId`の追加、受理版のallowlist、証跡の検証時点（P1〜P3）、`evidenceDigest`の範囲、コード表の0-rowを`activate`の前提へ加えることを含む。
+
+#282で実装した全Context整合証跡の要求: 認証側consumer Port（`authentication-consistency-evidence.ts`）は`runId`、`recoveryPointId`、検証済みLedger head（sequence、hash）だけを入力に、証跡Adapterのregistryが発行する不透明handleを受け取り、同じbindingで単回消費する。registryは偽造、別registry、別binding、再利用、catalog一致の0件／複数件、`recoveryPointId`の不一致を拒否し、不一致のbindingを渡されたhandleも失効させる。`consistencyDigest`は各Contextの検証済み状態（復旧点に束縛したhead revisionを含む）を覆う値と定め、P2／P3の不変確認はこの値、`recoveryPointId`、Context集合の一致で行う。各handleは発行時のLedger headへ束縛し、P1は削除再適用前のhead、P2はappend直前に再検証したhead、P3はappend後のheadを使う（このrunの削除Complete appendでheadが進むため）。必須Context集合（現在は`group-management`）と完全一致しない証跡、Portの未注入、受理版外のManifestは隔離する。受理版は6のままで、コードの破棄、`activate`の0-row、構成確認は後続Task（#284、#285）が入れる。本節のRestore順序と開通条件はそれ以外は現行のままである。
 
 ## Done CriteriaとEvidence
 

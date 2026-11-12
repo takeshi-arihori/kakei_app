@@ -65,4 +65,6 @@ Witness修復は真正な同headとFailure domainの運用証拠を確認する�
 
 現行Runbookがコードを既に扱うとは主張しない。GM Invitation/成功operationとの共通commitを片側SchemaのRestoreで巻き戻さず、全Context復旧点/Checkpoint整合を検証するまで開通しない。新たな本番Capabilityと実証は同設計のB4/Production Gateに残す。
 
-[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted、未実装）は、このRunbookのBackup復旧を次のように拡張する。Manifestの受理版を`{6, 11}`のallowlistにし、v11では全Context共通の`recoveryPointId`と整合証跡を必須にする。公開世代へコード2用途を加える。`evidenceDigest`は認証のfingerprint digestに、コード破棄の検証結果と整合証跡を加えた値にする（Ledger／Witnessの書式は変えない）。上の「Backup復旧の順序」は、実装されるまで現行（schema v6、コード用途で停止）のままである。
+[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）は、このRunbookのBackup復旧を次のように拡張する。Manifestの受理版を`{6, 11}`のallowlistにし、v11では全Context共通の`recoveryPointId`と整合証跡を必須にする。公開世代へコード2用途を加える。`evidenceDigest`は認証のfingerprint digestに、コード破棄の検証結果と整合証跡を加えた値にする（Ledger／Witnessの書式は変えない）。上の「Backup復旧の順序」は、受理版の拡張とコード破棄が実装されるまで現行（schema v6、コード用途で停止）のままである。
+
+#282で実装済みの部分（受理版は6のまま）: Manifestは任意Field`recoveryPointId`（UUIDv4）を持ち、版11以上で必須、11未満では不在とする（v6でFieldありは拒否）。Restore Serviceは受理版のallowlist（既定`{6}`）と「証跡必須の最小版」（既定11）で証跡の要否を判定し、必要な構成では`isolate`の前にPortの注入、必須Context集合、`recoveryPointId`を確認する。証跡はP1（削除再適用の前）、P2（`migrateIdentity`の後、`evidenceDigest`の計算前）、P3（recovery appendの後、`activate`の前）で毎回新しいhandleを発行させて単回消費し、P1／P2／P3の`recoveryPointId`、Context集合、`consistencyDigest`が一致しなければ隔離する。`evidenceDigest`はv6でもADR #278 論点3の書式（要素2／3はpresence=0）に変わった。本番Compositionは未接続で、v11の経路は受理版11を注入したServiceレベルのTestだけで検証している。

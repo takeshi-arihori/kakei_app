@@ -20,6 +20,7 @@ import {
   authenticationUuid,
   encodeAuthenticationTlv,
 } from './canonical-authentication.js';
+import { authenticationManifestObject } from './authentication-backup-manifest.js';
 import { authenticationBytesEqual } from './authentication-digests.js';
 
 const fail = (): never => {
@@ -253,13 +254,8 @@ export const createAuthenticationLedgerEvidence = (
     }
     let backupHead: AuthenticationLedgerHead | undefined;
     if (manifest !== undefined) {
-      const m = authenticationObject(manifest, [
-        'createdAt',
-        'schemaVersion',
-        'keyStateVersion',
-        'epoch',
-        'checkpoint',
-      ]);
+      // recoveryPointIdは版規則だけ検査し、受理版6ではFieldを持たない。
+      const m = authenticationManifestObject(manifest);
       integer(m.createdAt);
       if (m.schemaVersion !== 6) return fail();
       integer(m.keyStateVersion, 1);

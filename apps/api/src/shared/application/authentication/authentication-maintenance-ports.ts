@@ -176,8 +176,16 @@ export interface AuthenticationLedgerMacKeys {
   >;
 }
 
+/** `recoveryPointId`を必須にするManifestの最小版。これ未満の版ではFieldを持たない。 */
+export const authenticationRecoveryPointSchemaVersion = 11;
+
 /** 復旧DBと独立して保持するBackup Manifestの最小値。 */
 export interface AuthenticationBackupManifest {
+  /**
+   * 信頼済みBackup catalogが全Context共通で発行した復旧点UUIDv4。
+   * `schemaVersion`が{@link authenticationRecoveryPointSchemaVersion}以上で必須、未満では不在。
+   */
+  readonly recoveryPointId?: string;
   /** Backup取得UTC。35日超や未来を拒否する。 */
   readonly createdAt: number;
   /** 対応済みDB Schemaの版。 */

@@ -1,11 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  createAuthenticationConsistencyEvidenceRegistry,
+  createAuthenticationRestoreEvidenceDigest,
+} from '../../infrastructure/authentication/authentication-consistency-evidence.js';
+import type {
+  AuthenticationConsistencyBinding,
+  AuthenticationConsistencyEvidence,
+  AuthenticationConsistencyEvidencePort,
+} from './authentication-consistency-evidence.js';
+
 import type {
   AuthenticationCleanupDatabase,
   AuthenticationDeletionDatabase,
   AuthenticationRestoreDatabase,
 } from './authentication-maintenance-database.js';
 import type {
+  AuthenticationBackupManifest,
   AuthenticationKeyDestructionPort,
   AuthenticationActorDeletionCursor,
   AuthenticationDeletionRecord,
@@ -15,6 +26,7 @@ import type {
   AuthenticationVerifiedHead,
   AuthenticationVerifiedIntent,
   AuthenticationVerifiedDestruction,
+  AuthenticationRecoveryRecord,
 } from './authentication-maintenance-ports.js';
 import type {
   AuthenticationRestoreControl,
@@ -195,7 +207,50 @@ describe('認証Restoreの隔離と開通', () => {
       verify: () => Promise.resolve(false),
     };
     const monitor = { record: vi.fn(() => Promise.resolve(undefined)) };
-    const service = (now = 2000) =>
+    const evidenceDigest = createAuthenticationRestoreEvidenceDigest();
+    // 合成の証跡Source。呼出しごとのbindingを記録し、応答はTestが差し替える。
+    const evidenceCalls: AuthenticationConsistencyBinding[] = [];
+    let evidenceAnswer = (
+      _call: number,
+      binding: AuthenticationConsistencyBinding,
+    ): readonly AuthenticationConsistencyEvidence[] => [
+      {
+        recoveryPointId: binding.recoveryPointId,
+        contexts: ['group-management'],
+        consistencyDigest: new Uint8Array(32).fill(7),
+      },
+    ];
+    const consistency = {
+      evidence: createAuthenticationConsistencyEvidenceRegistry({
+        source: {
+          verify: (binding) =>
+            Promise.resolve().then(() => {
+              evidenceCalls.push(binding);
+              events.push('evidence');
+              return evidenceAnswer(evidenceCalls.length, binding);
+            }),
+        },
+      }),
+      requiredContexts: ['group-management'] as readonly string[],
+    };
+    const appended: AuthenticationRecoveryRecord[] = [];
+    const opened: Uint8Array[] = [];
+    const originalAppend = ledger.append.bind(ledger);
+    ledger.append = (current, record) => {
+      if (record.kind === 'recovery') appended.push(record);
+      return originalAppend(current, record);
+    };
+    const originalOpen = control.open.bind(control);
+    control.open = (input, value, expected, digest) => {
+      opened.push(Uint8Array.from(digest));
+      return originalOpen(input, value, expected, digest);
+    };
+    const service = (
+      now = 2000,
+      overrides: Partial<
+        Parameters<typeof createAuthenticationRestoreService>[0]
+      > = {},
+    ) =>
       createAuthenticationRestoreService({
         control,
         database,
@@ -204,10 +259,22 @@ describe('認証Restoreの隔離と開通', () => {
         ledger,
         keys,
         monitor,
+        evidenceDigest,
         clock: { now: () => now },
+        ...overrides,
       });
+    const v11 = (now = 2000) =>
+      service(now, { acceptedSchemaVersions: [6, 11], consistency });
     return {
       events,
+      evidenceCalls,
+      setEvidence: (answer: typeof evidenceAnswer) => {
+        evidenceAnswer = answer;
+      },
+      consistency,
+      appended,
+      opened,
+      v11,
       control,
       database,
       deletion,
@@ -443,4 +510,298 @@ describe('認証Restoreの隔離と開通', () => {
     expect(f.events).not.toContain('migrate');
     expect(f.events).not.toContain('open');
   });
+
+  describe('Restoreの全Context整合証跡（受理版11を注入した構成）', () => {
+    const recoveryPointId = '44444444-4444-4444-8444-444444444444';
+    const otherRecoveryPointId = '66666666-6666-4666-8666-666666666666';
+    const v11Manifest: AuthenticationBackupManifest = {
+      ...manifest,
+      schemaVersion: 11,
+      recoveryPointId,
+    };
+    const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex');
+    const irreversible = ['discard', 'epoch', 'migrate'] as const;
+
+    it('P1〜P3が揃った場合だけ開通し、証跡をevidenceDigestへ束縛する', async () => {
+      const f = fixture();
+      expect(await f.v11().run(runId, v11Manifest)).toEqual({
+        status: 'complete',
+      });
+      const positions = f.events
+        .map((event, index) => (event === 'evidence' ? index : -1))
+        .filter((index) => index >= 0);
+      expect(positions).toHaveLength(3);
+      const [p1, p2, p3] = positions;
+      expect(f.events.indexOf('isolate')).toBeLessThan(p1);
+      expect(p1).toBeLessThan(f.events.indexOf('discard'));
+      expect(f.events.indexOf('migrate')).toBeLessThan(p2);
+      expect(p2).toBeLessThan(f.events.indexOf('checkpoint-witness'));
+      expect(f.events.indexOf('checkpoint-witness')).toBeLessThan(p3);
+      expect(p3).toBeLessThan(f.events.indexOf('active'));
+      // P1／P2はappend前のhead、P3はappend後のheadへ束縛する。
+      expect(f.evidenceCalls.map((call) => call.head.sequence)).toEqual([
+        0, 0, 1,
+      ]);
+      expect(
+        f.evidenceCalls.every(
+          (call) =>
+            call.runId === runId && call.recoveryPointId === recoveryPointId,
+        ),
+      ).toBe(true);
+      const expected = createAuthenticationRestoreEvidenceDigest().digest({
+        fingerprint: new Uint8Array(32).fill(9),
+        codeClosure: null,
+        consistency: {
+          recoveryPointId,
+          contexts: ['group-management'],
+          consistencyDigest: new Uint8Array(32).fill(7),
+        },
+      });
+      expect(f.appended.map((record) => hex(record.evidenceDigest))).toEqual([
+        hex(expected),
+      ]);
+      expect(f.opened.map(hex)).toEqual([hex(expected)]);
+    });
+
+    it('v6は証跡を要求せず、evidenceDigestを新書式のgoldenにする', async () => {
+      const f = fixture();
+      expect(await f.service().run(runId, manifest)).toEqual({
+        status: 'complete',
+      });
+      expect(f.evidenceCalls).toEqual([]);
+      // fingerprint 0x09×32、要素2／3がpresence=0の固定値（Python独立実装）。
+      const golden =
+        '8ea7b7301c1cd21bc1d744b1bd4f7d597480eaca478f570e3825af31caf6eda6';
+      expect(f.appended.map((record) => hex(record.evidenceDigest))).toEqual([
+        golden,
+      ]);
+      expect(f.opened.map(hex)).toEqual([golden]);
+    });
+
+    it('受理版11を注入した構成でもv6は証跡なしで開通する', async () => {
+      const f = fixture();
+      expect((await f.v11().run(runId, manifest)).status).toBe('complete');
+      expect(f.evidenceCalls).toEqual([]);
+    });
+
+    it.each([
+      ['既定構成（受理版6）のv11', 'default', v11Manifest],
+      ['受理版外の版', 'v11', { ...v11Manifest, schemaVersion: 12 }],
+      ['証跡Port未注入', 'no-port', v11Manifest],
+      ['必須Context集合が空', 'empty-contexts', v11Manifest],
+      ['v11でrecoveryPointIdが欠落', 'v11', { ...manifest, schemaVersion: 11 }],
+      [
+        'v11で不正なrecoveryPointId',
+        'v11',
+        { ...v11Manifest, recoveryPointId: 'x' },
+      ],
+      ['v6でrecoveryPointIdが存在', 'v11', { ...manifest, recoveryPointId }],
+    ] as const)(
+      '%sはisolate前に隔離する',
+      async (_name, mode, input: AuthenticationBackupManifest) => {
+        const f = fixture();
+        const service =
+          mode === 'default'
+            ? f.service()
+            : mode === 'no-port'
+              ? f.service(2000, { acceptedSchemaVersions: [6, 11] })
+              : mode === 'empty-contexts'
+                ? f.service(2000, {
+                    acceptedSchemaVersions: [6, 11],
+                    consistency: { ...f.consistency, requiredContexts: [] },
+                  })
+                : f.v11();
+        expect((await service.run(runId, input)).status).toBe('quarantined');
+        expect(f.events).not.toContain('isolate');
+        expect(f.events).toContain('quarantine');
+        expect(f.evidenceCalls).toEqual([]);
+      },
+    );
+
+    it.each([
+      ['証跡の不足', () => []],
+      [
+        '複数一致',
+        (_call: number, binding: AuthenticationConsistencyBinding) => [
+          evidenceFor(binding.recoveryPointId),
+          evidenceFor(binding.recoveryPointId),
+        ],
+      ],
+      ['recoveryPointIdの不一致', () => [evidenceFor(otherRecoveryPointId)]],
+      [
+        'Contextの欠落',
+        (_call: number, binding: AuthenticationConsistencyBinding) => [
+          { ...evidenceFor(binding.recoveryPointId), contexts: ['settlement'] },
+        ],
+      ],
+      [
+        '余分なContext',
+        (_call: number, binding: AuthenticationConsistencyBinding) => [
+          {
+            ...evidenceFor(binding.recoveryPointId),
+            contexts: ['group-management', 'settlement'],
+          },
+        ],
+      ],
+      [
+        'Source障害',
+        () => {
+          throw new Error('synthetic evidence failure');
+        },
+      ],
+    ] as const)(
+      'P1の%sでは削除再適用・破棄・epoch公開の前に隔離する',
+      async (_name, answer) => {
+        const f = fixture();
+        f.setEvidence(answer);
+        expect((await f.v11().run(runId, v11Manifest)).status).toBe(
+          'quarantined',
+        );
+        expect(f.evidenceCalls).toHaveLength(1);
+        for (const event of irreversible) expect(f.events).not.toContain(event);
+        expect(f.events).not.toContain('open');
+        expect(f.events).toContain('quarantine');
+      },
+    );
+
+    it.each([
+      [
+        'consistencyDigestの変化',
+        { consistencyDigest: new Uint8Array(32).fill(8) },
+      ],
+      ['Context集合の変化', { contexts: ['group-management', 'settlement'] }],
+      ['証跡の不足', null],
+    ] as const)(
+      'P2で%sを検出したらrecovery checkpointをappendせず隔離する',
+      async (_name, change) => {
+        const f = fixture();
+        f.setEvidence((call, binding) =>
+          call === 2
+            ? change === null
+              ? []
+              : [{ ...evidenceFor(binding.recoveryPointId), ...change }]
+            : [evidenceFor(binding.recoveryPointId)],
+        );
+        expect((await f.v11().run(runId, v11Manifest)).status).toBe(
+          'quarantined',
+        );
+        expect(f.evidenceCalls).toHaveLength(2);
+        expect(f.events).toContain('epoch');
+        expect(f.appended).toEqual([]);
+        expect(f.events).not.toContain('active');
+        expect(f.events).not.toContain('open');
+      },
+    );
+
+    it.each([
+      [
+        'consistencyDigestの変化',
+        { consistencyDigest: new Uint8Array(32).fill(8) },
+      ],
+      ['Context集合の変化', { contexts: ['group-management', 'settlement'] }],
+      ['証跡の不足', null],
+    ] as const)(
+      'P3で%sを検出したらappend済みでもactivate／openせず再閉鎖して隔離する',
+      async (_name, change) => {
+        const f = fixture();
+        f.setEvidence((call, binding) =>
+          call === 3
+            ? change === null
+              ? []
+              : [{ ...evidenceFor(binding.recoveryPointId), ...change }]
+            : [evidenceFor(binding.recoveryPointId)],
+        );
+        expect((await f.v11().run(runId, v11Manifest)).status).toBe(
+          'quarantined',
+        );
+        expect(f.appended).toHaveLength(1);
+        expect(f.events).not.toContain('active');
+        expect(f.events).not.toContain('open');
+        expect(f.events.filter((event) => event === 'close')).toHaveLength(2);
+      },
+    );
+
+    it('Ledger headが進んだら再試行でP1とP2を新しいhandleで再実行する', async () => {
+      const f = fixture();
+      let advanced = false;
+      const originalHead = f.ledger.head.bind(f.ledger);
+      let latestCalls = 0;
+      const originalLatest = f.ledger.latest.bind(f.ledger);
+      f.ledger.latest = (input) => {
+        latestCalls += 1;
+        return originalLatest(input);
+      };
+      // 2回目のlatest（append直前の再確認）だけ別headを返し、手順3へ戻す。
+      f.ledger.head = (head) => {
+        const value = originalHead(head);
+        if (latestCalls === 2 && !advanced) {
+          advanced = true;
+          return { sequence: value.sequence, hash: 'b'.repeat(64) };
+        }
+        return value;
+      };
+      expect((await f.v11().run(runId, v11Manifest)).status).toBe('complete');
+      expect(f.evidenceCalls).toHaveLength(5);
+      expect(f.appended).toHaveLength(1);
+    });
+
+    it('consumeで消費できないhandle（別binding）は証跡として受理しない', async () => {
+      const f = fixture();
+      const port = f.consistency.evidence;
+      const forged: AuthenticationConsistencyEvidencePort = {
+        verify: (binding) =>
+          port.verify({ ...binding, runId: otherRecoveryPointId }),
+        consume: (handle, binding) => port.consume(handle, binding),
+      };
+      const service = f.service(2000, {
+        acceptedSchemaVersions: [6, 11],
+        consistency: { ...f.consistency, evidence: forged },
+      });
+      expect((await service.run(runId, v11Manifest)).status).toBe(
+        'quarantined',
+      );
+      for (const event of irreversible) expect(f.events).not.toContain(event);
+    });
+
+    it('Portが別の復旧点や不正長のdigestを返しても受理しない', async () => {
+      for (const evidence of [
+        evidenceFor(otherRecoveryPointId),
+        {
+          ...evidenceFor(recoveryPointId),
+          consistencyDigest: new Uint8Array(31),
+        },
+      ]) {
+        const f = fixture();
+        const service = f.service(2000, {
+          acceptedSchemaVersions: [6, 11],
+          consistency: {
+            ...f.consistency,
+            evidence: {
+              verify: () =>
+                Promise.resolve(
+                  Object.freeze({}) as Awaited<
+                    ReturnType<AuthenticationConsistencyEvidencePort['verify']>
+                  >,
+                ),
+              consume: () => evidence,
+            },
+          },
+        });
+        expect((await service.run(runId, v11Manifest)).status).toBe(
+          'quarantined',
+        );
+        for (const event of irreversible) expect(f.events).not.toContain(event);
+      }
+    });
+  });
 });
+
+function evidenceFor(
+  recoveryPointId: string,
+): AuthenticationConsistencyEvidence {
+  return {
+    recoveryPointId,
+    contexts: ['group-management'],
+    consistencyDigest: new Uint8Array(32).fill(7),
+  };
+}
