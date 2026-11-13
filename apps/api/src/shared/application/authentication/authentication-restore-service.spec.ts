@@ -88,7 +88,18 @@ describe('認証Restoreの隔離と開通', () => {
           return fence;
         });
       },
-      verifyClosed: () => Promise.resolve(true),
+      verifyClosed: () => {
+        return Promise.resolve().then(() => {
+          events.push('verify-closed');
+          return true;
+        });
+      },
+      closedAt: () => {
+        return Promise.resolve().then((): number | null => {
+          events.push('closed-at');
+          return 1500;
+        });
+      },
       publishEpoch: () => {
         return Promise.resolve().then(() => {
           events.push('epoch');
@@ -290,7 +301,15 @@ describe('認証Restoreの隔離と開通', () => {
     expect(await f.service().run(runId, manifest)).toEqual({
       status: 'complete',
     });
-    expect(f.events.indexOf('close')).toBeLessThan(f.events.indexOf('isolate'));
+    expect(f.events.indexOf('close')).toBeLessThan(
+      f.events.indexOf('verify-closed'),
+    );
+    expect(f.events.indexOf('verify-closed')).toBeLessThan(
+      f.events.indexOf('closed-at'),
+    );
+    expect(f.events.indexOf('closed-at')).toBeLessThan(
+      f.events.indexOf('isolate'),
+    );
     expect(f.events.indexOf('discard')).toBeLessThan(f.events.indexOf('epoch'));
     expect(f.events.indexOf('epoch')).toBeLessThan(f.events.indexOf('migrate'));
     expect(f.events.indexOf('checkpoint-witness')).toBeLessThan(
@@ -332,6 +351,70 @@ describe('認証Restoreの隔離と開通', () => {
     if (fault === 'open') f.control.open = () => Promise.resolve(false);
     expect((await f.service().run(runId, manifest)).status).toBe('quarantined');
     expect(f.events).toContain('quarantine');
+  });
+  it.each([
+    ['記録なし（喪失）', null],
+    ['負値', -1],
+    ['非整数', 1500.5],
+    ['NaN', Number.NaN],
+    ['safe integer超過', Number.MAX_SAFE_INTEGER + 1],
+    ['文字列', '1500' as unknown as number],
+  ] as const)(
+    '閉鎖UTCの記録が%sなら初回扱いせず隔離を維持する',
+    async (_name, value) => {
+      const f = fixture();
+      let closes = 0;
+      const originalClose = f.control.close.bind(f.control);
+      f.control.close = async (...args) => {
+        closes += 1;
+        return originalClose(...args);
+      };
+      f.control.closedAt = () => Promise.resolve(value);
+      expect((await f.service().run(runId, manifest)).status).toBe(
+        'quarantined',
+      );
+      expect(closes).toBe(2);
+      expect(f.events).toContain('quarantine');
+      expect(f.events).not.toContain('isolate');
+      expect(f.events).not.toContain('epoch');
+      expect(f.events).not.toContain('open');
+    },
+  );
+  it.each([0, Number.MAX_SAFE_INTEGER])(
+    '閉鎖UTCの記録が受理境界%iなら既存どおり開通する',
+    async (value) => {
+      const f = fixture();
+      f.control.closedAt = () => Promise.resolve(value);
+      expect(await f.service().run(runId, manifest)).toEqual({
+        status: 'complete',
+      });
+      expect(f.events).toContain('isolate');
+      expect(f.events).not.toContain('quarantine');
+    },
+  );
+  it('外部閉鎖を確認できなければ閉鎖UTCの記録を読まず隔離する', async () => {
+    const f = fixture();
+    f.control.verifyClosed = () => Promise.resolve(false);
+    let reads = 0;
+    f.control.closedAt = () => Promise.resolve(++reads);
+    expect((await f.service().run(runId, manifest)).status).toBe('unavailable');
+    expect(reads).toBe(0);
+    expect(f.events).not.toContain('isolate');
+  });
+  it('閉鎖UTCの記録を取得できなければ隔離を維持する', async () => {
+    const f = fixture();
+    f.control.closedAt = () => Promise.reject(new Error('synthetic'));
+    expect((await f.service().run(runId, manifest)).status).toBe('quarantined');
+    expect(f.events).not.toContain('isolate');
+    expect(f.events).not.toContain('open');
+  });
+  it('閉鎖UTCの記録喪失で外部再閉鎖を確認できなければunavailableを返す', async () => {
+    const f = fixture();
+    f.control.closedAt = () => Promise.resolve(null);
+    let verifications = 0;
+    f.control.verifyClosed = () => Promise.resolve(++verifications === 1);
+    expect((await f.service().run(runId, manifest)).status).toBe('unavailable');
+    expect(f.events).not.toContain('isolate');
   });
   it('35日超Backupを処理せず開通しない', async () => {
     const f = fixture();

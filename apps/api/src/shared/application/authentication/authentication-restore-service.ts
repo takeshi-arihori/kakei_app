@@ -254,6 +254,14 @@ export const createAuthenticationRestoreService = (
         validRun = true;
         fence = await options.control.close(runId);
         if (!(await options.control.verifyClosed(fence))) return fail();
+        // 閉鎖済みで記録がない状態は初回でなく記録の喪失として扱い、起算し直さず隔離する。
+        const closedAt = await options.control.closedAt(fence);
+        if (
+          closedAt === null ||
+          !Number.isSafeInteger(closedAt) ||
+          closedAt < 0
+        )
+          return fail();
         assertAuthenticationBackupAge(manifest.createdAt, options.clock.now());
         const requirement = consistencyRequirement(manifest);
         const generationVersion = await options.database.isolate(

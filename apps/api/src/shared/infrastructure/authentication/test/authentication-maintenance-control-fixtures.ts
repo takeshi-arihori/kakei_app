@@ -26,12 +26,14 @@ const purposes = [
  * @param keys DBと独立して保持する合成全世代Registry。
  * @param ledger MAC/chainを実検証する合成外部Ledger。
  * @param actorStateKeyVersion 復旧後のActor MAC世代。旧世代を含めない移行も検証する。
- * @returns 同runの所有fence・公開実体・故障注入だけの合成制御。
+ * @param now 閉鎖UTCを採るControl側の合成時刻源。呼出し側の時刻を使わない。
+ * @returns 同runの所有fence・公開実体・閉鎖UTC記録・故障注入だけの合成制御。
  */
 export const syntheticAuthenticationRestoreControl = (
   keys: ReturnType<typeof syntheticAuthenticationManagedKeys>,
   ledger: ReturnType<typeof syntheticAuthenticationLedger>,
   actorStateKeyVersion = 'v1',
+  now: () => number = () => Date.now(),
 ) => {
   const fence = Object.freeze(
     Object.create(null),
@@ -44,6 +46,9 @@ export const syntheticAuthenticationRestoreControl = (
     baseVersion: number;
     restoringVersions: Set<number>;
   } | null = null;
+  // 閉鎖済みrunと閉鎖UTCを分けて持ち、記録の喪失を初回閉鎖と区別する。
+  const closedRuns = new Set<string>();
+  const closedAt = new Map<string, number>();
   const faults = new Set<string>();
   const events: string[] = [];
   const tick = (name: string) => {
@@ -125,6 +130,11 @@ export const syntheticAuthenticationRestoreControl = (
           publication = null;
           isolation = null;
         }
+        // 初回閉鎖だけが閉鎖と閉鎖UTC記録を同じ同期区間で行う。再実行は記録しない。
+        if (!closedRuns.has(runId)) {
+          closedRuns.add(runId);
+          closedAt.set(runId, now());
+        }
         owner = runId;
         closed = true;
         tick('after-close');
@@ -132,6 +142,12 @@ export const syntheticAuthenticationRestoreControl = (
       });
     },
     verifyClosed: (input) => Promise.resolve(owns(input)),
+    closedAt: (input) => {
+      return Promise.resolve().then(() => {
+        if (!owns(input)) throw new Error('synthetic fence');
+        return closedAt.get(owner!) ?? null;
+      });
+    },
     publishEpoch: (input, previousEpoch) => {
       return Promise.resolve().then(() => {
         tick('before-publish');
@@ -204,5 +220,11 @@ export const syntheticAuthenticationRestoreControl = (
     events,
     /** @returns 合成Trafficが閉じている場合だけtrue。 */
     isClosed: () => closed,
+    /** @returns runの記録済み閉鎖UTC。未記録/喪失はnull。 */
+    recordedClosedAt: (runId: string) => closedAt.get(runId) ?? null,
+    /** 閉鎖済みrunの閉鎖UTC記録だけを失わせるTest-only故障注入。 */
+    loseClosedAt: (runId: string) => {
+      closedAt.delete(runId);
+    },
   };
 };

@@ -22,7 +22,7 @@ Witness修復は真正な同headとFailure domainの運用証拠を確認する�
 
 ## Backup復旧の順序
 
-1. **DBを差し戻す前に**、DB外の所有run fenceでTraffic、新規認証、保守Writer、別Restoreを閉じる。進行中Writerをdrainし、拒否が実際に効くことを確認する。DBのactive flagやDB Backup内のfenceを信用しない。
+1. **DBを差し戻す前に**、DB外の所有run fenceでTraffic、新規認証、保守Writer、別Restoreを閉じる。進行中Writerをdrainし、拒否が実際に効くことを確認する。DBのactive flagやDB Backup内のfenceを信用しない。runの初回閉鎖は閉鎖UTCを外部制御側の時刻で同時にdurable記録し、再開や再閉鎖では上書きしない。閉鎖済みで記録がない場合は初回として起算し直さず、隔離を維持して原因を調査する。
 2. 信頼済みcatalogから35日以内のBackupを選ぶ。物理BackupとManifest（取得UTC、schema v6、key-state版、epoch、checkpoint sequence／hash）の真正性・対応をProviderで確認する。未来／35日超／欠損は拒否する。認証鍵、Nonce registry、Ledger、Witness、外部epoch制御をDB Backupと一緒に巻き戻さない。
 3. 閉鎖下でBackupを復元し、同run IDでRestore Coordinatorを呼ぶ。key_state排他Lockでdrainし、初回はManifestと現DB版の完全一致を確認する。固定Manifest／runへ許可した隔離版をDB外へdurable登録してからrestoringへ移行し、再試行はその進行記録を照合する。最新Checkpoint／Witnessの署名・challenge・chain・MAC・Manifest所属を検証する。
 4. 最初に、未完了Actor票をProvider所有の固定snapshot cursorで真の末尾まで全件照合する。1,000件超も打ち切らず、途中の集合／版変更・不正cursor・重複／欠落で隔離する。その後、最新の全Prepared／Completeを再適用する。DBだけのIntentを拒否し、削除Identity／Session／Alias、全鍵世代Destroyed、0-rowを確認する。削除済み鍵の復号失敗を理由に削除意思をskipしない。
@@ -40,7 +40,7 @@ Witness修復は真正な同headとFailure domainの運用証拠を確認する�
 | 認証専用鍵／Nonce Provider、IAM、独立ランダム用途鍵 | DB外のdurable単調割当、後退検知、rollback burn、旧鍵Seal停止、新世代、全scope／burn世代inventoryとclosure |
 | durable destruction ticket／proof／pending列挙 | Process再起動・応答喪失・部分破棄・inventory変更時の版束縛、固定snapshot全件列挙と所有cursor、別operation／scope証跡拒否 |
 | 認証Ledger／Checkpoint／独立Witnessとattestation Verifier | append-only、linearizable latest、expected head CAS、fresh challenge、独立Failure domain、rollback／fork検知と復旧訓練 |
-| DB外Restore fence／epoch publish／Traffic open | 所有run／revision CAS、Manifestと隔離進行版のDB外durable記録、他Writer停止とdrain、別Restore拒否、DB巻戻しで開通しない実配置 |
+| DB外Restore fence／epoch publish／Traffic open | 所有run／revision CAS、初回閉鎖と閉鎖UTC（外部制御側の時刻源）のatomicなDB外durable記録とその取得、Manifestと隔離進行版のDB外durable記録、他Writer停止とdrain、別Restore拒否、DB巻戻しで開通しない実配置 |
 | 信頼済みBackup catalog／Manifest | 物理Backupとの真正な対応、35日保持・削除、鍵と外部制御の別管理、定期復旧訓練 |
 | Scheduler／監視／運用入口 | 頻度・Batch・retry・権限・Alert配信・24時間未達時の封鎖・最古overdueの継続監視 |
 | 認証HTTP／画面・退会業務 | #218／#219の個別Ready、CSRF／Origin／Cookie／Rate limit／Proxy、未完了業務と過去参照の受付方針 |

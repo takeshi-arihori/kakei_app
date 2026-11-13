@@ -1773,7 +1773,14 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
         epoch: ids.epoch,
         checkpoint: ledger.evidence.head(await ledger.evidence.latest()),
       };
-      const control = syntheticAuthenticationRestoreControl(managed, ledger);
+      // 閉鎖UTCを採るたびに進むControl側時刻源。再記録すれば値が変わる。
+      let clockCalls = 0;
+      const control = syntheticAuthenticationRestoreControl(
+        managed,
+        ledger,
+        'v1',
+        () => now + ++clockCalls,
+      );
       const runId = randomUUID();
       let fired = false;
       const phases = new Map<number, string>();
@@ -1840,6 +1847,9 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
         manifest,
       );
       expect(result).toEqual({ status: 'complete' });
+      // 同runの再開・再閉鎖でも初回の閉鎖UTCを上書きしない。
+      expect(control.recordedClosedAt(runId)).toBe(now + 1);
+      expect(clockCalls).toBe(1);
       expect(await count('session_record')).toBe(0);
       expect(await count('login_attempt')).toBe(0);
       expect(await count('google_identity')).toBe(1);
@@ -1887,6 +1897,42 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       ).toEqual({ status: 'unavailable' });
     },
   );
+  it('閉鎖済みで閉鎖UTCの記録がないRestoreは初回扱いせず隔離を維持する', async () => {
+    await login();
+    const snapshot = await backup();
+    const manifest = {
+      createdAt: now,
+      schemaVersion: 6,
+      keyStateVersion: 1,
+      epoch: ids.epoch,
+      checkpoint: ledger.evidence.head(await ledger.evidence.latest()),
+    };
+    const control = syntheticAuthenticationRestoreControl(managed, ledger);
+    const runId = randomUUID();
+    await control.control.close(runId);
+    expect(control.recordedClosedAt(runId)).not.toBeNull();
+    await restoreBackup(snapshot, control);
+    control.loseClosedAt(runId);
+    const sessions = await count('session_record');
+    expect(sessions).toBeGreaterThan(0);
+    expect(
+      (await components(pool, control).restore.run(runId, manifest)).status,
+    ).toBe('quarantined');
+    expect(control.isClosed()).toBe(true);
+    // 再閉鎖で新しいUTCを記録し直さない。
+    expect(control.recordedClosedAt(runId)).toBeNull();
+    expect(control.events).not.toContain('before-publish');
+    expect(await count('session_record')).toBe(sessions);
+    const state = authenticationDatabaseRow(
+      (
+        await observer.query(
+          'SELECT status,epoch FROM authentication.key_state',
+        )
+      ).rows[0],
+    );
+    expect(state.status).not.toBe('active');
+    expect(state.epoch).toBe(ids.epoch);
+  });
   it.each([
     'delete',
     'audit',

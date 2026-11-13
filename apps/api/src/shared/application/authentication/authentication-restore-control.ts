@@ -74,6 +74,9 @@ export interface AuthenticationRestoreControl {
   ): Promise<AuthenticationRestorePublication | null>;
   /**
    * 全Trafficと、このrun以外の認証/保守Writerを閉じ単一Restore所有権を取得する。
+   * runの初回閉鎖は、fence閉鎖と閉鎖UTCのdurable記録を単一のatomic操作で行う。
+   * 閉鎖UTCはControl側の信頼できる時刻源で採り、呼出し側の時刻を使わない。
+   * 同runの再開や再実行（開通後の再閉鎖を含む）では記録を作成・更新しない。
    * @param runId 再試行で固定するServer生成UUIDv4。
    * @returns このrunへ束縛したopaque所有能力。
    */
@@ -84,6 +87,13 @@ export interface AuthenticationRestoreControl {
    * @returns 競合/解放/偽造がない閉鎖状態だけtrue。
    */
   verifyClosed(fence: AuthenticationRestoreFence): Promise<boolean>;
+  /**
+   * runの初回閉鎖で記録した閉鎖UTCを、DB Backupと独立した外部状態から取得する。
+   * @param fence 同じrunの有効な閉鎖能力。
+   * @returns 非負safe integerのUTC Unix epoch milliseconds。閉鎖済みで記録がない（喪失）場合はnull。
+   * @throws 別run/解放済み/偽造の能力、外部状態の取得障害。
+   */
+  closedAt(fence: AuthenticationRestoreFence): Promise<number | null>;
   /**
    * 旧epoch Writerをfenceし、新epochと新Cookie鍵世代をconditional公開する。
    * @param fence 同じrunの所有能力。
