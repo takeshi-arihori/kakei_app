@@ -59,7 +59,7 @@ APIのUnit Testと型検査、依存方向、既存Group／Settlement vectorを�
 
 ## 認証保守の証跡境界
 
-`authentication-ledger-evidence.ts`は専用256-bit HMAC、application／用途／namespace付きCanonical TLV、SHA256 chain、全page連続性、freshな両latest head／attestation、Prepared→Complete版とManifest hash所属を検証する。検証済みhead／intentは所有registryに登録し、構造だけの証拠を受理しない。retired MAC鍵は検証専用で新規appendを拒否する。全鍵破棄／外部fenceの保証は専用Port提供者が所有し、Test-only合成実装をProductionへimportしない。詳細と未実装本番Capabilityは[保守契約](../../../../../../docs/security/authentication-maintenance.md)と[Runbook](../../../../../../docs/operations/authentication-retention-restore.md)を参照する。
+`authentication-ledger-evidence.ts`は専用256-bit HMAC、application／用途／namespace付きCanonical TLV、SHA256 chain、全page連続性、freshな両latest head／attestation、Prepared→Complete版とManifest hash所属を検証する。検証済みhead／intentは所有registryに登録し、構造だけの証拠を受理しない。retired MAC鍵は検証専用で新規appendを拒否する。`authentication-backup-manifest.ts`はManifestの固定Fieldと`recoveryPointId`の版規則（版11以上で必須、未満では不在）を検査し、Ledger証跡とPG Restoreの`isolate`が共有する。受理版の判定は各呼出し側に残す。`authentication-consistency-evidence.ts`は、Restoreの全Context整合証跡を発行・単回消費するregistry（Compositionが他Contextの検証をSourceとして橋渡しする）と、`evidenceDigest`の固定書式のSHA-256を持つ。全鍵破棄／外部fenceの保証は専用Port提供者が所有し、Test-only合成実装をProductionへimportしない。詳細と未実装本番Capabilityは[保守契約](../../../../../../docs/security/authentication-maintenance.md)と[Runbook](../../../../../../docs/operations/authentication-retention-restore.md)を参照する。
 
 ## 招待コード専用暗号（#238）
 
