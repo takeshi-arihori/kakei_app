@@ -32,7 +32,7 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 
 新epochだけで既存Invitation/operationの一貫性を証明したとは扱わない。API全体と外部Providerの同時侵害、全DB整合rollbackをMACで防げると主張しない。Restore訓練と実配置のEvidenceなしにProduction wiringを許可しない。
 
-#278の採用設計（未実装）: 上の手順2／3／6／7の全Context整合は、[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）の契約で実装する。全Context共通の`recoveryPointId`、証跡Port（P1は削除再適用の前、P2はrecovery appendの前、P3は`activate`の前）、`evidenceDigest`への束縛、Manifestの受理版`{6, 11}`と構成確認、Restoreのコードticket（`dueAt`はrunの最初のfence閉鎖UTCで固定）、Providerが知らないコード行での停止、コード表の0-rowを含む。GM側のRestore検証は、Epic #202ではなくProduction Gate側の別の設計Taskとする。実装は#245の後続Taskで、合成の証跡で検証する。上の手順と受入Evidenceは緩和しない。
+#278の採用設計（#282で証跡Port、`recoveryPointId`、P1〜P3、`evidenceDigest`への束縛を実装。受理版は6のままで、コード破棄と受理版の拡張は未実装）: 上の手順2／3／6／7の全Context整合は、[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）の契約で実装する。全Context共通の`recoveryPointId`、証跡Port（P1は削除再適用の前、P2はrecovery appendの前、P3は`activate`の前）、`evidenceDigest`への束縛、Manifestの受理版`{6, 11}`と構成確認、Restoreのコードticket（`dueAt`はrunの最初のfence閉鎖UTCで固定）、Providerが知らないコード行での停止、コード表の0-rowを含む。GM側のRestore検証は、Epic #202ではなくProduction Gate側の別の設計Taskとする。実装は#245の後続Taskで、合成の証跡で検証する。上の手順と受入Evidenceは緩和しない。
 
 ## 受入Evidenceと停止条件
 

@@ -75,6 +75,7 @@ export const syntheticAuthenticationRestoreControl = (
           manifest.epoch,
           manifest.checkpoint.sequence,
           manifest.checkpoint.hash,
+          manifest.recoveryPointId ?? null,
         ]);
         if (isolation === null) {
           if (

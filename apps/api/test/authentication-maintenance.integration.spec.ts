@@ -17,6 +17,7 @@ import {
   importAuthenticationMacKey,
 } from '../src/shared/infrastructure/authentication/authentication-digests.js';
 import { createAuthenticationRecordCodec } from '../src/shared/infrastructure/authentication/authentication-record-codec.js';
+import { createAuthenticationRestoreEvidenceDigest } from '../src/shared/infrastructure/authentication/authentication-consistency-evidence.js';
 import { createPostgresAuthenticationCleanup } from '../src/shared/infrastructure/authentication/postgres/postgres-authentication-cleanup.js';
 import { createPostgresAuthenticationDeletion } from '../src/shared/infrastructure/authentication/postgres/postgres-authentication-deletion.js';
 import { createPostgresAuthenticationRestore } from '../src/shared/infrastructure/authentication/postgres/postgres-authentication-restore.js';
@@ -343,6 +344,9 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       },
     };
   };
+  // migrateIdentityが返したfingerprint。recovery entryの新書式evidenceDigestと照合する。
+  const migratedFingerprints: Uint8Array[] = [];
+  const evidenceDigest = createAuthenticationRestoreEvidenceDigest();
   const components = (
     connections: AuthenticationConnectionPool = pool,
     control = syntheticAuthenticationRestoreControl(managed, ledger),
@@ -371,6 +375,12 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       ledger: ledger.evidence,
       control: control.control,
     });
+    const migrateIdentity = dbRestore.migrateIdentity.bind(dbRestore);
+    dbRestore.migrateIdentity = async (...args) => {
+      const fingerprint = await migrateIdentity(...args);
+      migratedFingerprints.push(Uint8Array.from(fingerprint));
+      return fingerprint;
+    };
     const signals: unknown[] = [];
     const monitor = {
       record: (event: unknown) => {
@@ -405,6 +415,7 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
         keys: destruction,
         clock,
         monitor,
+        evidenceDigest,
       }),
     };
   };
@@ -1110,6 +1121,35 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       ).status,
     ).toBe('active');
   });
+  it('受理版6のPG isolateはrecoveryPointIdなしを受理し、ありを拒否する', async () => {
+    const c = components();
+    const fence = await c.control.control.close(randomUUID());
+    const manifest = {
+      createdAt: now,
+      schemaVersion: 6,
+      keyStateVersion: 1,
+      epoch: ids.epoch,
+      checkpoint: { sequence: 0, hash: '0'.repeat(64) },
+    };
+    const status = async () =>
+      authenticationDatabaseRow(
+        (await observer.query('SELECT status FROM authentication.key_state'))
+          .rows[0],
+      ).status;
+    for (const rejected of [
+      { ...manifest, recoveryPointId: '44444444-4444-4444-8444-444444444444' },
+      {
+        ...manifest,
+        schemaVersion: 11,
+        recoveryPointId: '44444444-4444-4444-8444-444444444444',
+      },
+    ]) {
+      await expect(c.dbRestore.isolate(fence, rejected)).rejects.toThrow();
+      expect(await status()).toBe('active');
+    }
+    expect(await c.dbRestore.isolate(fence, manifest)).toBe(2);
+    expect(await status()).toBe('restoring');
+  });
   it('Prepared前の孤児ticketから再受付せず元operationを隔離する', async () => {
     const target = await login();
     ledger.faults.add('before-actor-deletion-prepared-checkpoint');
@@ -1293,6 +1333,26 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
         result = await components(pool, control).restore.run(runId, manifest);
       }
       expect(result).toEqual({ status: 'complete' });
+      // v6回帰: evidenceDigestはfingerprintだけでなく、ADR #278の書式（要素2／3はpresence=0）で覆う。
+      const recovery = ledger.entries.at(-1)!.record;
+      expect(recovery.kind).toBe('recovery');
+      expect(
+        recovery.kind === 'recovery' &&
+          Buffer.from(recovery.evidenceDigest).toString('hex'),
+      ).toBe(
+        Buffer.from(
+          evidenceDigest.digest({
+            fingerprint: migratedFingerprints.at(-1)!,
+            codeClosure: null,
+            consistency: null,
+          }),
+        ).toString('hex'),
+      );
+      expect(
+        Buffer.from(
+          recovery.kind === 'recovery' ? recovery.evidenceDigest : [],
+        ).toString('hex'),
+      ).not.toBe(Buffer.from(migratedFingerprints.at(-1)!).toString('hex'));
       expect(await count('session_record')).toBe(0);
       expect(await count('login_attempt')).toBe(0);
       const targetRow = authenticationDatabaseRow(

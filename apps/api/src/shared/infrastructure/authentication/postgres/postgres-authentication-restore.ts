@@ -20,6 +20,7 @@ import {
   authenticationObject,
   authenticationUuid,
 } from '../canonical-authentication.js';
+import { authenticationManifestObject } from '../authentication-backup-manifest.js';
 import { authenticationBytesEqual } from '../authentication-digests.js';
 import { insertAuthenticationAudit } from './authentication-audit.js';
 import {
@@ -154,13 +155,8 @@ export const createPostgresAuthenticationRestore = (
     async isolate(fence, manifest) {
       completions.delete(fence);
       await closed(fence);
-      const m = authenticationObject(manifest, [
-        'createdAt',
-        'schemaVersion',
-        'keyStateVersion',
-        'epoch',
-        'checkpoint',
-      ]);
+      // recoveryPointIdは版規則だけ検査する。受理版は6のままで、v6はFieldを持たない。
+      const m = authenticationManifestObject(manifest);
       if (m.schemaVersion !== 6) return fail();
       const oldEpoch = authenticationUuid(m.epoch);
       const backupVersion = authenticationDatabaseInteger(m.keyStateVersion, 1);
