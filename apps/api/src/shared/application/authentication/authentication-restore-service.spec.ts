@@ -33,6 +33,8 @@ import type {
   AuthenticationRestorePublication,
 } from './authentication-restore-control.js';
 import { createAuthenticationRestoreService } from './authentication-restore-service.js';
+import { RecipientCodeUnavailable } from './recipient-code-record.js';
+import type { RecipientCodeRestoreDiscard } from './recipient-code-restore-discard.js';
 
 const runId = '11111111-1111-4111-8111-111111111111';
 const oldEpoch = '22222222-2222-4222-8222-222222222222';
@@ -1077,6 +1079,170 @@ describe('認証Restoreの隔離と開通', () => {
         );
         for (const event of irreversible) expect(f.events).not.toContain(event);
       }
+    });
+  });
+
+  describe('全招待コードの破棄への参加（コード参加の構成）', () => {
+    const closures = [
+      {
+        codeId: '77777777-7777-4777-8777-777777777777',
+        operationId: runId,
+        inventoryRevision: 'rev-1',
+        evidenceReference: 'evidence/a',
+      },
+    ];
+    const v11Manifest: AuthenticationBackupManifest = {
+      ...manifest,
+      schemaVersion: 11,
+      recoveryPointId: '44444444-4444-4444-8444-444444444444',
+    };
+    const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex');
+    const participating = () => {
+      const f = fixture();
+      const calls: Parameters<RecipientCodeRestoreDiscard['discard']>[0][] = [];
+      let answer: () => Promise<readonly (typeof closures)[number][]> = () =>
+        Promise.resolve(closures);
+      const recipientCodes: RecipientCodeRestoreDiscard = {
+        discard: (input) => {
+          calls.push(input);
+          f.events.push('codes');
+          return answer();
+        },
+      };
+      return {
+        ...f,
+        calls,
+        fail: () => {
+          answer = () => Promise.reject(new RecipientCodeUnavailable());
+        },
+        codes: (now = 2000) => f.service(now, { recipientCodes }),
+        codesV11: (now = 2000) =>
+          f.service(now, {
+            acceptedSchemaVersions: [6, 11],
+            consistency: f.consistency,
+            recipientCodes,
+          }),
+      };
+    };
+
+    it('Credential破棄の後、epoch公開の前に、同runのfenceと初回閉鎖UTCで破棄する', async () => {
+      const f = participating();
+      expect(await f.codes().run(runId, manifest)).toEqual({
+        status: 'complete',
+      });
+      expect(f.events.indexOf('discard')).toBeLessThan(
+        f.events.indexOf('codes'),
+      );
+      expect(f.events.indexOf('codes')).toBeLessThan(f.events.indexOf('epoch'));
+      expect(f.calls).toHaveLength(1);
+      expect(f.calls[0].runId).toBe(runId);
+      expect(f.calls[0].closedAt).toBe(1500);
+      expect(f.calls[0].fence).toBeDefined();
+    });
+
+    it('closure集合のdigestをevidenceDigestの要素2へ入れて開通する', async () => {
+      const f = participating();
+      expect((await f.codes().run(runId, manifest)).status).toBe('complete');
+      const digest = createAuthenticationRestoreEvidenceDigest();
+      const expected = digest.digest({
+        fingerprint: new Uint8Array(32).fill(9),
+        codeClosure: digest.codeClosure(closures),
+        consistency: null,
+      });
+      expect(f.appended.map((record) => hex(record.evidenceDigest))).toEqual([
+        hex(expected),
+      ]);
+      expect(f.opened.map(hex)).toEqual([hex(expected)]);
+      // コード不参加のgolden（要素2がpresence=0）とは異なる値になる。
+      expect(hex(expected)).not.toBe(
+        '8ea7b7301c1cd21bc1d744b1bd4f7d597480eaca478f570e3825af31caf6eda6',
+      );
+    });
+
+    it('コードの破棄が成立しなければepochを公開せず隔離する', async () => {
+      const f = participating();
+      f.fail();
+      expect((await f.codes().run(runId, manifest)).status).toBe('quarantined');
+      for (const event of ['epoch', 'migrate', 'open'])
+        expect(f.events).not.toContain(event);
+      expect(f.events).toContain('quarantine');
+    });
+
+    it('証跡P1が成立しなければコードの登録・破棄に進まない', async () => {
+      const f = participating();
+      f.setEvidence(() => []);
+      expect((await f.codesV11().run(runId, v11Manifest)).status).toBe(
+        'quarantined',
+      );
+      expect(f.calls).toEqual([]);
+    });
+
+    it('証跡が揃えばP1の後にコードを破棄し、証跡とcode closureの両方をdigestへ入れる', async () => {
+      const f = participating();
+      expect((await f.codesV11().run(runId, v11Manifest)).status).toBe(
+        'complete',
+      );
+      expect(f.events.indexOf('evidence')).toBeLessThan(
+        f.events.indexOf('codes'),
+      );
+      const digest = createAuthenticationRestoreEvidenceDigest();
+      expect(f.opened.map(hex)).toEqual([
+        hex(
+          digest.digest({
+            fingerprint: new Uint8Array(32).fill(9),
+            codeClosure: digest.codeClosure(closures),
+            consistency: evidenceFor(v11Manifest.recoveryPointId!),
+          }),
+        ),
+      ]);
+    });
+
+    it.each([
+      ['Restore ServiceのClockより1ms未来', 2001],
+      ['大きく未来', Number.MAX_SAFE_INTEGER],
+    ])(
+      '初回閉鎖UTCが%sなら、起点に使わずisolate前に隔離する',
+      async (_name, value) => {
+        const f = participating();
+        f.control.closedAt = () => Promise.resolve(value);
+        expect((await f.codes(2000).run(runId, manifest)).status).toBe(
+          'quarantined',
+        );
+        expect(f.events).not.toContain('isolate');
+        expect(f.calls).toEqual([]);
+      },
+    );
+
+    it('初回閉鎖UTCが現在時刻と等しければ受理する', async () => {
+      const f = participating();
+      f.control.closedAt = () => Promise.resolve(2000);
+      expect((await f.codes(2000).run(runId, manifest)).status).toBe(
+        'complete',
+      );
+      expect(f.calls[0].closedAt).toBe(2000);
+    });
+
+    it('Ledger headが進んだ再試行でも、同じ閉鎖UTCで破棄をやり直してから開通する', async () => {
+      const f = participating();
+      let refreshes = 0;
+      const latest = f.ledger.latest.bind(f.ledger);
+      const head = f.ledger.head.bind(f.ledger);
+      // 1回目のappend直前の再確認だけheadを進め、手順3からやり直させる。
+      f.ledger.latest = (input) => {
+        refreshes += 1;
+        return latest(input);
+      };
+      f.ledger.head = (verified) => {
+        const value = head(verified);
+        return refreshes === 2
+          ? { sequence: value.sequence, hash: 'f'.repeat(64) }
+          : value;
+      };
+      expect((await f.codes().run(runId, manifest)).status).toBe('complete');
+      expect(f.calls.length).toBeGreaterThanOrEqual(2);
+      expect(new Set(f.calls.map((call) => call.closedAt))).toEqual(
+        new Set([1500]),
+      );
     });
   });
 });

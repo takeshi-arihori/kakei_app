@@ -27,19 +27,27 @@ const cell = (value: unknown): string | null => {
   throw new AuthenticationCryptoUnavailable();
 };
 
+/** コード参加の構成だけが加えるコード表。不参加では照会せず、v6のgoldenを変えない。 */
+const recipientCodeQuery =
+  'SELECT code_id,recipient_actor_id,record_version FROM authentication.recipient_code ORDER BY code_id';
+
 /**
  * 同一Lock下の固定Inventory全体をFingerprintへ束縛する。復号Payloadを含めない。
  * @param connection key_state排他Lockを保持する復旧Transaction。
+ * @param recipientCodes コード参加の構成ならtrue。コード表を末尾に加える。
  * @returns private completionとCheckpointへ束縛する32-byte値。
  * @throws AuthenticationCryptoUnavailable SQL/型不正。Auditの追加はFingerprintを変えない。
  */
 export const authenticationRestoreFingerprint = async (
   connection: AuthenticationQueryConnection,
+  recipientCodes = false,
 ): Promise<Uint8Array> => {
   const digest = createHash('sha256').update(
     encodeAuthenticationTlv(['authentication-restore-evidence/v1']),
   );
-  for (const query of queries) {
+  for (const query of recipientCodes
+    ? [...queries, recipientCodeQuery]
+    : queries) {
     digest.update(encodeAuthenticationTlv([query]));
     const result = await connection.query(query);
     for (const value of result.rows as unknown[]) {

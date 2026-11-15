@@ -40,7 +40,7 @@ fresh challengeに束縛されたCheckpoint／Witnessのattestationを別Verifie
 
 OperatorがTrafficと他の認証／保守Writerを外部fenceで閉じてからBackupを戻す。復旧DBのactive flagを開通根拠にしない。Manifestは信頼済みBackup catalogから渡すMetadata契約であり、本Adapterは物理Backupの署名・真正性を検証するProviderではない。未来・不正・35日超を拒否し、35日等値は対象とする。
 
-外部制御は、runの初回`close`でfence閉鎖と閉鎖UTCのdurable記録を単一のatomic操作で行う。閉鎖UTCは外部制御側の信頼できる時刻源で採り、呼出し側の時刻を使わない。同runの再開や`close`の再実行（開通後の再閉鎖を含む）では記録を作成・更新しない。Restoreは`close`と`verifyClosed`の直後、DB隔離の前に`closedAt`で記録を取得し、閉鎖済みで記録がない（喪失）、不正値、取得失敗のいずれかなら初回とみなさず、DBを変更せずに同runで再閉鎖して隔離する。記録の`dueAt`の起点としての利用は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)の論点7に従い、コード破棄の実装で行う。
+外部制御は、runの初回`close`でfence閉鎖と閉鎖UTCのdurable記録を単一のatomic操作で行う。閉鎖UTCは外部制御側の信頼できる時刻源で採り、呼出し側の時刻を使わない。同runの再開や`close`の再実行（開通後の再閉鎖を含む）では記録を作成・更新しない。Restoreは`close`と`verifyClosed`の直後、DB隔離の前に`closedAt`で記録を取得し、閉鎖済みで記録がない（喪失）、不正値、取得失敗のいずれかなら初回とみなさず、DBを変更せずに同runで再閉鎖して隔離する。記録は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)の論点7に従い、コード参加のRestoreで`dueAt`の起点に使う（#284）。その構成では、記録がRestoreのClockより未来なら`isolate`の前に隔離する。
 
 外部所有fence確認 → Manifestの全Metadata検査／key_state排他Lock／Writer drain／restoring CAS → 最新Ledger検証・適用と未完了削除再開 → 全Attempt／Sessionのdurable ticket登録・全行／全DEK除去 → 外部revision CASで新epoch公開・再確認 → 保持Identityの旧鍵Seal停止／独立新DEK・Nonce世代で再Seal → 全required Alias再構築、重複・破損・Actor MAC検査 → 最新head再検証 → recovery checkpoint条件付きappend／Witness一致 → DB active CAS → 同run／epoch／revision／headへの外部Traffic open CASの順とする。
 
@@ -52,7 +52,9 @@ OperatorがTrafficと他の認証／保守Writerを外部fenceで閉じてから
 
 招待コードと全Context整合証跡への拡張は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）が定める。Manifestへの`recoveryPointId`の追加、受理版のallowlist、証跡の検証時点（P1〜P3）、`evidenceDigest`の範囲、コード表の0-rowを`activate`の前提へ加えることを含む。
 
-#282で実装した全Context整合証跡の要求: 認証側consumer Port（`authentication-consistency-evidence.ts`）は`runId`、`recoveryPointId`、検証済みLedger head（sequence、hash）だけを入力に、証跡Adapterのregistryが発行する不透明handleを受け取り、同じbindingで単回消費する。registryは偽造、別registry、別binding、再利用、catalog一致の0件／複数件、`recoveryPointId`の不一致を拒否し、不一致のbindingを渡されたhandleも失効させる。`consistencyDigest`は各Contextの検証済み状態（復旧点に束縛したhead revisionを含む）を覆う値と定め、P2／P3の不変確認はこの値、`recoveryPointId`、Context集合の一致で行う。各handleは発行時のLedger headへ束縛する。P2はP1と同じLedger headであることも要求し、このrunの削除Complete appendなどでheadが進んでいれば、隔離せずにActor票照合とP1から再試行する（既存の最大3回）。P3はrecovery append後のheadを使う。必須Context集合（現在は`group-management`）と完全一致しない証跡、Portの未注入、受理版外のManifestは隔離する。受理版は6のままで、コードの破棄、`activate`の0-row、構成確認は後続Task（#284、#285）が入れる。本節のRestore順序と開通条件はそれ以外は現行のままである。
+#282で実装した全Context整合証跡の要求: 認証側consumer Port（`authentication-consistency-evidence.ts`）は`runId`、`recoveryPointId`、検証済みLedger head（sequence、hash）だけを入力に、証跡Adapterのregistryが発行する不透明handleを受け取り、同じbindingで単回消費する。registryは偽造、別registry、別binding、再利用、catalog一致の0件／複数件、`recoveryPointId`の不一致を拒否し、不一致のbindingを渡されたhandleも失効させる。`consistencyDigest`は各Contextの検証済み状態（復旧点に束縛したhead revisionを含む）を覆う値と定め、P2／P3の不変確認はこの値、`recoveryPointId`、Context集合の一致で行う。各handleは発行時のLedger headへ束縛する。P2はP1と同じLedger headであることも要求し、このrunの削除Complete appendなどでheadが進んでいれば、隔離せずにActor票照合とP1から再試行する（既存の最大3回）。P3はrecovery append後のheadを使う。必須Context集合（現在は`group-management`）と完全一致しない証跡、Portの未注入、受理版外のManifestは隔離する。受理版は6のままで、構成確認は後続Task（#285）が入れる。本節のRestore順序と開通条件はそれ以外は現行のままである。
+
+#284で実装した全招待コードの破棄への参加: Restore Serviceの任意設定`recipientCodes`で参加し、未設定（既定値）では順序・fingerprint・`evidenceDigest`を変えない。参加時は、P1の後、Attempt／Session破棄の後、epoch公開の前に、Restore runを所有operationとするコードticketを`dueAt=closedAt`で登録・採用し、全世代closureとコードの0-row、再snapshotの一致、コード表全体の0-rowを確認する。Providerが知らない行や列挙の不完全では隔離する。closure集合のdigestを`evidenceDigest`の要素2へ入れる。Restore DB Adapterは`recipientCodes: true`でfingerprintへコード表を加え、`activate`でコード表の0-rowを要求する。手順と停止条件は[運用設計の#284](../operations/invitation-code-retention-restore.md#284-restoreへのコード参加)に従う。
 
 ## Done CriteriaとEvidence
 

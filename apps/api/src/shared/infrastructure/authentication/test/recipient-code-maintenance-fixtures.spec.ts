@@ -278,6 +278,53 @@ describe('ticketの所有・採用・window（ADR D3）', () => {
     expect(await guard.find(code(1))).toEqual(ticket);
   });
 
+  it('Restoreのfence閉鎖UTCを根拠とする起算だけが、expiresAtより後のdueAtで登録できる', async () => {
+    const { guard, allocate } = setup();
+    await allocate(1);
+    await allocate(2);
+    const restore = uuid(2, 3);
+    const created = await guard.prepare({
+      scope: scopeOf(1),
+      operationId: restore,
+      window: windowAt(expiresAt + 1),
+      expected: null,
+      basis: 'restore-fence',
+    });
+    expect(created.status).toBe('created');
+    expect(created.ticket.window.dueAt).toBe(expiresAt + 1);
+    // 既存ticketの採用でも、根拠の明示がない延長は受理しない。
+    const owned = await guard.prepare({
+      scope: scopeOf(2),
+      operationId: cleanup,
+      window: windowAt(expiresAt),
+      expected: null,
+    });
+    const adopted = await guard.prepare({
+      scope: scopeOf(2),
+      operationId: restore,
+      window: windowAt(expiresAt + 1),
+      expected: owned.ticket,
+      basis: 'restore-fence',
+    });
+    expect(adopted.ticket.window.dueAt).toBe(expiresAt);
+  });
+
+  it('未知の起算根拠はProviderへ渡さず拒否する', async () => {
+    const prepareSpy = vi.fn<RecipientCodeMaintenancePort['prepare']>();
+    const { guard, allocate } = setup({ maintenance: { prepare: prepareSpy } });
+    await allocate(1);
+    await unavailable(() =>
+      guard.prepare({
+        scope: scopeOf(1),
+        operationId: cleanup,
+        window: windowAt(expiresAt + 1),
+        expected: null,
+        basis: 'cleanup' as 'restore-fence',
+      }),
+    );
+    expect(prepareSpy).not.toHaveBeenCalled();
+  });
+
   it('未知scopeと別Actorのscopeにはticketを作らない', async () => {
     const { guard, allocate, prepare } = setup();
     await allocate(1);
@@ -345,7 +392,13 @@ describe('完了済みticketのclosure再検証', () => {
   it('所有operationのclosureを冪等に再検証し、偽closureを拒否する', async () => {
     const { f, guard, ticket } = await completed();
     const done = await guard.complete(ticket, await guard.close(ticket));
-    await expect(guard.verifyComplete(done)).resolves.toBeUndefined();
+    // 再検証したclosureを、所有operationと全世代版へ束縛して返す（Restoreがdigestへ入れる）。
+    await expect(guard.verifyComplete(done)).resolves.toEqual({
+      codeId: code(1),
+      operationId: cleanup,
+      inventoryRevision: done.inventoryRevision,
+      evidenceReference: 'evidence/' + code(1),
+    });
     const forged = guardRecipientCodeMaintenance({
       maintenance: f.maintenance,
       lifecycle: {

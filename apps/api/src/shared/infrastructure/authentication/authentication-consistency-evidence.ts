@@ -18,6 +18,15 @@ const fail = (): never => {
 };
 const encoder = new TextEncoder();
 const tag = encoder.encode('restore-evidence/v1');
+const closureTag = encoder.encode('restore-code-closure/v1');
+/** closureの全世代版と証跡参照。guardと同じく空・前後空白・255文字超を拒否する。 */
+const closureText = (value: unknown): Uint8Array =>
+  typeof value === 'string' &&
+  value.length > 0 &&
+  value.length <= 255 &&
+  value.trim() === value
+    ? encoder.encode(value)
+    : fail();
 const contextName = /^[a-z][a-z0-9-]{0,62}$/;
 
 const digest32 = (value: unknown): Uint8Array =>
@@ -127,6 +136,45 @@ export const createAuthenticationRestoreEvidenceDigest =
       }
       const hash = createHash('sha256');
       for (const part of parts) hash.update(part);
+      return Uint8Array.from(hash.digest());
+    },
+    codeClosure(closures) {
+      if (!Array.isArray(closures) || closures.length > 0xffffffff)
+        return fail();
+      const entries = closures.map((value: unknown) => {
+        const r = authenticationObject(value, [
+          'codeId',
+          'operationId',
+          'inventoryRevision',
+          'evidenceReference',
+        ]);
+        return {
+          codeId: uuidBytes(r.codeId),
+          operationId: uuidBytes(r.operationId),
+          inventoryRevision: closureText(r.inventoryRevision),
+          evidenceReference: closureText(r.evidenceReference),
+        };
+      });
+      entries.sort((left, right) => compareBytes(left.codeId, right.codeId));
+      for (let index = 1; index < entries.length; index += 1)
+        if (
+          compareBytes(entries[index - 1].codeId, entries[index].codeId) === 0
+        )
+          return fail();
+      const count = new Uint8Array(4);
+      new DataView(count.buffer).setUint32(0, entries.length);
+      const hash = createHash('sha256')
+        .update(uint16(closureTag.length))
+        .update(closureTag)
+        .update(count);
+      for (const entry of entries)
+        hash
+          .update(entry.codeId)
+          .update(entry.operationId)
+          .update(uint16(entry.inventoryRevision.length))
+          .update(entry.inventoryRevision)
+          .update(uint16(entry.evidenceReference.length))
+          .update(entry.evidenceReference);
       return Uint8Array.from(hash.digest());
     },
   });

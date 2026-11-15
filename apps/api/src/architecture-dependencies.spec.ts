@@ -452,7 +452,7 @@ describe('API architecture dependencies', () => {
       (path) =>
         path !== keyState &&
         path !== retention &&
-        /readRecipientCodeMaintenanceKeyState|recipientCodeRetentionWindow|RecipientCodeMaintenancePort|guardRecipientCodeMaintenance/.test(
+        /readRecipientCodeMaintenanceKeyState|readRecipientCodeRestoreKeyState|recipientCodeRetentionWindow|RecipientCodeMaintenancePort|guardRecipientCodeMaintenance|createRecipientCodeRestoreDiscard|createPostgresRecipientCodeRestore/.test(
           readFileSync(path, 'utf8'),
         ),
     );

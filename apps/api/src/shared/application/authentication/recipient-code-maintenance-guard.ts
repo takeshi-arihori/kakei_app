@@ -100,9 +100,12 @@ export interface GuardedRecipientCodeMaintenance {
   /**
    * 完了済みticketの全世代closureを、所有operationへ束縛して再検証する。破棄済みなら冪等に応答が戻る。
    * @param ticket 完了済みticket。採用側の確認でもoperationIdは所有operationを使う。
+   * @returns 所有operationへ束縛した検証済みclosure。
    * @throws RecipientCodeUnavailable 未完了、全世代版の不一致、偽closure、部分世代、Provider障害。
    */
-  verifyComplete(ticket: RecipientCodeDestructionTicket): Promise<void>;
+  verifyComplete(
+    ticket: RecipientCodeDestructionTicket,
+  ): Promise<RecipientCodeMacKeyClosure>;
   /**
    * DB 0-rowを確認した呼出し側がticketを完了する。closureは完了直前にも再検証する。
    * @param ticket 未完了の最新版ticket。
@@ -445,7 +448,15 @@ export const guardRecipientCodeMaintenance = (options: {
         const operationId = uuid(input.operationId);
         const window = windowOf(input.window);
         if (expected !== null && expected.codeId !== scope.codeId) reject();
-        const request = { scope, operationId, window, expected };
+        if (input.basis !== undefined && input.basis !== 'restore-fence')
+          reject();
+        const request = {
+          scope,
+          operationId,
+          window,
+          expected,
+          ...(input.basis === undefined ? {} : { basis: input.basis }),
+        };
         const fields = record(await maintenance.prepare(request), [
           'status',
           'ticket',
@@ -522,10 +533,9 @@ export const guardRecipientCodeMaintenance = (options: {
       failClosed(async () => {
         const current = ticketOf(ticket);
         if (current.state !== 'complete') reject();
-        await assertClosed(
-          current,
-          closureOf(await closeOwned(current), current),
-        );
+        const closure = closureOf(await closeOwned(current), current);
+        await assertClosed(current, closure);
+        return closure;
       }),
     complete: (ticket, closure) =>
       failClosed(async () => {

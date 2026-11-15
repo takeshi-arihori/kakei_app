@@ -216,7 +216,7 @@ export const syntheticRecipientCodeManagedKeys = () => {
           nextCursor,
         };
       }),
-    prepare: ({ scope, operationId, window, expected }) =>
+    prepare: ({ scope, operationId, window, expected, basis }) =>
       Promise.resolve().then(() => {
         tick('before-prepare');
         const stored = scopes.get(scope.codeId);
@@ -224,7 +224,7 @@ export const syntheticRecipientCodeManagedKeys = () => {
         if (
           stored === undefined ||
           stored.recipientActorId !== scope.recipientActorId ||
-          window.dueAt > stored.expiresAt ||
+          (basis !== 'restore-fence' && window.dueAt > stored.expiresAt) ||
           current?.version !== expected?.version
         )
           throw new Error('synthetic ticket mismatch');

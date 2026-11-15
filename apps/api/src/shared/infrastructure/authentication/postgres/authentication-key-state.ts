@@ -331,6 +331,22 @@ export const readRecipientCodeMaintenanceKeyState = (
   );
 
 /**
+ * Restore専用のコード破棄Adapterだけが使う。復旧したDBのコード用途の世代を、
+ * あってもなくても受理する（コード鍵は使わず、期限・MACに依らず行を除去するため）。
+ * Restoreの他の操作は`readAuthenticationRestoreKeyState`のままコード用途を拒否する（停止契約）。
+ * @param connection 復旧処理が所有するTransaction接続。
+ * @returns restoringに限定した共有Lock付きの既存認証世代。コード世代は含まない。
+ * @throws AuthenticationCryptoUnavailable restoring以外、未知用途、不正State、鍵世代不足。
+ */
+export const readRecipientCodeRestoreKeyState = (
+  connection: AuthenticationQueryConnection,
+): Promise<AuthenticationStoreKeyState> =>
+  readState(connection, ['restoring'], [], true, [
+    'recipient-code-lookup',
+    'recipient-code-state-mac',
+  ]);
+
+/**
  * 外部fenceを検証した復旧専用Adapterだけが使う。
  * @param connection 復旧処理が所有するTransaction接続。
  * @returns restoringに限定した共有Lock付き世代。

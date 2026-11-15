@@ -92,15 +92,21 @@ export interface RecipientCodeMaintenancePort {
   }): Promise<RecipientCodeScopePage>;
   /**
    * ticketを作成または採用する。findの結果をexpectedへ渡す、版を上げるCAS。
-   * @param input 既知scope、要求operation、起算済みwindow、読取時点のticket。
+   * @param input 既知scope、要求operation、起算済みwindow、読取時点のticket、起算の根拠。
    * @returns CAS適用後のticketと、作成・再実行・採用・充足の区別。
-   * @throws Error 未知scope、Actor不一致、allocateが保持するexpiresAtより後のdueAt、版不一致、Provider障害。
+   * @throws Error 未知scope、Actor不一致、allocateが保持するexpiresAtより後のdueAt（restore-fenceを除く）、版不一致、Provider障害。
    */
   prepare(input: {
     /** allocate済みで束縛Actorが一致するscope。 */ readonly scope: RecipientCodeKeyScope;
     /** 要求operationのServer生成UUIDv4。 */ readonly operationId: string;
     /** 要求側の起算によるwindow。既存より遅ければ延長しない。 */ readonly window: AuthenticationRetentionWindow;
     /** 読取時点のticket。nullは未登録の期待。 */ readonly expected: RecipientCodeDestructionTicket | null;
+    /**
+     * 起算の根拠。省略は清掃・Actor削除で、dueAtはexpiresAt以下に限る。
+     * restore-fenceはRestoreの初回fence閉鎖UTCを起算とし、expiresAtより後のdueAtを許す
+     * （ADR #278 論点7、2026-11-15 Owner Decision）。既存ticketの窓は前倒しのみで延長しない。
+     */
+    readonly basis?: 'restore-fence';
   }): Promise<RecipientCodeTicketPreparation>;
   /**
    * codeIdのticketを未完了・完了の別なく取得する。

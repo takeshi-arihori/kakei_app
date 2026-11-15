@@ -84,8 +84,16 @@ export const createPostgresAuthenticationRestore = (
     control: AuthenticationRestoreControl;
     /** Lock取得後の現在UTC。 */
     clock: AuthenticationClock;
+    /**
+     * コード参加の構成ならtrue。fingerprintへコード表を加え、activateはコード表の0-rowを要求する。
+     * 既定は不参加で、コード表を照会しない（v6のgoldenを変えない）。
+     */
+    recipientCodes?: boolean;
   }>,
 ): AuthenticationRestoreDatabase => {
+  const recipientCodes = options.recipientCodes === true;
+  const fingerprint = (connection: AuthenticationQueryConnection) =>
+    authenticationRestoreFingerprint(connection, recipientCodes);
   const transactions = createAuthenticationTransactions(
     options.pool,
     createAuthenticationTransactionScopes(),
@@ -558,7 +566,7 @@ export const createPostgresAuthenticationRestore = (
           return fail();
         return {
           version,
-          digest: await authenticationRestoreFingerprint(connection),
+          digest: await fingerprint(connection),
         };
       });
       completions.set(fence, {
@@ -591,10 +599,17 @@ export const createPostgresAuthenticationRestore = (
             "SELECT 1 FROM authentication.deletion_intent WHERE state='prepared' LIMIT 1",
           );
           if (pending.rows.length !== 0) return false;
+          if (recipientCodes) {
+            // 全closureの検証後も、コード表の0-rowを開通の前提にする（ADR #278 論点7）。
+            const codes = await connection.query(
+              'SELECT 1 FROM authentication.recipient_code LIMIT 1',
+            );
+            if (codes.rows.length !== 0) return false;
+          }
           await readAuthenticationRestoreKeyState(connection);
           if (
             !authenticationBytesEqual(
-              await authenticationRestoreFingerprint(connection),
+              await fingerprint(connection),
               complete.digest,
             )
           )
