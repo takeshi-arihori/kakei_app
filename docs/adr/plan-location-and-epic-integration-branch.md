@@ -60,7 +60,7 @@ Epic内でも、Code上の依存があるTaskだけをStackで直列にする。
 
 - `.gitignore`、AGENTS.md、[Engineering Loop](../engineering/engineering-loop.md)、[Delivery Workflow](../engineering/delivery-workflow.md)、[PR依存関係Gate](../engineering/pr-dependency-gate.md)、[Worktree運用](../engineering/worktree-management.md)、[正本入口](../governance/README.md)、関連Skillを同じPRで更新する。
 - `epic/**`をBaseとするPRにも、CI（`品質検証`）と`依存PR確認`を実行する。
-- `epic/**`のRuleset（Required check、削除禁止、force push禁止）はRepository設定であり、Ownerが設定する。設定するまでは、上記のRuleを運用で守る。
+- `epic/**`には、Ownerの依頼で2026-11-17にRuleset `epic-integration`を設定した。force pushの禁止、PR必須（Squashとmerge commitだけ）、Required check（`lint・型・Test・Build`と`依存PR確認`。Branch作成時は除く）を課す。削除は禁止しない。Epic→`develop`のMerge後に、Epic Branchを削除するためである。
 - Epic Branchが長く残るため、`develop`との衝突は追従PRで早めに解消する。
 
 ## Review Trigger
