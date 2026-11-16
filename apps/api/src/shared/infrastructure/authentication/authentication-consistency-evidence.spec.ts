@@ -149,6 +149,72 @@ describe('Restoreのevidence digest書式', () => {
   });
 });
 
+describe('Restoreのコードclosure digest書式（evidenceDigestの要素2）', () => {
+  const digest = createAuthenticationRestoreEvidenceDigest();
+  const closure = (
+    codeId: string,
+    operationId: string,
+    inventoryRevision: string,
+    evidenceReference: string,
+  ) => ({ codeId, operationId, inventoryRevision, evidenceReference });
+  const a = closure(
+    '22222222-2222-4222-8222-222222222222',
+    runId,
+    'rev-1',
+    'evidence/a',
+  );
+  const b = closure(
+    '0aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    '33333333-3333-4333-8333-333333333333',
+    '改訂-2',
+    'evidence/b',
+  );
+
+  // 独立実装（Python hashlib／struct）で算出した固定値。順序はcodeIdのbyte昇順へ揃える。
+  it.each([
+    [
+      'コードなし（0件）',
+      [],
+      'd2f398c5f94985281c37e3aad466125f4acbf47163d13463246f15814e41c63e',
+    ],
+    [
+      '2件・入力順に依らない',
+      [a, b],
+      'c8d2017c7d40d9d14978ac73b60e6392b17a9da33b1c034e5362e252cc3f798a',
+    ],
+    [
+      '2件・逆順',
+      [b, a],
+      'c8d2017c7d40d9d14978ac73b60e6392b17a9da33b1c034e5362e252cc3f798a',
+    ],
+  ] as const)('%sのgolden vectorに一致する', (_name, input, expected) => {
+    expect(hex(digest.codeClosure(input))).toBe(expected);
+  });
+
+  it('所有operation・全世代版・証跡参照のどれが変わっても値が変わる', () => {
+    const base = hex(digest.codeClosure([a]));
+    for (const changed of [
+      { ...a, operationId: otherRunId },
+      { ...a, inventoryRevision: 'rev-2' },
+      { ...a, evidenceReference: 'evidence/z' },
+    ])
+      expect(hex(digest.codeClosure([changed]))).not.toBe(base);
+  });
+
+  it.each([
+    ['重複したcodeId', [a, { ...a, evidenceReference: 'evidence/c' }]],
+    ['UUIDv4でないcodeId', [{ ...a, codeId: 'not-a-uuid' }]],
+    ['UUIDv4でない所有operation', [{ ...a, operationId: 'x' }]],
+    ['空の全世代版', [{ ...a, inventoryRevision: '' }]],
+    ['空の証跡参照', [{ ...a, evidenceReference: '' }]],
+    ['未知のField', [{ ...a, extra: 1 }]],
+  ])('%sを拒否する', (_name, input) => {
+    expect(() =>
+      digest.codeClosure(input as Parameters<typeof digest.codeClosure>[0]),
+    ).toThrow(AuthenticationCryptoUnavailable);
+  });
+});
+
 describe('整合証跡のregistry Adapter', () => {
   const fixture = (
     candidates: () => readonly unknown[] = () => [evidence()],

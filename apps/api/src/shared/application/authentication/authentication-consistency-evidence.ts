@@ -1,4 +1,5 @@
 import type { AuthenticationLedgerHead } from './authentication-maintenance-ports.js';
+import type { RecipientCodeMacKeyClosure } from './recipient-code-key-lifecycle.js';
 
 declare const consistencyEvidenceBrand: unique symbol;
 
@@ -74,4 +75,12 @@ export interface AuthenticationRestoreEvidenceDigest {
    * @throws AuthenticationCryptoUnavailable 長さやContext名が不正な場合。
    */
   digest(input: AuthenticationRestoreEvidenceInput): Uint8Array;
+  /**
+   * コード参加のRestoreで検証した全closureを、`evidenceDigest`の要素2へ入れる32-byteへまとめる。
+   * 呼出し側はコード表の0-rowを確認した後だけ呼ぶ。0件も「参加して0件」として値を持つ。
+   * @param closures 所有operationへ束縛した検証済みclosure。順序は問わない。
+   * @returns codeIdのbyte昇順に並べた固定書式のSHA-256。
+   * @throws AuthenticationCryptoUnavailable 重複したcodeId、不正なUUID・文字列、未知のField。
+   */
+  codeClosure(closures: readonly RecipientCodeMacKeyClosure[]): Uint8Array;
 }

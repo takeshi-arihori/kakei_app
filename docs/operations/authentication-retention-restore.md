@@ -60,6 +60,10 @@ Witness修復は真正な同headとFailure domainの運用証拠を確認する�
 | 既存の削除Reader（#260） | 受理 | 受理 | 拒否 | 無視して受理し、有無だけを返す | 拒否 |
 | コード発行・消費 | 受理 | 拒否 | 拒否 | 必須 | 拒否 |
 | コード保守Reader（呼出元はコードの内部清掃とActor削除参加が共有するAdapterだけ） | 受理 | 受理 | 拒否 | 必須 | 拒否 |
+| Restoreのコード破棄Reader（#284。呼出元はRestore専用のコード破棄Adapterだけ） | 拒否 | 拒否 | `restoring`だけ受理 | 無視して受理 | 拒否 |
+| Restoreの既存Reader（削除再適用・Credential破棄・移行・開通） | 拒否 | 拒否 | `restoring`だけ受理 | 拒否 | 拒否 |
+
+Restoreの2行は`authentication-maintenance.integration.spec.ts`の#284のCaseが実PGで固定する。
 
 `quarantined`から`active`へ戻す更新はRestoreの`restoring`限定CASだけが持つ。これらは旧Writerを止める契約で、コードを除去する機能ではない。コードの清掃は[内部入口](invitation-code-retention-restore.md#259-コード清掃の小batchと封鎖)が持ち、Actor削除でのコード除去は[Actor削除の別入口](invitation-code-retention-restore.md#260-actor削除へのコード参加)が持つ。どちらも通常入口へはwireしない。既存の清掃Readerは#259、既存の削除Readerは#260でコードpurposeを無視して読むようにした（[ADR](../adr/recipient-code-maintenance-key-inventory.md)のD6）。削除Readerはコードpurposeの有無を返し、コード用途があるのにコード参加なしで構成した削除をPrepared前に止める。コードpurposeの初期化は未実装である。
 
@@ -68,3 +72,5 @@ Witness修復は真正な同headとFailure domainの運用証拠を確認する�
 [ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）は、このRunbookのBackup復旧を次のように拡張する。Manifestの受理版を`{6, 11}`のallowlistにし、v11では全Context共通の`recoveryPointId`と整合証跡を必須にする。公開世代へコード2用途を加える。`evidenceDigest`は認証のfingerprint digestに、コード破棄の検証結果と整合証跡を加えた値にする（Ledger／Witnessの書式は変えない）。上の「Backup復旧の順序」は、受理版の拡張とコード破棄が実装されるまで現行（schema v6、コード用途で停止）のままである。
 
 #282で実装済みの部分（受理版は6のまま）: Manifestは任意Field`recoveryPointId`（UUIDv4）を持ち、版11以上で必須、11未満では不在とする（v6でFieldありは拒否）。Restore Serviceは受理版のallowlist（既定`{6}`）と「証跡必須の最小版」（既定11）で証跡の要否を判定し、必要な構成では`isolate`の前にPortの注入、必須Context集合、`recoveryPointId`を確認する。証跡はP1（削除再適用の前）、P2（`migrateIdentity`の後、`evidenceDigest`の計算前）、P3（recovery appendの後、`activate`の前）で毎回新しいhandleを発行させて単回消費し、P1／P2／P3の`recoveryPointId`、Context集合、`consistencyDigest`が一致しなければ隔離する。P2はP1とLedger headの一致も要求し、headが進んでいれば隔離せず、上の手順4のActor票照合とP1から再試行する（Backupの復元と`isolate`はやり直さない。既存の最大3回）。`evidenceDigest`はv6でもADR #278 論点3の書式（要素2／3はpresence=0）に変わった。本番Compositionは未接続で、v11の経路は受理版11を注入したServiceレベルのTestだけで検証している。
+
+#284で実装済みの部分: コード参加のService設定で、Restoreは全招待コードをrun所有のコードticket（`dueAt`は初回fence閉鎖UTC）で破棄し、全世代closureとコード表の0-rowを開通の前提に加える（[運用設計の#284](invitation-code-retention-restore.md#284-restoreへのコード参加)）。Restoreのコード破棄Readerはコード用途を無視して受理するが、Restoreの既存Readerはコード用途で止まるので、v11のBackupは#285までRestoreできない。

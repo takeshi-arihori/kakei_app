@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 import { Client, Pool, type QueryResult } from 'pg';
@@ -36,6 +36,11 @@ import {
   readStoredAuthenticationActor,
   readStoredAuthenticationIdentity,
 } from '../src/shared/infrastructure/authentication/postgres/authentication-record-rows.js';
+import { authenticationRestoreFingerprint } from '../src/shared/infrastructure/authentication/postgres/authentication-restore-fingerprint.js';
+import { createPostgresRecipientCodeRestore } from '../src/shared/infrastructure/authentication/postgres/postgres-recipient-code-restore.js';
+import { syntheticRecipientCodeManagedKeys } from '../src/shared/infrastructure/authentication/test/recipient-code-maintenance-fixtures.js';
+import { guardRecipientCodeMaintenance } from '../src/shared/application/authentication/recipient-code-maintenance-guard.js';
+import { createRecipientCodeRestoreDiscard } from '../src/shared/application/authentication/recipient-code-restore-discard.js';
 
 const secret = (n: number) => Buffer.alloc(32, n).toString('base64url');
 const key = <P extends AuthenticationMacPurpose>(purpose: P, n: number) => ({
@@ -2365,4 +2370,441 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
     expect((await cleanup.deleteExpired(10)).status).toBe('committed');
     expect(await count('session_record')).toBe(0);
   }, 15000);
+
+  // ここより後だけコード表（0008）を足す。前のCaseのv6構成とgoldenには影響しない。
+  // 受理版とコード用途の世代は#285の範囲なので、v6 Manifestと既存9用途のまま、
+  // コード表とコード参加のService設定だけを足した合成構成で検証する。
+  describe('全招待コードの破棄への参加（v6 DBへコード表だけを足した合成構成）', () => {
+    const day = 86_400_000;
+    let codeKeys: ReturnType<typeof syntheticRecipientCodeManagedKeys>;
+    beforeAll(async () => {
+      await observer.query(
+        await readFile(
+          new URL(
+            '../migrations/authentication/0008_recipient_code_schema.sql',
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      );
+    });
+    beforeEach(() => {
+      codeKeys = syntheticRecipientCodeManagedKeys();
+    });
+    /** Backup時点で発行され、Providerにも登録した復旧コード行。10分後に失効する。 */
+    const insertCode = async (
+      actorId: string,
+      options: { known?: boolean; state?: 'issued' | 'consumed' } = {},
+    ) => {
+      const codeId = randomUUID();
+      const createdAt = now;
+      const consumed = options.state === 'consumed';
+      await observer.query(
+        'INSERT INTO authentication.recipient_code(code_id,recipient_actor_id,record_version,epoch,created_at_ms,expires_at_ms,state,terminal_at_ms,lookup_key_version,lookup_digest,mac_key_version,state_mac) ' +
+          'VALUES($1,$2,1,$3,$4,$5,$6,$7,$8,$9,$8,$10)',
+        [
+          codeId,
+          actorId,
+          ids.epoch,
+          createdAt,
+          createdAt + 600_000,
+          consumed ? 'consumed' : 'issued',
+          consumed ? createdAt + 1 : null,
+          'v1',
+          randomBytes(32),
+          randomBytes(32),
+        ],
+      );
+      if (options.known !== false)
+        await codeKeys.allocation.allocate({
+          codeId,
+          recipientActorId: actorId,
+          keyVersion: 'v1',
+          expiresAt: createdAt + 600_000,
+        });
+      return codeId;
+    };
+    const restoring = () =>
+      observer.query(
+        "UPDATE authentication.key_state SET status='restoring',generation_version=generation_version+1",
+      );
+    const purgeAudits = async () =>
+      Number(
+        authenticationDatabaseRow(
+          (
+            await observer.query(
+              "SELECT count(*) AS count FROM authentication.audit_event WHERE action='purge'",
+            )
+          ).rows[0],
+        ).count,
+      );
+    const manifestOf = async () => ({
+      createdAt: now,
+      schemaVersion: 6,
+      keyStateVersion: 1,
+      epoch: ids.epoch,
+      checkpoint: ledger.evidence.head(await ledger.evidence.latest()),
+    });
+    const participating = (
+      control: ReturnType<typeof syntheticAuthenticationRestoreControl>,
+      connections: AuthenticationConnectionPool = pool,
+    ) => {
+      const base = components(connections, control);
+      const dbRestore = createPostgresAuthenticationRestore({
+        pool: connections,
+        codec,
+        digests,
+        keys: destruction,
+        clock,
+        ledger: ledger.evidence,
+        control: control.control,
+        recipientCodes: true,
+      });
+      const migrateIdentity = dbRestore.migrateIdentity.bind(dbRestore);
+      dbRestore.migrateIdentity = async (...args) => {
+        const fingerprint = await migrateIdentity(...args);
+        migratedFingerprints.push(Uint8Array.from(fingerprint));
+        return fingerprint;
+      };
+      const signals: unknown[] = [];
+      const monitor = {
+        record: (event: unknown) =>
+          Promise.resolve().then(() => {
+            signals.push(event);
+          }),
+      };
+      const codes = createPostgresRecipientCodeRestore({
+        pool: connections,
+        digests,
+        control: control.control,
+        clock,
+      });
+      return {
+        codes,
+        signals,
+        restore: createAuthenticationRestoreService({
+          control: control.control,
+          database: dbRestore,
+          deletion: base.dbDeletion,
+          cleanup: base.dbCleanup,
+          ledger: ledger.evidence,
+          keys: destruction,
+          clock,
+          monitor,
+          evidenceDigest,
+          recipientCodes: createRecipientCodeRestoreDiscard({
+            maintenance: guardRecipientCodeMaintenance(codeKeys),
+            database: codes,
+            clock,
+            monitor,
+          }),
+        }),
+      };
+    };
+    const controlAtNow = () =>
+      syntheticAuthenticationRestoreControl(managed, ledger, 'v1', () => now);
+
+    it('期限切れの行と孤立scopeを含む全コードを初回閉鎖UTC起算で破棄し、closureをevidenceDigestへ入れて開通する', async () => {
+      const { actorId } = await login();
+      const issued = await insertCode(actorId);
+      const consumed = await insertCode(actorId, { state: 'consumed' });
+      const orphan = randomUUID();
+      await codeKeys.allocation.allocate({
+        codeId: orphan,
+        recipientActorId: actorId,
+        keyVersion: 'v1',
+        expiresAt: now + 600_000,
+      });
+      // Credential破棄もpurge Auditを残すので、その件数を除いてコード分を数える。
+      const audits =
+        (await purgeAudits()) +
+        (await count('session_record')) +
+        (await count('login_attempt'));
+      const manifest = await manifestOf();
+      now += day;
+      const control = controlAtNow();
+      const runId = randomUUID();
+      expect(await participating(control).restore.run(runId, manifest)).toEqual(
+        { status: 'complete' },
+      );
+      const closedAt = control.recordedClosedAt(runId)!;
+      expect(closedAt).toBe(now);
+      expect(await count('recipient_code')).toBe(0);
+      expect(await purgeAudits()).toBe(audits + 2);
+      const closures = [];
+      for (const codeId of [issued, consumed, orphan]) {
+        const ticket = await codeKeys.maintenance.find(codeId);
+        expect(ticket).toMatchObject({
+          operationId: runId,
+          state: 'complete',
+          window: { dueAt: closedAt, deadline: closedAt + day },
+        });
+        expect(
+          (await codeKeys.lifecycle.inventory(codeId)).generations.map(
+            (generation) => generation.lifecycle,
+          ),
+        ).toEqual(['destroyed']);
+        closures.push({
+          codeId,
+          operationId: runId,
+          inventoryRevision: ticket!.inventoryRevision,
+          evidenceReference: 'evidence/' + codeId,
+        });
+      }
+      const recovery = ledger.entries.at(-1)!.record;
+      expect(
+        recovery.kind === 'recovery' &&
+          Buffer.from(recovery.evidenceDigest).toString('hex'),
+      ).toBe(
+        Buffer.from(
+          evidenceDigest.digest({
+            fingerprint: migratedFingerprints.at(-1)!,
+            codeClosure: evidenceDigest.codeClosure(closures),
+            consistency: null,
+          }),
+        ).toString('hex'),
+      );
+      expect(
+        authenticationDatabaseRow(
+          (await observer.query('SELECT status FROM authentication.key_state'))
+            .rows[0],
+        ).status,
+      ).toBe('active');
+    });
+
+    it('Providerが知らない行があれば、ticketもepochも作らず行を残して隔離する', async () => {
+      const { actorId } = await login();
+      const known = await insertCode(actorId);
+      const unknown = await insertCode(actorId, {
+        known: false,
+        state: 'consumed',
+      });
+      const manifest = await manifestOf();
+      const control = controlAtNow();
+      const runId = randomUUID();
+      expect(
+        (await participating(control).restore.run(runId, manifest)).status,
+      ).toBe('quarantined');
+      expect(await codeKeys.maintenance.find(known)).toBeNull();
+      expect(await count('recipient_code')).toBe(2);
+      expect(
+        (
+          await observer.query(
+            'SELECT 1 FROM authentication.recipient_code WHERE code_id=$1',
+            [unknown],
+          )
+        ).rowCount,
+      ).toBe(1);
+      expect(control.events).not.toContain('before-publish');
+    });
+
+    it('破棄後・移行前に戻ったコード行は、fingerprintが一致してもactivateの0-rowで開通せず、同runの再開で破棄し直して開通する', async () => {
+      const { actorId } = await login();
+      const createdAt = now;
+      const codeId = await insertCode(actorId);
+      const manifest = await manifestOf();
+      now += day;
+      const control = controlAtNow();
+      const runId = randomUUID();
+      let reinserted = false;
+      const connections = wrappedPool(async (sql, _values, execute) => {
+        // epoch公開後で最初のrestoring Transaction（migrateIdentity）の先頭。行はfingerprintに入る。
+        if (
+          !reinserted &&
+          sql ===
+            'SELECT status,generation_version,epoch FROM authentication.key_state WHERE state_id=1 FOR UPDATE' &&
+          control.events.includes('before-publish')
+        ) {
+          reinserted = true;
+          // 破棄の確認後、移行の前に別経路で行が戻った状態を再現する（Providerは既知）。
+          await observer.query(
+            'INSERT INTO authentication.recipient_code(code_id,recipient_actor_id,record_version,epoch,created_at_ms,expires_at_ms,state,terminal_at_ms,lookup_key_version,lookup_digest,mac_key_version,state_mac) ' +
+              "VALUES($1,$2,1,$3,$4,$5,'consumed',$6,'v1',$7,'v1',$8)",
+            [
+              codeId,
+              actorId,
+              ids.epoch,
+              createdAt,
+              createdAt + 600_000,
+              createdAt + 1,
+              randomBytes(32),
+              randomBytes(32),
+            ],
+          );
+        }
+        return execute();
+      });
+      expect(
+        (await participating(control, connections).restore.run(runId, manifest))
+          .status,
+      ).toBe('quarantined');
+      expect(reinserted).toBe(true);
+      expect(await count('recipient_code')).toBe(1);
+      // 移行時のfingerprintは戻った行を含み、現DBと一致する。止めたのはactivateの0-row検査である。
+      const connection = await pool.connect();
+      try {
+        expect(
+          Buffer.from(
+            await authenticationRestoreFingerprint(connection, true),
+          ).toString('hex'),
+        ).toBe(Buffer.from(migratedFingerprints.at(-1)!).toString('hex'));
+      } finally {
+        connection.release();
+      }
+      expect(
+        authenticationDatabaseRow(
+          (await observer.query('SELECT status FROM authentication.key_state'))
+            .rows[0],
+        ).status,
+      ).toBe('restoring');
+      const firstClosedAt = control.recordedClosedAt(runId);
+      now += 1000;
+      expect(await participating(control).restore.run(runId, manifest)).toEqual(
+        { status: 'complete' },
+      );
+      expect(control.recordedClosedAt(runId)).toBe(firstClosedAt);
+      expect(await count('recipient_code')).toBe(0);
+      expect((await codeKeys.maintenance.find(codeId))?.window.dueAt).toBe(
+        firstClosedAt,
+      );
+    });
+
+    describe('Restore専用のPGコード破棄Adapter（直接呼出し）', () => {
+      const setup = async () => {
+        const { actorId } = await login();
+        const control = controlAtNow();
+        const fence = await control.control.close(randomUUID());
+        const { codes } = participating(control);
+        return { actorId, control, fence, codes };
+      };
+      const rejects = (work: Promise<unknown>) =>
+        expect(work).rejects.toThrow();
+
+      it('restoring以外のDBでは、どの操作も拒否して行を変えない', async () => {
+        const { actorId, fence, codes } = await setup();
+        const codeId = await insertCode(actorId);
+        await rejects(codes.rows(fence, null, 10));
+        await rejects(
+          codes.remove(fence, { codeId, recipientActorId: actorId }),
+        );
+        await rejects(codes.absent(fence, codeId));
+        await rejects(codes.empty(fence));
+        expect(await count('recipient_code')).toBe(1);
+      });
+
+      it('このControlが閉鎖を確認できない別のfenceでは拒否する', async () => {
+        const { actorId, codes } = await setup();
+        const codeId = await insertCode(actorId);
+        await restoring();
+        const foreign = await controlAtNow().control.close(randomUUID());
+        await rejects(
+          codes.remove(foreign, { codeId, recipientActorId: actorId }),
+        );
+        await rejects(codes.rows(foreign, null, 10));
+        expect(await count('recipient_code')).toBe(1);
+      });
+
+      it('行をcodeId昇順のPageで返し、期限・MACに依らず除去してpurge Auditを残す', async () => {
+        const { actorId, fence, codes } = await setup();
+        const created = [
+          await insertCode(actorId),
+          await insertCode(actorId, { state: 'consumed' }),
+          await insertCode(actorId, { state: 'consumed' }),
+        ].sort();
+        // MACを壊しても除去する（Restoreは行のMACを信頼の根拠にしない）。
+        await observer.query(
+          'UPDATE authentication.recipient_code SET state_mac=$1 WHERE code_id=$2',
+          [randomBytes(32), created[0]],
+        );
+        await restoring();
+        const first = await codes.rows(fence, null, 2);
+        expect(first.map((row) => row.codeId)).toEqual(created.slice(0, 2));
+        expect(first.every((row) => row.recipientActorId === actorId)).toBe(
+          true,
+        );
+        expect(
+          (await codes.rows(fence, first[1].codeId, 2)).map(
+            (row) => row.codeId,
+          ),
+        ).toEqual([created[2]]);
+        await rejects(codes.rows(fence, null, 0));
+        await rejects(codes.rows(fence, null, 1001));
+        const audits = await purgeAudits();
+        for (const codeId of created) {
+          await codes.remove(fence, { codeId, recipientActorId: actorId });
+          expect(await codes.absent(fence, codeId)).toBe(true);
+        }
+        expect(await purgeAudits()).toBe(audits + 3);
+        // 行がなければ成功し、Auditを書かない。
+        await codes.remove(fence, {
+          codeId: created[0],
+          recipientActorId: actorId,
+        });
+        expect(await purgeAudits()).toBe(audits + 3);
+        expect(await codes.empty(fence)).toBe(true);
+      });
+
+      it('行のActorがProviderの束縛と異なれば除去せず止める', async () => {
+        const { actorId, fence, codes } = await setup();
+        const codeId = await insertCode(actorId);
+        await restoring();
+        await rejects(
+          codes.remove(fence, { codeId, recipientActorId: randomUUID() }),
+        );
+        expect(await codes.absent(fence, codeId)).toBe(false);
+        expect(await codes.empty(fence)).toBe(false);
+      });
+
+      it('コード用途の世代があっても動き、Restoreの他の操作はコード用途で止まる（停止契約）', async () => {
+        const { actorId, fence, codes } = await setup();
+        const codeId = await insertCode(actorId);
+        for (const purpose of [
+          'recipient-code-lookup',
+          'recipient-code-state-mac',
+        ])
+          await observer.query(
+            'INSERT INTO authentication.key_generation(generation_id,purpose,key_version,epoch,searchable,write_required) VALUES($1,$2,$3,NULL,true,true)',
+            [randomUUID(), purpose, 'v1'],
+          );
+        await restoring();
+        expect(
+          (await codes.rows(fence, null, 10)).map((r) => r.codeId),
+        ).toEqual([codeId]);
+        const dbRestore = createPostgresAuthenticationRestore({
+          pool,
+          codec,
+          digests,
+          keys: destruction,
+          clock,
+          ledger: ledger.evidence,
+          control: controlAtNow().control,
+        });
+        await rejects(dbRestore.discardCredentials(fence));
+      });
+
+      it('fingerprintは参加時だけコード表を覆い、不参加ではコード表を照会しない', async () => {
+        const { actorId } = await setup();
+        const connection = await pool.connect();
+        try {
+          const without = await authenticationRestoreFingerprint(connection);
+          const emptyTable = await authenticationRestoreFingerprint(
+            connection,
+            true,
+          );
+          await insertCode(actorId);
+          expect(await authenticationRestoreFingerprint(connection)).toEqual(
+            without,
+          );
+          const withRow = await authenticationRestoreFingerprint(
+            connection,
+            true,
+          );
+          expect(emptyTable).not.toEqual(without);
+          expect(withRow).not.toEqual(emptyTable);
+        } finally {
+          connection.release();
+        }
+      });
+    });
+  });
 });

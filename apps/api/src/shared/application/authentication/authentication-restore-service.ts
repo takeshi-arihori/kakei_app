@@ -23,6 +23,7 @@ import type { AuthenticationClock } from './authentication-ports.js';
 import { AuthenticationCryptoUnavailable } from './authentication-record-protection.js';
 import { assertAuthenticationBackupAge } from './authentication-retention-policy.js';
 import type { AuthenticationRestoreControl } from './authentication-restore-control.js';
+import type { RecipientCodeRestoreDiscard } from './recipient-code-restore-discard.js';
 
 /** 隔離を維持した復旧の結果。本番Provider実証とは区別する。 */
 export interface AuthenticationRestoreResult {
@@ -82,6 +83,11 @@ export const createAuthenticationRestoreService = (
       /** Compositionが設定する必須Context名の閉じた集合。空は不可。 */
       requiredContexts: readonly string[];
     }>;
+    /**
+     * 全招待コードの破棄への参加。未設定はコード不参加（既定値）で、コード表を扱わない。
+     * 設定時は初回閉鎖UTCを起点にticketを登録し、closure集合を`evidenceDigest`へ入れる。
+     */
+    recipientCodes?: RecipientCodeRestoreDiscard;
   }>,
 ) => {
   const fail = (): never => {
@@ -262,6 +268,13 @@ export const createAuthenticationRestoreService = (
           closedAt < 0
         )
           return fail();
+        // dueAtの起点に未来値を使うと、deadlineを延ばしOVERDUEを遅らせられる。
+        // 起点に使うコード参加の構成だけ、不可逆な操作の前に隔離する。
+        if (
+          options.recipientCodes !== undefined &&
+          closedAt > options.clock.now()
+        )
+          return fail();
         assertAuthenticationBackupAge(manifest.createdAt, options.clock.now());
         const requirement = consistencyRequirement(manifest);
         const generationVersion = await options.database.isolate(
@@ -301,6 +314,20 @@ export const createAuthenticationRestoreService = (
               await destroy(ticket);
             }
           }
+          // 手順5: P1の後に全コードを破棄する。再試行でも同じ閉鎖UTCで冪等にやり直す。
+          const codeClosure =
+            options.recipientCodes === undefined
+              ? null
+              : Uint8Array.from(
+                  options.evidenceDigest.codeClosure(
+                    await options.recipientCodes.discard({
+                      runId,
+                      fence,
+                      closedAt,
+                    }),
+                  ),
+                );
+          if (codeClosure !== null && codeClosure.length !== 32) return fail();
           await checkActorTickets(head);
           const publication = await options.control.publishEpoch(
             fence,
@@ -343,7 +370,7 @@ export const createAuthenticationRestoreService = (
           const evidenceDigest = Uint8Array.from(
             options.evidenceDigest.digest({
               fingerprint: digest,
-              codeClosure: null,
+              codeClosure,
               consistency: p2,
             }),
           );

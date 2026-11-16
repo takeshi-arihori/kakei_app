@@ -32,7 +32,7 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 
 新epochだけで既存Invitation/operationの一貫性を証明したとは扱わない。API全体と外部Providerの同時侵害、全DB整合rollbackをMACで防げると主張しない。Restore訓練と実配置のEvidenceなしにProduction wiringを許可しない。
 
-#278の採用設計（#282で証跡Port、`recoveryPointId`、P1〜P3、`evidenceDigest`への束縛を実装。受理版は6のままで、コード破棄と受理版の拡張は未実装）: 上の手順2／3／6／7の全Context整合は、[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）の契約で実装する。全Context共通の`recoveryPointId`、証跡Port（P1は削除再適用の前、P2はrecovery appendの前、P3は`activate`の前）、`evidenceDigest`への束縛、Manifestの受理版`{6, 11}`と構成確認、Restoreのコードticket（`dueAt`はrunの最初のfence閉鎖UTCで固定）、Providerが知らないコード行での停止、コード表の0-rowを含む。GM側のRestore検証は、Epic #202ではなくProduction Gate側の別の設計Taskとする。実装は#245の後続Taskで、合成の証跡で検証する。上の手順と受入Evidenceは緩和しない。
+#278の採用設計（#282で証跡Port、`recoveryPointId`、P1〜P3、`evidenceDigest`への束縛を、#284でコードticket・closure・0-row（[下記](#284-restoreへのコード参加)）を実装。受理版は6のままで、受理版の拡張と構成確認は未実装）: 上の手順2／3／6／7の全Context整合は、[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）の契約で実装する。全Context共通の`recoveryPointId`、証跡Port（P1は削除再適用の前、P2はrecovery appendの前、P3は`activate`の前）、`evidenceDigest`への束縛、Manifestの受理版`{6, 11}`と構成確認、Restoreのコードticket（`dueAt`はrunの最初のfence閉鎖UTCで固定）、Providerが知らないコード行での停止、コード表の0-rowを含む。GM側のRestore検証は、Epic #202ではなくProduction Gate側の別の設計Taskとする。実装は#245の後続Taskで、合成の証跡で検証する。上の手順と受入Evidenceは緩和しない。
 
 ## 受入Evidenceと停止条件
 
@@ -45,7 +45,7 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | 公開経路 | CSRF/Origin/Rate、secret非保存/no-store、旧code拒否、新発行・Invitation作成・本人受諾の実HTTP/Browser |
 | 監視 | overdue/pending/破損/epoch不一致の実配信と封鎖、秘密/直接IDの非収集 |
 
-コード用の除去期限は`recipientCodeRetentionWindow`が計算し、`dueAt`を`expiresAt`・`terminalAt`・Actor側の時点の最早値、`deadline`をその24時間後とする。Actor側の時点は清掃がdisabledAt、Actor削除がpreparedAtである。下記の清掃入口（Actor側の時点はdisabledAt）と[Actor削除の別入口](#260-actor削除へのコード参加)（Actor側の時点はpreparedAt）が使う。key-stateの停止契約は[認証Runbook](authentication-retention-restore.md#招待コード拡張の採用設計未実装)に記載する。
+コード用の除去期限は`recipientCodeRetentionWindow`が計算し、`dueAt`を`expiresAt`・`terminalAt`・Actor側の時点の最早値、`deadline`をその24時間後とする。Actor側の時点は清掃がdisabledAt、Actor削除がpreparedAtである。Restoreだけは行の期限を使わず、runの初回fence閉鎖UTCを`dueAt`とする（[#284](#284-restoreへのコード参加)）。下記の清掃入口（Actor側の時点はdisabledAt）と[Actor削除の別入口](#260-actor削除へのコード参加)（Actor側の時点はpreparedAt）が使う。key-stateの停止契約は[認証Runbook](authentication-retention-restore.md#招待コード拡張の採用設計未実装)に記載する。
 
 本Taskは採用済みの運用設計の文書化であり、上表を実行済みとは扱わない。B4の合成Provider成功も本番Capabilityの証拠ではない。既知の期限未達、外部票不足、MAC/鍵不整合、未知Schema、旧Writer共存、片側復旧のいずれかがあれば成功/開通を停止する。
 
@@ -83,7 +83,25 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 | 停止 | 列挙の不完全、版不一致、Lock中の行、Provider/SQL/Audit障害、commit応答喪失、別Actorのticketでは外部Completeをappendせず`unavailable`とする |
 | 構成の確認 | コード用途があるのにコード参加なしの構成、またはコード用途がないのにコード参加ありの構成はPrepared前に止まる。Prepared済みの再開で食い違った場合はCompleteしない |
 
-GM Invitation・過去Actor参照・成功結果・proof鍵は対象外で、認証からGM Tableや他Contextの鍵を参照しない。Restore（#245）はコード専用Portで検証する。合成Providerの成功を実Providerの線形化・耐久性・IAMの証拠にしない。
+GM Invitation・過去Actor参照・成功結果・proof鍵は対象外で、認証からGM Tableや他Contextの鍵を参照しない。Restoreは下記の#284でコード専用Portを使って検証する。合成Providerの成功を実Providerの線形化・耐久性・IAMの証拠にしない。
+
+## #284 Restoreへのコード参加
+
+[内部入口](../../apps/api/src/shared/application/authentication/recipient-code-restore-discard.ts)が[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)の論点5・7を実装する。Restore Serviceの任意設定（`recipientCodes`）で参加し、未設定（既定値）はコード不参加で、コード表を扱わない。本番Compositionは未接続で、受理版は6のまま。受理版`{6, 11}`、公開世代のコード用途、構成確認は#285が入れる。実PGと合成Providerで検証した（v6のDBへコード表だけを足した合成構成）。
+
+| 手順 | 実装の内容 |
+| --- | --- |
+| 順序 | 証跡P1の後、Attempt／Session破棄の後、epoch公開の前（ADRの手順5）に、固定snapshot→Providerが知らない行の照合→ticket登録・採用→各コードの行除去と`purge` Audit→全世代closure→コードの0-row→ticket完了→再snapshotの照合→コード表全体の0-row。P1が成立しなければ登録も破棄もしない |
+| 起算 | `dueAt`は外部Controlが記録したrunの初回fence閉鎖UTC（`closedAt`）、`deadline`はその24時間後。行の`expiresAt`／`terminalAt`は使わない。ticket登録は`basis: 'restore-fence'`で、Providerは`expiresAt`より後の`dueAt`をこの場合に限り受理する（2026-11-15 Owner Decision。清掃・Actor削除は現行の検査のまま） |
+| 未来の`closedAt` | コード参加の構成では、`closedAt`がRestore ServiceのClockより後なら起点に使わず、`isolate`の前に隔離する（`deadline`を延ばしてOVERDUEを遅らせない）。コード不参加の構成は`closedAt`を起点に使わないので、#283の挙動のまま |
+| 再開と採用 | 同runの再開は同じ`closedAt`で再実行し、窓を延ばさない。別run・清掃・Actor削除の未完了ticketは採用して前倒しだけ行い、完了済みticketは充足として採用し、Backupから戻った行を除去して所有operationのclosureを再検証する。Providerは完了済みscopeを固定snapshotから落としてよいので、snapshotにない行は、完了済みticketを`scopes`で同じActorへ解決できる場合だけ受理する（未完了なら停止）。同runの再実行でも、完了して列挙から落ちたticketを`byOperation`から再検証する |
+| 停止 | Providerが知らない行、行とProviderの束縛Actorの不一致、列挙の不完全、全世代版の不一致、再snapshotの不一致（scopeの増加、版またはActorの変化。完了したscopeが落ちるのは許す）、closure／0-rowの失敗、ClockがdueAt未達では、開通せず既存規則で再閉鎖して隔離する。1件の失敗でも他のコードの破棄は試してから止める |
+| `OVERDUE` | 所有・採用した未完了ticketが`deadline`に到達していれば、最古の窓で`OVERDUE`を通知する。それだけでは隔離しない（restoring中は受付を閉じている。副論点B）。通知を確認できなければ成功にしない |
+| DB境界 | [Restore専用のPG Adapter](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-recipient-code-restore.ts)は、外部閉鎖を前後で確認し、`key_state`の排他Lock下で`restoring`だけを許可する。期限・MACに関係なく行を除去する。key-stateは、コード用途の世代をあってもなくても受理する専用readerで読む。Restoreの他の操作はコード用途で止まる（停止契約）。`readAuthenticationRestoreKeyState`は変えない |
+| 開通の前提 | Restore DB Adapterの`recipientCodes: true`で、fingerprintへコード表を加え、`activate`はコード表の0-rowを要求する。不参加では照会しない |
+| 証跡 | 検証した全closure（codeId、所有operation、全世代版、証跡参照）をcodeId順の固定書式でSHA-256し、`evidenceDigest`の要素2（presence=1）へ入れる。コード0件も「参加して0件」の値を持つ |
+
+既知の限界: v11のコード用途の世代は`migrateIdentity`の公開世代に含まれない（#285で追加）ので、実PGで通しているのはコード用途のないv6構成だけである。合成Providerの成功を実Providerの線形化・耐久性・IAMの証拠にしない。
 
 ## #240 管理Storeから保守へ引き継ぐInventory
 
