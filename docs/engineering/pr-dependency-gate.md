@@ -84,7 +84,7 @@ Stack中に前提BranchをBaseとしているPRでも、依存関係のTraceabil
 - 自分自身のPR番号: 失敗
 - PR本文変更時も再検証する
 
-`develop`のRulesetでStatus Check `依存PR確認`をRequiredにする。Required化されていない場合、CI失敗だけではMergeを強制停止できない。`epic/**`には、Ruleset `epic-integration`で同じ2つのStatus CheckをRequiredにしている。ここでは、force pushの禁止とPR必須も課している。
+`develop`のRulesetでStatus Check `依存PR確認`をRequiredにする。Required化されていない場合、CI失敗だけではMergeを強制停止できない。`epic/**`には、Ruleset `epic-integration`でStatus Check `lint・型・Test・Build`と`依存PR確認`をRequiredにしている。ここでは、force pushの禁止とPR必須も課している。
 
 ## Planningで残す情報
 
