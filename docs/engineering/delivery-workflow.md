@@ -179,9 +179,9 @@ develop ────────────────────────
 | --- | --- |
 | 作成 | Task Issueを2つ以上持つEpicで、最初のTaskに着手する前に、最新`develop`から`epic/<Epic番号>-<短い名前>`を作ってPushする。Task Issueが1つだけの場合はEpic Branchを作らない |
 | Task PR | BaseをEpic Branch（Stackの場合は直接の前提Branch）にしてSquash mergeする。PRサイズの目安、Review、CIはTask PRごとに適用する |
-| `develop`への追従 | Base=Epic Branch、Head=`develop`のPRを作り、merge commitでMergeする。Epic Branchをrebaseしたり、force pushしたりしない。衝突はこのPRの中で解消する |
+| `develop`への追従 | Base=Epic Branch、Head=`develop`のPRを作り、merge commitでMergeする。Epic Branchをrebaseしたり、force pushしたりしない。衝突はこのPRの中で解消する。衝突を手で解消した場合は、その解消差分をTask PRと同じ独立Reviewに通す |
 | Epic完了前に`develop`で必要な修正 | Epic外の通常Taskとして`develop`へ入れ、その後Epic Branchを追従させる |
-| 完了 | 一覧のTaskがすべてCloseした後、Epic Branch→`develop`のPRを作る。本文にEpic Issueと、含まれるTask PRの一覧を書く。merge commitでMergeし、Task単位の履歴を`develop`に残す。MergeはOwnerの明示依頼がある場合だけ行う |
+| 完了 | 一覧のTaskがすべてCloseした後、Epic Branch→`develop`のPRを作る。本文にEpic Issueと、含まれるTask PRの一覧を書く。作成前に、Epic Branch上のCommitがTask PRのSquash Commitと追従PRのmerge commitだけであることを確認する。merge commitでMergeし、Task単位の履歴を`develop`に残す。MergeはOwnerの明示依頼がある場合だけ行う |
 | 後片付け | Epic→`develop`のMerge後、RemoteのEpic Branchを削除する |
 
 Epic Branchは、未完成の機能を`develop`へ入れずに、Taskを独立して検証・Reviewするための統合先である。Epic内のTaskの順序は、[PR依存関係Gate](pr-dependency-gate.md)に従い、Code上の依存がある場合だけStackで表す。

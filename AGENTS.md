@@ -119,7 +119,7 @@ Branch、Commit、PR、PRサイズ、Issue・PR本文、Squash merge、公開前
 
 Root Gateとして次だけを守る。
 
-- `develop`を統合Branchとし、直接Pushしない。Task Issueを2つ以上持つEpicでは、`epic/<番号>-<名前>`をEpic統合Branchとし、Task PRをそこへMergeする。Epic Branchにも直接Pushしない。
+- `develop`を統合Branchとし、直接Pushしない。Task Issueを2つ以上持つEpicでは、`epic/<番号>-<名前>`をEpic統合Branchとし、Task PRをそこへMergeする。Epic Branchにも、作成時を除いて直接Pushしない。適用範囲（2026-11-17以降に実装を始めるEpicだけ。進行中のEpicは従来のRule）は[Delivery Workflow](docs/engineering/delivery-workflow.md#epic統合branch)に従う。
 - 1 Task／1 Branch／1 PRを基本とし、Taskごとに新しいSessionで開始する。
 - Commitはレビュー可能な論理単位にする。
 - PR作成前にSelf Reviewと独立Reviewを完了する。

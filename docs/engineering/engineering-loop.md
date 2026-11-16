@@ -207,7 +207,7 @@ Epic（必要な場合）
 
 依存がないTaskは並行Deliveryできる。未Mergeの変更へCode上の依存があるTaskはStacked PR候補とし、Merge順序をDependency Graphから決める。
 
-Task Issueを2つ以上持つEpicでは、[Epic統合Branch](delivery-workflow.md#epic統合branch)を使う。最初のTaskに着手する前に、最新`develop`からEpic Branchを作る。Task PRはEpic Branchへ統合し、Epic完了時にEpic Branchを`develop`へ統合する。
+Task Issueを2つ以上持つEpicでは、[Epic統合Branch](delivery-workflow.md#epic統合branch)を使う。適用範囲（2026-11-17以降に実装を始めるEpicだけ）は同節に従う。最初のTaskに着手する前に、最新`develop`からEpic Branchを作る。Task PRはEpic Branchへ統合し、Epic完了時にEpic Branchを`develop`へ統合する。
 
 Taskは`Backlog`のまま保存し、着手時にI0へ進む。
 
