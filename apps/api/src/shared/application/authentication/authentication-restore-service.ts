@@ -18,7 +18,11 @@ import type {
   AuthenticationVerifiedHead,
   AuthenticationActorDeletionCursor,
 } from './authentication-maintenance-ports.js';
-import { authenticationRecoveryPointSchemaVersion } from './authentication-maintenance-ports.js';
+import {
+  authenticationRecipientCodeSchemaVersion,
+  authenticationRecoveryPointSchemaVersion,
+  authenticationRestoreSchemaVersions,
+} from './authentication-maintenance-ports.js';
 import type { AuthenticationClock } from './authentication-ports.js';
 import { AuthenticationCryptoUnavailable } from './authentication-record-protection.js';
 import { assertAuthenticationBackupAge } from './authentication-retention-policy.js';
@@ -72,9 +76,12 @@ export const createAuthenticationRestoreService = (
     monitor: AuthenticationMaintenanceMonitor;
     /** recovery checkpointへappendする`evidenceDigest`の固定書式。 */
     evidenceDigest: AuthenticationRestoreEvidenceDigest;
-    /** Manifestの受理版の明示allowlist。既定は6だけ。 */
+    /** Manifestの受理版の明示allowlist。既定は{@link authenticationRestoreSchemaVersions}。 */
     acceptedSchemaVersions?: readonly number[];
-    /** 全Context整合証跡を必須にするManifestの最小版。既定は11。 */
+    /**
+     * 全Context整合証跡を必須にするManifestの最小版。既定は11。
+     * 11より大きくしても、コード表を持つ版（11以上）は常に証跡必須のままにする。
+     */
     consistencyRequiredFrom?: number;
     /** 全Context整合証跡。未注入で証跡が必要な版は開通せず隔離する。 */
     consistency?: Readonly<{
@@ -86,6 +93,8 @@ export const createAuthenticationRestoreService = (
     /**
      * 全招待コードの破棄への参加。未設定はコード不参加（既定値）で、コード表を扱わない。
      * 設定時は初回閉鎖UTCを起点にticketを登録し、closure集合を`evidenceDigest`へ入れる。
+     * 「コード機能の接続」はこの設定（コード用途の鍵Portとコード表Adapterの束）から導出する。
+     * 設定時はv11だけ、未設定時はv6だけを受理し、DB Adapterの設定との一致も`isolate`で確かめる。
      */
     recipientCodes?: RecipientCodeRestoreDiscard;
   }>,
@@ -93,7 +102,10 @@ export const createAuthenticationRestoreService = (
   const fail = (): never => {
     throw new AuthenticationCryptoUnavailable();
   };
-  const acceptedSchemaVersions = new Set(options.acceptedSchemaVersions ?? [6]);
+  const acceptedSchemaVersions = new Set(
+    options.acceptedSchemaVersions ?? authenticationRestoreSchemaVersions,
+  );
+  const recipientCodes = options.recipientCodes !== undefined;
   const consistencyRequiredFrom =
     options.consistencyRequiredFrom ?? authenticationRecoveryPointSchemaVersion;
   /**
@@ -104,13 +116,25 @@ export const createAuthenticationRestoreService = (
     const version = manifest.schemaVersion;
     if (!Number.isSafeInteger(version) || !acceptedSchemaVersions.has(version))
       return fail();
+    // 論点6: コード表を持つ版はコード参加の構成だけ、持たない版は不参加の構成だけで受理する。
+    // 接続済みでv6を受理しないので、Manifestの版を下げても証跡とコード破棄の要求は下がらない。
+    if (version >= authenticationRecipientCodeSchemaVersion !== recipientCodes)
+      return fail();
     const present = Object.prototype.hasOwnProperty.call(
       manifest,
       'recoveryPointId',
     );
     if (present !== version >= authenticationRecoveryPointSchemaVersion)
       return fail();
-    if (version < consistencyRequiredFrom) return null;
+    // コード表を持つ版（コード参加の構成）は、注入した最小版に依らず常に証跡を要求する（副論点A）。
+    if (
+      version <
+      Math.min(
+        consistencyRequiredFrom,
+        authenticationRecipientCodeSchemaVersion,
+      )
+    )
+      return null;
     const consistency = options.consistency ?? fail();
     const required = new Set(consistency.requiredContexts);
     if (
@@ -280,6 +304,7 @@ export const createAuthenticationRestoreService = (
         const generationVersion = await options.database.isolate(
           fence,
           manifest,
+          { recipientCodes },
         );
         let head = await options.ledger.latest(manifest);
         for (let attempt = 0; attempt < 3; attempt += 1) {

@@ -333,7 +333,7 @@ export const readRecipientCodeMaintenanceKeyState = (
 /**
  * Restore専用のコード破棄Adapterだけが使う。復旧したDBのコード用途の世代を、
  * あってもなくても受理する（コード鍵は使わず、期限・MACに依らず行を除去するため）。
- * Restoreの他の操作は`readAuthenticationRestoreKeyState`のままコード用途を拒否する（停止契約）。
+ * Restoreの他の操作は`readAuthenticationRestoreKeyState`で、コード参加の構成に限ってコード用途を受理する。
  * @param connection 復旧処理が所有するTransaction接続。
  * @returns restoringに限定した共有Lock付きの既存認証世代。コード世代は含まない。
  * @throws AuthenticationCryptoUnavailable restoring以外、未知用途、不正State、鍵世代不足。
@@ -348,10 +348,21 @@ export const readRecipientCodeRestoreKeyState = (
 
 /**
  * 外部fenceを検証した復旧専用Adapterだけが使う。
+ * コード不参加ではコード用途を未知用途として拒否する（旧Restoreの停止契約）。コード参加（v11）では
+ * コード2用途の現行世代を必須にして受理する（ADR #278 論点6）。
  * @param connection 復旧処理が所有するTransaction接続。
- * @returns restoringに限定した共有Lock付き世代。
- * @throws restoring以外、不正State、鍵世代不足。
+ * @param recipientCodes コード参加の構成ならtrue。Adapterの設定から渡し、呼出しごとに切り替えない。
+ * @returns restoringに限定した共有Lock付き世代。型にコード世代を含めない（Restoreはコード鍵を使わない）。
+ * @throws restoring以外、不正State、未知用途、鍵世代不足、参加時のコード世代不足。
  */
-export const readAuthenticationRestoreKeyState = (
+export const readAuthenticationRestoreKeyState = async (
   connection: AuthenticationQueryConnection,
-): Promise<AuthenticationStoreKeyState> => readState(connection, ['restoring']);
+  recipientCodes = false,
+): Promise<AuthenticationStoreKeyState> =>
+  recipientCodes
+    ? await readState(
+        connection,
+        ['restoring'],
+        ['recipient-code-lookup', 'recipient-code-state-mac'],
+      )
+    : await readState(connection, ['restoring']);

@@ -7,6 +7,10 @@ import type {
   AuthenticationLedgerEvidence,
   AuthenticationRestoreFence,
 } from '../../../application/authentication/authentication-maintenance-ports.js';
+import {
+  authenticationRecipientCodeSchemaVersion,
+  authenticationRestoreSchemaVersions,
+} from '../../../application/authentication/authentication-maintenance-ports.js';
 import type { AuthenticationClock } from '../../../application/authentication/authentication-ports.js';
 import {
   AuthenticationCryptoUnavailable,
@@ -86,7 +90,9 @@ export const createPostgresAuthenticationRestore = (
     clock: AuthenticationClock;
     /**
      * コード参加の構成ならtrue。fingerprintへコード表を加え、activateはコード表の0-rowを要求する。
-     * 既定は不参加で、コード表を照会しない（v6のgoldenを変えない）。
+     * Restoreの各操作はコード2用途を必須として受理し、公開世代にもコード2用途を要求する。
+     * isolateはRestore Serviceの設定、Manifestの版（11）、復旧DBのコード表とコード用途との一致を要求する。
+     * 既定は不参加で、v6だけを受理し、コード表を照会しない（v6のgoldenを変えない）。
      */
     recipientCodes?: boolean;
   }>,
@@ -94,6 +100,30 @@ export const createPostgresAuthenticationRestore = (
   const recipientCodes = options.recipientCodes === true;
   const fingerprint = (connection: AuthenticationQueryConnection) =>
     authenticationRestoreFingerprint(connection, recipientCodes);
+  const keyState = (connection: AuthenticationQueryConnection) =>
+    readAuthenticationRestoreKeyState(connection, recipientCodes);
+  /**
+   * ADR #278 論点6の構成確認。復旧DBのコード表とコード2用途の有無が、この構成と一致しなければ拒否する。
+   * v6のDBにはコード用途のenum値がないので、用途はtextで比較する。
+   */
+  const checkRecipientCodeInventory = async (
+    connection: AuthenticationQueryConnection,
+  ) => {
+    const table = await connection.query(
+      "SELECT to_regclass('authentication.recipient_code') IS NOT NULL AS present",
+    );
+    const purposes = await connection.query(
+      "SELECT DISTINCT purpose::text AS purpose FROM authentication.key_generation WHERE purpose::text IN ('recipient-code-lookup','recipient-code-state-mac')",
+    );
+    const present =
+      table.rows.length === 1 &&
+      authenticationDatabaseRow(table.rows[0]).present === true;
+    if (
+      present !== recipientCodes ||
+      purposes.rows.length !== (recipientCodes ? 2 : 0)
+    )
+      return fail();
+  };
   const transactions = createAuthenticationTransactions(
     options.pool,
     createAuthenticationTransactionScopes(),
@@ -160,12 +190,23 @@ export const createPostgresAuthenticationRestore = (
     if (result.rows.length !== 0) return fail();
   };
   return {
-    async isolate(fence, manifest) {
+    async isolate(fence, manifest, configuration) {
       completions.delete(fence);
       await closed(fence);
-      // recoveryPointIdは版規則だけ検査する。受理版は6のままで、v6はFieldを持たない。
+      // recoveryPointIdの版規則（v11で必須、v6で不在）はcodecが検査する。
       const m = authenticationManifestObject(manifest);
-      if (m.schemaVersion !== 6) return fail();
+      if (
+        typeof m.schemaVersion !== 'number' ||
+        !authenticationRestoreSchemaVersions.includes(m.schemaVersion)
+      )
+        return fail();
+      // 論点6: Restore ServiceとこのAdapterのコード参加、Manifestの版が一致する構成だけを受理する。
+      if (
+        configuration.recipientCodes !== recipientCodes ||
+        m.schemaVersion >= authenticationRecipientCodeSchemaVersion !==
+          recipientCodes
+      )
+        return fail();
       const oldEpoch = authenticationUuid(m.epoch);
       const backupVersion = authenticationDatabaseInteger(m.keyStateVersion, 1);
       const checkpoint = authenticationObject(m.checkpoint, [
@@ -184,10 +225,13 @@ export const createPostgresAuthenticationRestore = (
         return fail();
       const checkedManifest = {
         createdAt: authenticationDatabaseInteger(m.createdAt, 0),
-        schemaVersion: 6,
+        schemaVersion: m.schemaVersion,
         keyStateVersion: backupVersion,
         epoch: oldEpoch,
         checkpoint: { sequence: checkpointSequence, hash: checkpoint.hash },
+        ...(typeof m.recoveryPointId === 'string'
+          ? { recoveryPointId: m.recoveryPointId }
+          : {}),
       };
       const result = await transactions.run(async (connection) => {
         const selected = await connection.query(
@@ -210,6 +254,8 @@ export const createPostgresAuthenticationRestore = (
           row.status !== 'restoring'
         )
           return fail();
+        // 不可逆な操作（restoringへの更新を含む）の前に、復旧DBの構成を確かめる。
+        await checkRecipientCodeInventory(connection);
         const epoch = authenticationUuid(row.epoch);
         if (epoch !== oldEpoch) {
           const published = await options.control.currentPublication(fence);
@@ -256,7 +302,7 @@ export const createPostgresAuthenticationRestore = (
         record,
       );
       return restoring(fence, async (connection) => {
-        const state = await readAuthenticationRestoreKeyState(connection);
+        const state = await keyState(connection);
         const actorRows = await connection.query(
           `SELECT ${authenticationActorColumns} FROM authentication.actor WHERE actor_id=$1 FOR UPDATE`,
           [target.actorId],
@@ -377,7 +423,7 @@ export const createPostgresAuthenticationRestore = (
     async discardCredentials(fence) {
       completions.delete(fence);
       return restoring(fence, async (connection) => {
-        const state = await readAuthenticationRestoreKeyState(connection);
+        const state = await keyState(connection);
         const actors = await connection.query(
           `SELECT ${authenticationActorColumns} FROM authentication.actor ORDER BY actor_id FOR SHARE`,
         );
@@ -440,12 +486,14 @@ export const createPostgresAuthenticationRestore = (
     },
     async migrateIdentity(fence, input) {
       completions.delete(fence);
-      const publication = authenticationRestorePublication(input);
+      const publication = authenticationRestorePublication(
+        input,
+        recipientCodes,
+      );
       if (!(await options.control.verifyPublication(fence, publication)))
         return fail();
       const result = await restoring(fence, async (connection, version) => {
-        const previousState =
-          await readAuthenticationRestoreKeyState(connection);
+        const previousState = await keyState(connection);
         const selectedActors = await connection.query(
           `SELECT ${authenticationActorColumns} FROM authentication.actor ORDER BY actor_id FOR UPDATE`,
         );
@@ -477,7 +525,7 @@ export const createPostgresAuthenticationRestore = (
             ],
           );
         }
-        const state = await readAuthenticationRestoreKeyState(connection);
+        const state = await keyState(connection);
         const activeActors = new Set<string>();
         for (const stored of actors) {
           // 旧公開集合への所属とMACは世代切替前に検証済み。新集合に旧世代を要求せず、
@@ -606,7 +654,7 @@ export const createPostgresAuthenticationRestore = (
             );
             if (codes.rows.length !== 0) return false;
           }
-          await readAuthenticationRestoreKeyState(connection);
+          await keyState(connection);
           if (
             !authenticationBytesEqual(
               await fingerprint(connection),

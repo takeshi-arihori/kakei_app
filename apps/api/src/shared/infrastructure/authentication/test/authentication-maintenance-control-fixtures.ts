@@ -20,6 +20,10 @@ const purposes = [
   'deleted-actor',
   'deletion-ledger-mac',
 ] as const;
+const recipientCodePurposes = [
+  'recipient-code-lookup',
+  'recipient-code-state-mac',
+] as const;
 
 /**
  * 外部所有権とepoch/CASのTest-only制御。実Traffic/IAM/failure domainの証明ではない。
@@ -27,6 +31,7 @@ const purposes = [
  * @param ledger MAC/chainを実検証する合成外部Ledger。
  * @param actorStateKeyVersion 復旧後のActor MAC世代。旧世代を含めない移行も検証する。
  * @param now 閉鎖UTCを採るControl側の合成時刻源。呼出し側の時刻を使わない。
+ * @param recipientCodes コード参加の構成ならtrue。公開世代へコード2用途（v1）を加える。
  * @returns 同runの所有fence・公開実体・閉鎖UTC記録・故障注入だけの合成制御。
  */
 export const syntheticAuthenticationRestoreControl = (
@@ -34,6 +39,7 @@ export const syntheticAuthenticationRestoreControl = (
   ledger: ReturnType<typeof syntheticAuthenticationLedger>,
   actorStateKeyVersion = 'v1',
   now: () => number = () => Date.now(),
+  recipientCodes = false,
 ) => {
   const fence = Object.freeze(
     Object.create(null),
@@ -160,7 +166,10 @@ export const syntheticAuthenticationRestoreControl = (
             runId: owner!,
             revision: 2,
             epoch,
-            generations: purposes.map((purpose) => ({
+            generations: [
+              ...purposes,
+              ...(recipientCodes ? recipientCodePurposes : []),
+            ].map((purpose) => ({
               purpose,
               keyVersion:
                 purpose === 'deletion-ledger-mac'

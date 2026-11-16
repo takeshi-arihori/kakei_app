@@ -7,7 +7,10 @@ import type {
 
 /** 復旧時に外部制御状態から取得する認証専用世代。Materialを含まない。 */
 export interface AuthenticationRestoreGeneration {
-  /** 既存Schemaの独立した固定用途。 */
+  /**
+   * 既存Schemaの独立した固定用途。コード2用途はコード参加の構成（v11）だけが公開し、
+   * 不参加の構成では公開に含めない（ADR #278 論点6）。
+   */
   readonly purpose:
     | 'google-identity-search'
     | 'login-attempt-cookie'
@@ -17,7 +20,9 @@ export interface AuthenticationRestoreGeneration {
     | 'audit-attempt'
     | 'audit-session'
     | 'deleted-actor'
-    | 'deletion-ledger-mac';
+    | 'deletion-ledger-mac'
+    | 'recipient-code-lookup'
+    | 'recipient-code-state-mac';
   /** Providerで存在を確認した鍵世代。 */
   readonly keyVersion: string;
   /** Cookieは新epoch、それ以外はnull。 */
