@@ -9,7 +9,7 @@ description: 変更前にRepository正本とCodeを確認し、現状、Domain�
 
 ## 最初に読む
 
-- 最新`develop`
+- 最新の統合Branch（`develop`、またはEpic Branch）
 - GitHub Task／Requirement／Done Criteria／Dependencies／Decision
 - [Engineering Loop](../../../docs/engineering/engineering-loop.md)
 - [Skillガバナンス](../../../docs/engineering/skill-governance.md)
@@ -31,7 +31,7 @@ Skill自身が設計Ruleを再定義せず、評価根拠となるdocsを結果�
 
 ## 出力
 
-1. **基準**: develop SHA、Task、ADR、確認したdocs
+1. **基準**: 統合BranchのSHA、Task、ADR、確認したdocs
 2. **現状**: 設計・実装・Testの要約
 3. **Domain要素**: 変更に関係する要素と根拠
 4. **Gap**: Requirementとの不足・矛盾・変更不要箇所

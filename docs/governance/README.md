@@ -9,8 +9,11 @@ Notionは読み書きしない。2026-09-05のOwner承認と切替実施結果�
 | Epicの目的、Scope、全Taskの一覧と依存。TaskのRequirement、Done Criteria、依存、Owner、PR URL | GitHub Issue本文 |
 | 進捗、Status、Sprint、Story Points、優先度、分類 | [Private Project #9](https://github.com/users/takeshi-arihori/projects/9)のField |
 | 現行仕様・業務Rule・設計・運用文書 | このRepositoryの`develop` |
-| Decision本文・Status・履歴 | docs/adr。承認と切替実行の証跡は関連Issue |
-| 実装のレビューと統合 | develop向けPull Request |
+| Decision本文・Status・履歴 | docs/adr。承認と切替実行の証跡は関連Issue（Owner会話承認は日付と内容を1行でIssue Commentへ記録する） |
+| 実装のレビューと統合 | Task PR（`develop`向け、またはEpic統合Branch向け）と、Epic Branchから`develop`へのPull Request |
+| 実装前Plan、調査メモ、検討中の設計 | 正本なし。primary checkoutの`.claude/plan/`（Git管理外）に置く作業領域 |
+
+`.claude/plan/`の扱いは[実装前Planの置き場所とEpic統合Branch](../adr/plan-location-and-epic-integration-branch.md)に従う。独立Reviewer、他のSession、将来の参照が必要とする内容をここだけに置かない。
 
 同じ情報を二重に編集しない。Issue本文にProject Fieldの要約を記載した場合は同時更新し、食い違いを再取得で検出する。ProjectだけPrivateにしてもPublic RepositoryのIssue/PRは公開される。
 

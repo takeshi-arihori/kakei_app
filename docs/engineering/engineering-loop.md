@@ -155,6 +155,10 @@ pre-investigation
 - 更新対象docs
 - Open Question／Conflict／停止事項
 
+PlanとADR案などの途中成果は、[実装前Plan](delivery-workflow.md#実装前plan)に従ってprimary checkoutの`.claude/plan/`に置き、Commitしない。
+
+設計判断がある場合は、論点と推奨案をOwnerへ示し、実装前に会話で採否を得る。親Agentは日付と内容を1行で、ADR IssueまたはEpic IssueのCommentへ記録する。承認された判断は、依存する最初の実装PRにAccepted ADRとして同梱する。手順は[Delivery Workflow](delivery-workflow.md#adr)のADRの節に従う。承認Commentがない判断に依存する経路は止める。
+
 ## D3. 独立Planning Review
 
 次のいずれかに該当する場合だけ、Epic／Taskを保存する前に、新しい`work-planning-evaluator`へD0〜D2のEvidence、Epicの目的と期待成果、設計、Task名の案、Dependencies、Decisionを渡す。
@@ -203,6 +207,8 @@ Epic（必要な場合）
 
 依存がないTaskは並行Deliveryできる。未Mergeの変更へCode上の依存があるTaskはStacked PR候補とし、Merge順序をDependency Graphから決める。
 
+Task Issueを2つ以上持つEpicでは、[Epic統合Branch](delivery-workflow.md#epic統合branch)を使う。最初のTaskに着手する前に、最新`develop`からEpic Branchを作る。Task PRはEpic Branchへ統合し、Epic完了時にEpic Branchを`develop`へ統合する。
+
 Taskは`Backlog`のまま保存し、着手時にI0へ進む。
 
 # 実装フェーズ
@@ -211,7 +217,7 @@ Taskは`Backlog`のまま保存し、着手時にI0へ進む。
 
 `implement-github-task`を入口に、次を1回で行う。
 
-1. 対象Task、親Epic、Dependencies、Accepted ADR、基準`develop`、作業Treeを確認する。
+1. 対象Task、親Epic、Dependencies、Accepted ADRまたはOwner承認Comment、基準の統合Branch（`develop`またはEpic Branch）、作業Treeを確認する。
 2. `pre-investigation`で現状とGapを調査する。同じ対象の調査が基準Commit付きでIssue、PR、docsにあり、その後に対象Pathの変更がなければ再利用する。変更があれば変更分だけ調査する。
 3. Taskの詳細をIssue本文へ書く。すでに書かれている場合は不足分だけ補う。変更規模が目安を超えそうなら分割を検討する。
 4. [Delivery Workflow](delivery-workflow.md)のReady判定を行う。
@@ -219,7 +225,7 @@ Taskは`Backlog`のまま保存し、着手時にI0へ進む。
 
 Ready条件を満たさないTask、特に未承認Decisionに依存するTaskは実装へ進めず、`Backlog`のまま不足条件を報告する。
 
-Task専用Branchを用意し、GitHub Lifecycleは`implement-github-task`、実際の変更Workflowは`feature-development`へ委譲する。調査結果も渡し、`feature-development`では調査をやり直さない。
+Task専用Branchを基準の統合Branchから用意し、GitHub Lifecycleは`implement-github-task`、実際の変更Workflowは`feature-development`へ委譲する。調査結果も渡し、`feature-development`では調査をやり直さない。
 
 ## I1. TDDのRedを作る
 

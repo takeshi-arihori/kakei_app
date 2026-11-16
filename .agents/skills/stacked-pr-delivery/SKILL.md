@@ -30,7 +30,7 @@ Branch、PR Base、Dependency表現、Merge順序、前提Merge後の追従、�
 
 作業前に次を記録する。
 
-- 基準`develop` SHA
+- 基準の統合Branch（`develop`またはEpic Branch）とそのSHA
 - Stack対象TaskとBranch／PRの対応計画
 - Stackのbottom → top順序
 - 各Taskの直接依存Task／PR／Branch
@@ -133,7 +133,7 @@ Tool未導入だけを理由に`blocked`にはせず、安全なFallbackが成�
 ## 出力
 
 - 使用Adapter: `gh-stack` / `fallback`
-- 基準`develop` SHA
+- 基準の統合BranchとSHA
 - Stackのbottom → top順序
 - Task → Branch → PR → Baseの対応
 - Dependency metadataの照合結果

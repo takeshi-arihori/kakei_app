@@ -65,7 +65,7 @@ body:
     id: adr
     attributes:
       label: Related ADR・根拠
-      description: GitHub上のADR URLと判定理由。未確認・ProposedのままReadyにしない
+      description: GitHub上のADR URL、または同梱予定の判断のOwner承認Comment URLと判定理由。承認の記録がないままReadyにしない
     validations:
       required: true
   - type: checkboxes

@@ -5,7 +5,8 @@
 - 利用者の最新の明示指示を最優先する。
 - Notionは読み書きしない。GitHub IssueをRequirement／Done Criteria、Private Projectを進捗、Repositoryを仕様・設計・ADRの正本とする。
 - GitHubの取得先や固定Commitは[正本入口](docs/governance/README.md)で確認する。
-- 設計・実装を始める前に最新`develop`を確認する。
+- 設計・実装を始める前に最新`develop`を確認する。Epic Branchで作業する場合は、そのEpic Branchも確認する。
+- 実装前のPlan、調査メモ、検討中の設計はprimary checkoutの`.claude/plan/`（Git管理外）に置く。ここは正本ではないので、Reviewや後続作業が必要とする内容はIssue、ADR、docs、PRに書く。
 - 設計からDraft PRまでの標準状態遷移は[Engineering Loop](docs/engineering/engineering-loop.md)を正本とする。
 - 詳細Ruleの入口は[開発ガイド](docs/engineering/README.md)とする。必要な文書だけを読む。
 - GitHub正本とCodeが矛盾する場合は実装で吸収せず、Conflictとして扱う。
@@ -48,6 +49,7 @@ Directoryの責務と採用技術はRepository docsを正本とする。Rootで�
 - `infra`: Local／Cloud環境
 - `docs`: 静的な仕様・設計・Rule
 - `.worktree`: Project rootに置く、Git管理外の追加Worktree
+- `.claude/plan`: Project rootに置く、Git管理外の実装前Plan
 - `.agents/skills`: 再利用可能な作業Workflow
 - `.claude/agents`: 独立Reviewer／Evaluatorの定義
 
@@ -93,6 +95,7 @@ Taskの着手からDelivery
 - ADR必須条件、Ready条件、文書影響、公開Gateは[Delivery Workflow](docs/engineering/delivery-workflow.md)と[正本入口](docs/governance/README.md)に従う。
 - 依存Task／PRとStacked PRは[PR依存関係Gate](docs/engineering/pr-dependency-gate.md)に従う。
 - 採用済みDecisionを変更する場合、AIが暗黙にAccepted扱いしない。
+- 設計判断は実装前にOwnerの会話承認を得て、日付と内容をIssue Commentへ記録する。承認された判断は、依存する最初の実装PRにAccepted ADRとして同梱する。
 
 ## 独立Evaluator
 
@@ -116,7 +119,7 @@ Branch、Commit、PR、PRサイズ、Issue・PR本文、Squash merge、公開前
 
 Root Gateとして次だけを守る。
 
-- `develop`を統合Branchとし、直接Pushしない。
+- `develop`を統合Branchとし、直接Pushしない。Task Issueを2つ以上持つEpicでは、`epic/<番号>-<名前>`をEpic統合Branchとし、Task PRをそこへMergeする。Epic Branchにも直接Pushしない。
 - 1 Task／1 Branch／1 PRを基本とし、Taskごとに新しいSessionで開始する。
 - Commitはレビュー可能な論理単位にする。
 - PR作成前にSelf Reviewと独立Reviewを完了する。
