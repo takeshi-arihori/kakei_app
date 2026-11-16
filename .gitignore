@@ -45,6 +45,8 @@ next-env.d.ts
 
 /specs
 /.worktree/
+# 実装前Plan・調査メモ（正本ではない。docs/adr/plan-location-and-epic-integration-branch.md）
+/.claude/plan/
 
 # Webブラウザ検証の生成物
 /apps/web/test-results/

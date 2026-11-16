@@ -23,7 +23,7 @@ Private GitHub Project
 - Notionは読み書きしない。
 - IssueをRequirement／Done Criteria、Private Projectを進捗、Repositoryを仕様・設計・ADRの正本とする。
 - GitHubの取得先と固定Commitは[正本入口](../governance/README.md)で確認する。
-- Pull Requestは1つのTaskを検証可能な差分として届ける。
+- Pull Requestは1つのTaskを検証可能な差分として届ける。例外は、[Epic統合Branch](#epic統合branch)と`develop`の間の追従PRと統合PRだけとする。
 - 未承認Decisionに依存するTaskをReadyへ進めない。
 
 ## Epic
@@ -56,7 +56,7 @@ Epicには、Epicを完了させるのに必要なTaskを**すべて**列挙す�
 
 ### Epicの完了
 
-一覧のTaskとsub-issueが**すべてClose**するまでEpicをCloseしない。Epicの目的がまだ満たされない場合は、不足するTaskを起票して一覧へ追加する。目的の一部を別のEpicへ移す場合は、Scope／Out of scopeを書き換え、移したTaskを新しいEpicのsub-issueへ付け替える。
+一覧のTaskとsub-issueが**すべてClose**するまでEpicをCloseしない。[Epic統合Branch](#epic統合branch)を使ったEpicでは、さらにEpic→`develop`のPRがMergeされるまでCloseしない。Epicの目的がまだ満たされない場合は、不足するTaskを起票して一覧へ追加する。目的の一部を別のEpicへ移す場合は、Scope／Out of scopeを書き換え、移したTaskを新しいEpicのsub-issueへ付け替える。
 
 ### Epicの作成前
 
@@ -75,8 +75,8 @@ Taskは1つのPRで届けられ、単独で検証できる成果の大きさに�
 | 5 | Presentation | GraphQL／HTTPの公開契約と接続。契約Test |
 | 6 | Web | 画面。Component Test、Playwright E2E |
 
-- 決まっていないDecisionがあれば、1のTaskを先に置き、後続Taskをそれに依存させる。
-- 後続Taskは依存Taskが完了してから着手する（Code依存はMerge済み、Decision依存はADRがAccepted）。未Mergeの前提へのCode依存は[PR依存関係Gate](pr-dependency-gate.md)のStacked PRに従う。
+- 決まっていないDecisionがあれば、1のTaskを先に置き、後続Taskをそれに依存させる。ただし、[ADR](#adr)の手順で実装前にOwnerの会話承認を得た判断は、別のADR Taskにせず、依存する最初の実装TaskのPRにAccepted ADRとして同梱してよい。
+- 後続Taskは依存Taskが完了してから着手する（Code依存はMerge済み、Decision依存はOwner承認がIssue Commentに記録済み）。未Mergeの前提へのCode依存は[PR依存関係Gate](pr-dependency-gate.md)のStacked PRに従う。
 - 1つの層でもPRサイズの目安を超える場合は、縦に切る（例: 1件の正常系→境界・競合→清掃）。
 
 例:
@@ -131,33 +131,69 @@ Statusは`Backlog → Ready → In Progress → Review → Done`を基本とす�
 DependenciesをEpic本文とTask本文へ記録し、実装開始前にDelivery順序を決める。
 
 - 独立Task: 並行実装可能
-- 前提TaskがMerge済み: 最新`develop`から後続Taskを開始
+- 前提TaskがMerge済み: 最新の統合Branch（`develop`、またはEpic Branch）から後続Taskを開始
 - 前提PRが未Mergeで、そのCode差分が後続実装に必要: Stacked PR候補
 
 Stacked PRのBranch Base、PR Base、`Depends-On`、Merge順序、前提Merge後の再base／再検証は[PR依存関係Gate](pr-dependency-gate.md)に従う。
 
 ## Branch・Commit
 
-通常のTask Branchは最新`develop`を基点とする。Stacked PRだけ[PR依存関係Gate](pr-dependency-gate.md)に従って直接依存Branchを基点にできる。
+通常のTask Branchは、最新の統合Branchを基点とする。統合Branchは、Epic統合Branchを使うEpicのTaskではそのEpic Branch、それ以外では`develop`である。Stacked PRだけ[PR依存関係Gate](pr-dependency-gate.md)に従って直接依存Branchを基点にできる。
 
 Branch名:
 
 - 機能追加: `feat/issue-number-short-description`
 - 不具合修正: `fix/issue-number-short-description`
 - 保守作業: `chore/issue-number-short-description`
+- Epic統合Branch: `epic/epic-number-short-description`
 
 Rule:
 
-- `develop`を統合Branchとし、直接Pushしない。
+- `develop`を統合Branchとし、直接Pushしない。Epic Branchにも、作成時を除いて直接Pushしない。
 - `main` Branchを作成・Pushしない。
 - 1 Task／1 Branch／1 PRを基本とする。
 - Conventional Commitsを使用する。
 - 作業BranchのCommitはレビュー可能な論理単位にする。
 - Refactorと無関係な整形を混ぜない。
 - Secret、個人情報、公開不可情報、大容量生成物をCommitしない。
-- `develop`向けPRはSquash mergeを使用し、統合後は1 PRを1 Commitとして扱う。作業Branch内のCommitを事前に1つへ潰す必要はない。
+- Task PRは、`develop`向けでもEpic Branch向けでもSquash mergeを使用し、統合後は1 PRを1 Commitとして扱う。作業Branch内のCommitを事前に1つへ潰す必要はない。
+- Epic Branchと`develop`の間のPR（追従と完了時の統合）だけはmerge commitを使う。
 
 追加Worktreeを使う場合の保存先とIgnoreは[Worktree運用](worktree-management.md)に従う。
+
+## Epic統合Branch
+
+Decisionは[実装前Planの置き場所とEpic統合Branch](../adr/plan-location-and-epic-integration-branch.md)とする。2026-11-17以降に実装を始めるEpicに適用する。それより前から進行中のEpicは、Taskごとに`develop`へMergeする従来のRuleで完了させる。
+
+```text
+develop ──────────────────────────────●── (merge commit)
+   │                                  ▲
+   └─ epic/301-settlement ──●──●──●───┘
+          │                 ▲  ▲  ▲
+          ├─ feat/302 ──────┘  │  │   Task PR（Squash）
+          ├─ feat/303 ─────────┘  │
+          └─ feat/304 ────────────┘
+```
+
+| 場面 | 手順 |
+| --- | --- |
+| 作成 | Task Issueを2つ以上持つEpicで、最初のTaskに着手する前に、最新`develop`から`epic/<Epic番号>-<短い名前>`を作ってPushする。Task Issueが1つだけの場合はEpic Branchを作らない |
+| Task PR | BaseをEpic Branch（Stackの場合は直接の前提Branch）にしてSquash mergeする。PRサイズの目安、Review、CIはTask PRごとに適用する |
+| `develop`への追従 | Base=Epic Branch、Head=`develop`のPRを作り、merge commitでMergeする。Epic Branchをrebaseしたり、force pushしたりしない。衝突はこのPRの中で解消する。衝突を手で解消した場合は、その解消差分をTask PRと同じ独立Reviewに通す |
+| Epic完了前に`develop`で必要な修正 | Epic外の通常Taskとして`develop`へ入れ、その後Epic Branchを追従させる |
+| 完了 | 一覧のTaskがすべてCloseした後、Epic Branch→`develop`のPRを作る。本文にEpic Issueと、含まれるTask PRの一覧を書く。作成前に、Epic Branch上のCommitがTask PRのSquash Commitと追従PRのmerge commitだけであることを確認する。merge commitでMergeし、Task単位の履歴を`develop`に残す。MergeはOwnerの明示依頼がある場合だけ行う |
+| 後片付け | Epic→`develop`のMerge後、RemoteのEpic Branchを削除する |
+
+Epic Branchは、未完成の機能を`develop`へ入れずに、Taskを独立して検証・Reviewするための統合先である。Epic内のTaskの順序は、[PR依存関係Gate](pr-dependency-gate.md)に従い、Code上の依存がある場合だけStackで表す。
+
+## 実装前Plan
+
+実装前のPlan、調査メモ、検討中の設計は、primary checkoutの`.claude/plan/<Issue番号>-<短い名前>/`に置く。`.gitignore`で除外しているため、Commitされない。
+
+- `.claude/plan/`は正本ではない。Requirement、Done CriteriaはIssue、採用した判断はADR、現行RuleはRepository docs、検証とReviewの要約はPRに書く。
+- 独立Reviewerや他のSessionは`.claude/plan/`を読めない前提で、必要な内容をIssue、ADR、docs、またはReviewerへの入力に含める。
+- 追加Worktreeから読むときは、primary checkoutの`.claude/plan/`をPathで参照する。Worktree側に複製しない。
+- 作業が完了したら、残す必要のある結論を正本へ移したうえで、Planを削除してよい。
 
 ## PR前の文書同期
 
@@ -189,6 +225,7 @@ DoneはDone Criteria、必要なCI／Verification、文書同期、Issue／PR追
 
 変更行数（追加＋削除）の目安を**約500行**とする。上限ではなく、分割を検討する合図とする。
 
+- 目安はTask PRに適用する。Epic Branch→`develop`のPRと、`develop`への追従PRには適用しない。これらはReview済みのTask PRの集まりなので、本文に含まれるTask PRを列挙する。
 - I0で超えそうと分かった場合は、分割できないか検討する。実装中に超えた場合も、Reviewへ渡す前に検討する。
 - 分割すると単独で検証できない場合や、半端な状態が`develop`へ入る場合は分割しない。
 - 分割しない場合は、PR本文の変更規模へ理由を1行で書く。
@@ -218,7 +255,7 @@ Commit後は次で数える。
 git diff --shortstat -M origin/develop...HEAD -- . ':(exclude)pnpm-lock.yaml' ':(exclude)apps/web/src/shared/graphql/generated.ts' ':(exclude)apps/api/src/presentation/graphql/generated/resolvers.ts' ':(exclude)**/__snapshots__/**'
 ```
 
-Stacked PRでは`origin/develop`を直接のBase Branchへ置き換える。Codegenの出力先を変えた場合は、このCommandも更新する。
+Epic Branch向けのTask PRでは`origin/develop`を`origin/epic/...`へ、Stacked PRでは直接のBase Branchへ置き換える。Codegenの出力先を変えた場合は、このCommandも更新する。
 
 ## Issue・PR本文
 
@@ -249,8 +286,10 @@ Close済みのIssue・PRの本文は、このRuleのために遡って書き換�
 ADR本文とStatusの正本は`docs/adr`とGitHubの承認証跡とする。異なる内容の二重正本を作らない。
 
 - Epic／Task起票・Requirement変更・設計変更時にDecision Checkを行う。
-- Accepted Decisionを変更する場合、またはRepository GovernanceがADR必須とする場合はProposalを作る。
-- Proposed ADRに依存するTaskをReadyへ進めない。
+- Accepted Decisionを変更する場合、またはRepository GovernanceがADR必須とする場合は、ADR Issueに論点を書き、Proposalを`.claude/plan/`に作る。Proposed ADRはCommitしない。
+- 実装前に、論点と推奨案をOwnerへ示し、会話で採否を得る。親Agentは日付と内容を1行で、ADR IssueまたはEpic IssueのCommentへ記録する。
+- 承認Commentがない判断に依存するTaskをReadyへ進めない。
+- 承認された判断は、その判断に依存する最初の実装PRに、Accepted ADRとして同梱する。ADRには承認日と承認CommentへのLinkを書く。依存する実装がない場合だけ、ADRだけのPRにする。Proposal PRと承認同期PRは作らない。
 - Accepted／Rejectedの確定にはProject Ownerの明示Decisionを必要とする。
 - AI／実装者が明示承認なしにStatusを確定しない。
 - Rejectedなら変更案を取り下げ、Requirement／Done Criteria／Decision Checkを現行Decisionへ戻して再評価する。

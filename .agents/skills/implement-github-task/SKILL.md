@@ -23,7 +23,7 @@ Taskを、[Engineering Loop](../../../docs/engineering/engineering-loop.md)の�
 ## I0. Taskに着手する
 
 1. Task、親Epic、Dependencies、Decision、関連docsを取得する。
-2. 現在Branch、作業Tree、Remote、最新`develop`、同TaskのOpen PRを確認する。
+2. 現在Branch、作業Tree、Remote、最新の統合Branch（`develop`、またはEpic Branch）、同TaskのOpen PRを確認する。統合Branchの決め方は[Delivery Workflow](../../../docs/engineering/delivery-workflow.md)に従う。
 3. `pre-investigation`を1回行う。再利用できる調査があるかは[Engineering Loop](../../../docs/engineering/engineering-loop.md)のI0に従う。
 4. GitHubへの書き込み前にRepositoryの公開Gateを確認する。
 5. [Delivery Workflow](../../../docs/engineering/delivery-workflow.md)に従ってTaskの詳細をIssue本文へ書く。すでに書かれている場合は不足分だけ補う。PRサイズの目安を超えそうなら分割を検討する。
@@ -31,7 +31,7 @@ Taskを、[Engineering Loop](../../../docs/engineering/engineering-loop.md)の�
 7. Dependencyがある場合、[PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)に従って通常BranchかStacked Branchかを確認する。PlanningでStacked PRが確定済みなら`stacked-pr-delivery`へTask、直接Base、Dependency Graph、Merge順序を渡し、Branch／Stack状態を準備する。
 8. 無関係または所有者不明の変更を移動、破棄、Stage、Commitしない。
 
-Ready判定を満たさないTask、未承認Decisionに依存するTask、前提Dependencyを満たさないTaskは実装へ進めず、不足条件を報告する。Stack要否や直接BaseがPlanningで未確定の場合、I0で推測せず`prepare-github-work`へ戻す。
+Ready判定を満たさないTask、Owner承認の記録がないDecisionに依存するTask、前提Dependencyを満たさないTaskは実装へ進めず、不足条件を報告する。Stack要否や直接BaseがPlanningで未確定の場合、I0で推測せず`prepare-github-work`へ戻す。
 
 ## 実作業を委譲する
 

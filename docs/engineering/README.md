@@ -29,7 +29,7 @@ Skillは特定の言語、DB、Framework、ORM、API Protocol、Runtimeを固定
 - [coding-standards.md](coding-standards.md): 採用言語のCoding、単一責任、Error、Security、Documentation Rule
 - [frontend.md](frontend.md): Frontendの責務、構成、状態、Accessibility
 - [testing.md](testing.md): TDD、Test Level、検証Command、Done Criteria
-- [delivery-workflow.md](delivery-workflow.md): Epic／Task、Ready、Git、PRサイズ、Issue・PR本文、文書更新
+- [delivery-workflow.md](delivery-workflow.md): Epic／Task、Ready、Epic統合Branch、実装前Plan、Git、PRサイズ、Issue・PR本文、文書更新
 - [worktree-management.md](worktree-management.md): Project root内の追加Worktree配置・作成・後片付け
 - [implementation-review.md](implementation-review.md): Reviewerの起動条件、共通契約、修正上限、Draft PR Gate
 - [pr-dependency-gate.md](pr-dependency-gate.md): Task／PR依存とStacked PR

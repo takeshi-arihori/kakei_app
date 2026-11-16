@@ -24,7 +24,7 @@ Epic／Task粒度、Ready、ADR、Project Field、公開Gate、Branch／PR等の
 
 1. [Engineering Loop](../../../docs/engineering/engineering-loop.md)のD0〜D2のうち、必要なものが成立しているか確認する。D0〜D2で確認済みの内容は再調査しない。
 2. Problem、Goal、Scope、設計結果、Open Questionを取得する。
-3. 未決DecisionはClarification、調査Task、ADR Proposal等へ分離し、依存Taskに依存先を記録する。
+3. 未決DecisionはClarification、調査Task、ADR Proposal等へ分離し、依存Taskに依存先を記録する。Planと検討中の案の置き場所、Ownerの採否を得る時点と記録先は[Delivery Workflow](../../../docs/engineering/delivery-workflow.md)に従う。
 
 Evidenceが不足する場合、作業項目を推測で完成させず、不足する前段へ戻す。
 
@@ -37,6 +37,8 @@ Evidenceが不足する場合、作業項目を推測で完成させず、不足
 ## Dependency／PR Planning
 
 [PR依存関係Gate](../../../docs/engineering/pr-dependency-gate.md)に従い、依存があるTaskについて順序、Stacked PRの要否、直接Base、Merge順序を決める。依存がなければ省略する。
+
+Epicの場合は、[Delivery Workflow](../../../docs/engineering/delivery-workflow.md)に従ってEpic統合Branchを使うかを決め、使う場合はBranch名を記録する。
 
 ## 独立Planning Evaluator
 
@@ -57,6 +59,7 @@ GitHubへ書き込んだ場合は、[Delivery Workflow](../../../docs/engineerin
 - 使用／既存Epicと理由
 - Epicの目的
 - Task名、Dependencies、PR順序
+- Epic統合Branchの要否とBranch名
 - Decision／ADR状態
 - Evaluatorの結果、または起動しなかった理由
 - 未解決事項

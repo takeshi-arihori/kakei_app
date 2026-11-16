@@ -1,6 +1,8 @@
 # PR依存関係Gate
 
-Task／Pull Request間のDependencyを明示し、後続PRが前提変更より先に`develop`へ統合されることを防ぐ。
+Task／Pull Request間のDependencyを明示し、後続PRが前提変更より先に統合Branchへ統合されることを防ぐ。
+
+統合Branchは、[Epic統合Branch](delivery-workflow.md#epic統合branch)を使うEpicのTaskではそのEpic Branch（`epic/...`）、それ以外では`develop`である。以下の`develop`は、Epic内のTaskでは「Epic Branch」と読み替える。
 
 ## 先にTask Dependencyを決める
 
@@ -24,7 +26,7 @@ Task A ──前提──▶ Task B
 | 前提PRが未Mergeだが後続Taskを進める必要があり、Code上も前提差分が必要 | Stacked PR |
 | Requirement／Decisionだけに依存し、Code差分には依存しない | Accepted／Ready Gateを満たした後、通常PR。Stack不要 |
 
-Stackを使うこと自体を目的にしない。独立可能なTaskを不要に直列化しない。
+Stackを使うこと自体を目的にしない。独立可能なTaskを不要に直列化しない。Epic Branchを使う場合も同じで、Epic内のTaskの順序をStackで表すのはCode上の依存がある場合だけとする。独立したTaskは、それぞれEpic BranchからBranchを作り、並行してPRを出す。
 
 ## Stacked PR
 
@@ -74,7 +76,7 @@ Stack中に前提BranchをBaseとしているPRでも、依存関係のTraceabil
 
 ## CI Gate
 
-`.github/workflows/pr-dependency-gate.yml`は、`develop`へ統合するPR本文の`Depends-On`を検査する。
+`.github/workflows/pr-dependency-gate.yml`は、`develop`または`epic/**`へ統合するPR本文の`Depends-On`を検査する。Epic Branchへ統合されたPRも、GitHub上はMerged扱いになる。
 
 - すべての依存PRがMerged: `依存PR確認`成功
 - 未Mergeの依存PR: 失敗
@@ -82,7 +84,7 @@ Stack中に前提BranchをBaseとしているPRでも、依存関係のTraceabil
 - 自分自身のPR番号: 失敗
 - PR本文変更時も再検証する
 
-`develop`のRulesetでStatus Check `依存PR確認`をRequiredにする。Required化されていない場合、CI失敗だけではMergeを強制停止できない。
+`develop`のRulesetでStatus Check `依存PR確認`をRequiredにする。Required化されていない場合、CI失敗だけではMergeを強制停止できない。`epic/**`には、Ruleset `epic-integration`でStatus Check `lint・型・Test・Build`と`依存PR確認`をRequiredにしている。ここでは、force pushの禁止とPR必須も課している。
 
 ## Planningで残す情報
 
@@ -95,5 +97,6 @@ Task分解時に最低限次を記録する。
 - Stackの場合の直接Base
 - 期待するMerge順序
 - 前提Merge後に再実行する検証
+- Epic統合Branchを使うか（Branch名）
 
 Dependencyがない項目は省略してよい。[Engineering Loop](engineering-loop.md)のD3に該当する場合、`work-planning-evaluator`がこの情報とEpicの目的を照合し、不要な直列化、欠落Dependency、逆順Mergeがないか独立評価する。

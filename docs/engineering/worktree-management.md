@@ -10,6 +10,10 @@
 - Projectの`.gitignore`で`/.worktree/`をignoreする。共通ruleを導入するときは、このProject内のignore設定も合わせて確認する。
 - `.worktree/`配下のファイル、diff、未commit変更は、通常のProject rootとは独立したworktreeのGit stateとして確認する。
 
+## 実装前Planの参照
+
+[実装前Plan](delivery-workflow.md#実装前plan)はprimary checkoutの`.claude/plan/`だけに置き、追加worktreeからはそのPathを参照する。追加worktreeの中に`.claude/plan/`を作ったり、複製したりしない。追加worktreeを削除しても、Planは残る。
+
 ## 作成方法
 
 希望する保存先を受け付けるworktree toolがあれば、その機能でProject rootの`.worktree/<用途>/`を指定する。保存先を指定できず、Project外の管理Directoryに作成する機能は、このProjectの保存先ruleを満たさない。`.worktree/`を求める作業では、primary checkoutからGitの`worktree add`を使い、保存先を明示する。
@@ -18,6 +22,8 @@
 git worktree add -b feat/issue-number-short-name \
   .worktree/issue-number-short-name origin/develop
 ```
+
+[Epic統合Branch](delivery-workflow.md#epic統合branch)を使うEpicのTaskでは、`origin/develop`の代わりに`origin/epic/<Epic番号>-<短い名前>`をbaseにする。
 
 追加worktreeを作る前に、既存Branch／Worktree、dirty state、base Commitを確認する。Project rootの`.gitignore`に`/.worktree/`がなければ追加し、作成予定Pathがignoreされることを`git check-ignore`で確認する。ignoreされない状態では`worktree add`を実行せず、ignore設定を直すか阻害要因を解消する。Branch名とbaseはTaskとDelivery Workflowに合わせる。既に使われているBranchを再利用するときは、新しいBranchを作らず既存Worktreeを確認する。
 

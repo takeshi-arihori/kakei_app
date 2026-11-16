@@ -5,7 +5,7 @@ labels: ["work: adr"]
 body:
   - type: markdown
     attributes:
-      value: "Public Repositoryです。公開安全確認を先に行ってください。初期StatusはProposedで、AIはOwner承認なしにAcceptedにしません。"
+      value: "Public Repositoryです。公開安全確認を先に行ってください。初期StatusはProposedで、AIはOwner承認なしにAcceptedにしません。案は`.claude/plan/`に置き、Owner会話承認をこのIssueのCommentへ記録した後、依存する実装PRへAccepted ADRとして同梱します。"
   - type: textarea
     id: context
     attributes:
