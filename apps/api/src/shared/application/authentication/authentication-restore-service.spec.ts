@@ -46,6 +46,15 @@ const manifest = {
   epoch: oldEpoch,
   checkpoint: { sequence: 0, hash: '0'.repeat(64) },
 };
+/** 合成のコード破棄が返す全世代closure。 */
+const restoreClosures = [
+  {
+    codeId: '77777777-7777-4777-8777-777777777777',
+    operationId: runId,
+    inventoryRevision: 'rev-1',
+    evidenceReference: 'evidence/a',
+  },
+];
 describe('認証Restoreの隔離と開通', () => {
   const fixture = () => {
     const events: string[] = [];
@@ -117,10 +126,15 @@ describe('認証Restoreの隔離と開通', () => {
         });
       },
     };
+    // isolateへ渡された構成。Service設定とAdapter設定の一致確認の入力になる。
+    const isolations: Parameters<
+      AuthenticationRestoreDatabase['isolate']
+    >[2][] = [];
     const database: AuthenticationRestoreDatabase = {
-      isolate: () => {
+      isolate: (_fence, _manifest, configuration) => {
         return Promise.resolve().then(() => {
           events.push('isolate');
+          isolations.push(configuration);
           return 2;
         });
       },
@@ -276,10 +290,25 @@ describe('認証Restoreの隔離と開通', () => {
         clock: { now: () => now },
         ...overrides,
       });
-    const v11 = (now = 2000) =>
-      service(now, { acceptedSchemaVersions: [6, 11], consistency });
+    // v11はコード参加の構成だけで受理する（ADR #278 論点6）。合成の破棄は固定closureを返す。
+    const recipientCodes: RecipientCodeRestoreDiscard = {
+      discard: () =>
+        Promise.resolve().then(() => {
+          events.push('codes');
+          return restoreClosures;
+        }),
+    };
+    /** 既定の受理版{6, 11}に、整合証跡とコード参加を足したv11の構成。 */
+    const v11 = (
+      now = 2000,
+      overrides: Partial<
+        Parameters<typeof createAuthenticationRestoreService>[0]
+      > = {},
+    ) => service(now, { consistency, recipientCodes, ...overrides });
     return {
       events,
+      isolations,
+      recipientCodes,
       evidenceCalls,
       setEvidence: (answer: typeof evidenceAnswer) => {
         evidenceAnswer = answer;
@@ -634,9 +663,10 @@ describe('認証Restoreの隔離と開通', () => {
             call.runId === runId && call.recoveryPointId === recoveryPointId,
         ),
       ).toBe(true);
-      const expected = createAuthenticationRestoreEvidenceDigest().digest({
+      const digest = createAuthenticationRestoreEvidenceDigest();
+      const expected = digest.digest({
         fingerprint: new Uint8Array(32).fill(9),
-        codeClosure: null,
+        codeClosure: digest.codeClosure(restoreClosures),
         consistency: {
           recoveryPointId,
           contexts: ['group-management'],
@@ -664,14 +694,8 @@ describe('認証Restoreの隔離と開通', () => {
       expect(f.opened.map(hex)).toEqual([golden]);
     });
 
-    it('受理版11を注入した構成でもv6は証跡なしで開通する', async () => {
-      const f = fixture();
-      expect((await f.v11().run(runId, manifest)).status).toBe('complete');
-      expect(f.evidenceCalls).toEqual([]);
-    });
-
     it.each([
-      ['既定構成（受理版6）のv11', 'default', v11Manifest],
+      ['既定構成（証跡・コード参加なし）のv11', 'default', v11Manifest],
       ['受理版外の版', 'v11', { ...v11Manifest, schemaVersion: 12 }],
       ['証跡Port未注入', 'no-port', v11Manifest],
       ['必須Context集合が空', 'empty-contexts', v11Manifest],
@@ -682,7 +706,11 @@ describe('認証Restoreの隔離と開通', () => {
         'v11',
         { ...v11Manifest, recoveryPointId: 'x' },
       ],
-      ['v6でrecoveryPointIdが存在', 'v11', { ...manifest, recoveryPointId }],
+      [
+        'v6でrecoveryPointIdが存在',
+        'default',
+        { ...manifest, recoveryPointId },
+      ],
     ] as const)(
       '%sはisolate前に隔離する',
       async (_name, mode, input: AuthenticationBackupManifest) => {
@@ -691,10 +719,9 @@ describe('認証Restoreの隔離と開通', () => {
           mode === 'default'
             ? f.service()
             : mode === 'no-port'
-              ? f.service(2000, { acceptedSchemaVersions: [6, 11] })
+              ? f.service(2000, { recipientCodes: f.recipientCodes })
               : mode === 'empty-contexts' || mode === 'duplicate-contexts'
-                ? f.service(2000, {
-                    acceptedSchemaVersions: [6, 11],
+                ? f.v11(2000, {
                     consistency: {
                       ...f.consistency,
                       requiredContexts:
@@ -842,8 +869,7 @@ describe('認証Restoreの隔離と開通', () => {
 
     it('必須Context集合の一部だけを覆う証跡（純粋な欠落）はP1で隔離する', async () => {
       const f = fixture();
-      const service = f.service(2000, {
-        acceptedSchemaVersions: [6, 11],
+      const service = f.v11(2000, {
         consistency: {
           ...f.consistency,
           requiredContexts: ['group-management', 'settlement'],
@@ -869,8 +895,7 @@ describe('認証Restoreの隔離と開通', () => {
         },
         consume: (handle, binding) => port.consume(handle, binding),
       };
-      const service = f.service(2000, {
-        acceptedSchemaVersions: [6, 11],
+      const service = f.v11(2000, {
         consistency: { ...f.consistency, evidence: forged },
       });
       expect((await service.run(runId, v11Manifest)).status).toBe(
@@ -894,8 +919,7 @@ describe('認証Restoreの隔離と開通', () => {
         },
         consume: (handle, binding) => port.consume(handle, binding),
       };
-      const service = f.service(2000, {
-        acceptedSchemaVersions: [6, 11],
+      const service = f.v11(2000, {
         consistency: { ...f.consistency, evidence: replaying },
       });
       expect((await service.run(runId, v11Manifest)).status).toBe(
@@ -1040,8 +1064,7 @@ describe('認証Restoreの隔離と開通', () => {
           port.verify({ ...binding, runId: otherRecoveryPointId }),
         consume: (handle, binding) => port.consume(handle, binding),
       };
-      const service = f.service(2000, {
-        acceptedSchemaVersions: [6, 11],
+      const service = f.v11(2000, {
         consistency: { ...f.consistency, evidence: forged },
       });
       expect((await service.run(runId, v11Manifest)).status).toBe(
@@ -1059,8 +1082,7 @@ describe('認証Restoreの隔離と開通', () => {
         },
       ]) {
         const f = fixture();
-        const service = f.service(2000, {
-          acceptedSchemaVersions: [6, 11],
+        const service = f.v11(2000, {
           consistency: {
             ...f.consistency,
             evidence: {
@@ -1082,15 +1104,127 @@ describe('認証Restoreの隔離と開通', () => {
     });
   });
 
-  describe('全招待コードの破棄への参加（コード参加の構成）', () => {
-    const closures = [
-      {
-        codeId: '77777777-7777-4777-8777-777777777777',
-        operationId: runId,
-        inventoryRevision: 'rev-1',
-        evidenceReference: 'evidence/a',
+  describe('受理版{6, 11}と構成確認（ADR #278 論点6）', () => {
+    const recoveryPointId = '44444444-4444-4444-8444-444444444444';
+    const v11Manifest: AuthenticationBackupManifest = {
+      ...manifest,
+      schemaVersion: 11,
+      recoveryPointId,
+    };
+    const stoppedBeforeIsolate = (f: ReturnType<typeof fixture>) => {
+      expect(f.events).not.toContain('isolate');
+      expect(f.events).toContain('quarantine');
+      for (const event of ['evidence', 'reconcile', 'codes', 'epoch'])
+        expect(f.events).not.toContain(event);
+    };
+
+    it('既定の受理版で、v6は不参加、v11は参加の構成をisolateへ渡して開通する', async () => {
+      const v6 = fixture();
+      expect((await v6.service().run(runId, manifest)).status).toBe('complete');
+      expect(v6.isolations).toEqual([{ recipientCodes: false }]);
+      const v11 = fixture();
+      expect((await v11.v11().run(runId, v11Manifest)).status).toBe('complete');
+      expect(v11.isolations).toEqual([{ recipientCodes: true }]);
+    });
+
+    // 11未満は不参加、11以上は参加の構成で走らせ、版とコード参加の一致確認では止まらない入力にする。
+    // 停止の原因を受理版のallowlistに限定する。
+    it.each([7, 8, 9, 10, 12])(
+      '既定の受理版にない版%iはisolate前に隔離する',
+      async (schemaVersion) => {
+        const f = fixture();
+        const service = schemaVersion >= 11 ? f.v11() : f.service();
+        const input =
+          schemaVersion >= 11
+            ? { ...v11Manifest, schemaVersion }
+            : { ...manifest, schemaVersion };
+        expect((await service.run(runId, input)).status).toBe('quarantined');
+        stoppedBeforeIsolate(f);
+        // 同じ構成で受理版へ加えると先へ進むので、止めたのはallowlistである。
+        const widened = fixture();
+        await (
+          schemaVersion >= 11
+            ? widened.v11(2000, {
+                acceptedSchemaVersions: [6, 11, schemaVersion],
+              })
+            : widened.service(2000, {
+                acceptedSchemaVersions: [6, 11, schemaVersion],
+              })
+        ).run(runId, input);
+        expect(widened.events).toContain('isolate');
       },
-    ];
+    );
+
+    it.each([
+      ['証跡必須の最小版を12へ上げても', { consistencyRequiredFrom: 12 }],
+      [
+        '証跡必須の最小版を上限値にしても',
+        { consistencyRequiredFrom: Number.MAX_SAFE_INTEGER },
+      ],
+    ])('コード参加のv11は、%s証跡なしで受理しない', async (_name, override) => {
+      // Port未注入なら、証跡を要求してisolate前に隔離する。
+      const missing = fixture();
+      expect(
+        (
+          await missing
+            .v11(2000, { ...override, consistency: undefined })
+            .run(runId, v11Manifest)
+        ).status,
+      ).toBe('quarantined');
+      stoppedBeforeIsolate(missing);
+      // 注入されていれば、P1〜P3の証跡を揃えて開通する。
+      const present = fixture();
+      expect(
+        (await present.v11(2000, override).run(runId, v11Manifest)).status,
+      ).toBe('complete');
+      expect(present.evidenceCalls).toHaveLength(3);
+    });
+
+    it('v6はコード参加（接続済み）の構成では受理せず、isolate前に隔離する', async () => {
+      const f = fixture();
+      expect((await f.v11().run(runId, manifest)).status).toBe('quarantined');
+      stoppedBeforeIsolate(f);
+      // 証跡必須の最小版を上げても、接続済みでv6を受理する経路はない（副論点A）。
+      const raised = fixture();
+      expect(
+        (
+          await raised
+            .v11(2000, { consistencyRequiredFrom: 12 })
+            .run(runId, manifest)
+        ).status,
+      ).toBe('quarantined');
+      stoppedBeforeIsolate(raised);
+    });
+
+    it('v11はコード不参加の構成では受理せず、isolate前に隔離する', async () => {
+      const f = fixture();
+      expect(
+        (
+          await f
+            .service(2000, { consistency: f.consistency })
+            .run(runId, v11Manifest)
+        ).status,
+      ).toBe('quarantined');
+      stoppedBeforeIsolate(f);
+    });
+
+    it('PG Adapterが構成の不一致でisolateを拒否すれば、破棄やepoch公開へ進まない', async () => {
+      const f = fixture();
+      f.database.isolate = () =>
+        Promise.resolve().then(() => {
+          f.events.push('isolate');
+          throw new Error('synthetic configuration mismatch');
+        });
+      expect((await f.v11().run(runId, v11Manifest)).status).toBe(
+        'quarantined',
+      );
+      for (const event of ['evidence', 'reconcile', 'codes', 'epoch'])
+        expect(f.events).not.toContain(event);
+    });
+  });
+
+  describe('全招待コードの破棄への参加（コード参加の構成）', () => {
+    const closures = restoreClosures;
     const v11Manifest: AuthenticationBackupManifest = {
       ...manifest,
       schemaVersion: 11,
@@ -1115,19 +1249,14 @@ describe('認証Restoreの隔離と開通', () => {
         fail: () => {
           answer = () => Promise.reject(new RecipientCodeUnavailable());
         },
-        codes: (now = 2000) => f.service(now, { recipientCodes }),
-        codesV11: (now = 2000) =>
-          f.service(now, {
-            acceptedSchemaVersions: [6, 11],
-            consistency: f.consistency,
-            recipientCodes,
-          }),
+        // v11はコード参加と整合証跡が揃う構成だけで受理する（ADR #278 論点6）。
+        codes: (now = 2000) => f.v11(now, { recipientCodes }),
       };
     };
 
     it('Credential破棄の後、epoch公開の前に、同runのfenceと初回閉鎖UTCで破棄する', async () => {
       const f = participating();
-      expect(await f.codes().run(runId, manifest)).toEqual({
+      expect(await f.codes().run(runId, v11Manifest)).toEqual({
         status: 'complete',
       });
       expect(f.events.indexOf('discard')).toBeLessThan(
@@ -1142,12 +1271,12 @@ describe('認証Restoreの隔離と開通', () => {
 
     it('closure集合のdigestをevidenceDigestの要素2へ入れて開通する', async () => {
       const f = participating();
-      expect((await f.codes().run(runId, manifest)).status).toBe('complete');
+      expect((await f.codes().run(runId, v11Manifest)).status).toBe('complete');
       const digest = createAuthenticationRestoreEvidenceDigest();
       const expected = digest.digest({
         fingerprint: new Uint8Array(32).fill(9),
         codeClosure: digest.codeClosure(closures),
-        consistency: null,
+        consistency: evidenceFor(v11Manifest.recoveryPointId!),
       });
       expect(f.appended.map((record) => hex(record.evidenceDigest))).toEqual([
         hex(expected),
@@ -1162,7 +1291,9 @@ describe('認証Restoreの隔離と開通', () => {
     it('コードの破棄が成立しなければepochを公開せず隔離する', async () => {
       const f = participating();
       f.fail();
-      expect((await f.codes().run(runId, manifest)).status).toBe('quarantined');
+      expect((await f.codes().run(runId, v11Manifest)).status).toBe(
+        'quarantined',
+      );
       for (const event of ['epoch', 'migrate', 'open'])
         expect(f.events).not.toContain(event);
       expect(f.events).toContain('quarantine');
@@ -1171,7 +1302,7 @@ describe('認証Restoreの隔離と開通', () => {
     it('証跡P1が成立しなければコードの登録・破棄に進まない', async () => {
       const f = participating();
       f.setEvidence(() => []);
-      expect((await f.codesV11().run(runId, v11Manifest)).status).toBe(
+      expect((await f.codes().run(runId, v11Manifest)).status).toBe(
         'quarantined',
       );
       expect(f.calls).toEqual([]);
@@ -1179,9 +1310,7 @@ describe('認証Restoreの隔離と開通', () => {
 
     it('証跡が揃えばP1の後にコードを破棄し、証跡とcode closureの両方をdigestへ入れる', async () => {
       const f = participating();
-      expect((await f.codesV11().run(runId, v11Manifest)).status).toBe(
-        'complete',
-      );
+      expect((await f.codes().run(runId, v11Manifest)).status).toBe('complete');
       expect(f.events.indexOf('evidence')).toBeLessThan(
         f.events.indexOf('codes'),
       );
@@ -1205,7 +1334,7 @@ describe('認証Restoreの隔離と開通', () => {
       async (_name, value) => {
         const f = participating();
         f.control.closedAt = () => Promise.resolve(value);
-        expect((await f.codes(2000).run(runId, manifest)).status).toBe(
+        expect((await f.codes(2000).run(runId, v11Manifest)).status).toBe(
           'quarantined',
         );
         expect(f.events).not.toContain('isolate');
@@ -1216,7 +1345,7 @@ describe('認証Restoreの隔離と開通', () => {
     it('初回閉鎖UTCが現在時刻と等しければ受理する', async () => {
       const f = participating();
       f.control.closedAt = () => Promise.resolve(2000);
-      expect((await f.codes(2000).run(runId, manifest)).status).toBe(
+      expect((await f.codes(2000).run(runId, v11Manifest)).status).toBe(
         'complete',
       );
       expect(f.calls[0].closedAt).toBe(2000);
@@ -1228,6 +1357,7 @@ describe('認証Restoreの隔離と開通', () => {
       const latest = f.ledger.latest.bind(f.ledger);
       const head = f.ledger.head.bind(f.ledger);
       // 1回目のappend直前の再確認だけheadを進め、手順3からやり直させる。
+      // sequence 0のhashは0固定なので、進んだheadはsequence 1で表す（証跡のbinding検査を通す）。
       f.ledger.latest = (input) => {
         refreshes += 1;
         return latest(input);
@@ -1235,10 +1365,10 @@ describe('認証Restoreの隔離と開通', () => {
       f.ledger.head = (verified) => {
         const value = head(verified);
         return refreshes === 2
-          ? { sequence: value.sequence, hash: 'f'.repeat(64) }
+          ? { sequence: value.sequence + 1, hash: 'f'.repeat(64) }
           : value;
       };
-      expect((await f.codes().run(runId, manifest)).status).toBe('complete');
+      expect((await f.codes().run(runId, v11Manifest)).status).toBe('complete');
       expect(f.calls.length).toBeGreaterThanOrEqual(2);
       expect(new Set(f.calls.map((call) => call.closedAt))).toEqual(
         new Set([1500]),

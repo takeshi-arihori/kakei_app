@@ -179,6 +179,16 @@ export interface AuthenticationLedgerMacKeys {
 /** `recoveryPointId`を必須にするManifestの最小版。これ未満の版ではFieldを持たない。 */
 export const authenticationRecoveryPointSchemaVersion = 11;
 
+/**
+ * Restoreが受理するManifestの版の明示allowlist（ADR #278 論点6）。6はコード導入前、11はコード表と消費Audit。
+ * 中間版7〜9はRestoreの実PG検証がないので含めない。新しいMigrationを足すたびに明示的に加える。
+ */
+export const authenticationRestoreSchemaVersions: readonly number[] =
+  Object.freeze([6, 11]);
+
+/** コード表とコード用途を持つManifestの最小版。これ以上はコード参加を必須にし、未満では拒否する。 */
+export const authenticationRecipientCodeSchemaVersion = 11;
+
 /** 復旧DBと独立して保持するBackup Manifestの最小値。 */
 export interface AuthenticationBackupManifest {
   /**

@@ -115,11 +115,14 @@ export interface AuthenticationRestoreDatabase {
    * 外部fence検証後にkey_state排他Lockで旧WriterをdrainしrestoringへCASする。
    * @param fence 同じRestore runの外部所有能力。
    * @param manifest Schema/epoch/鍵State版を照合するBackupの基準。
+   * @param configuration Restore Serviceのコード参加。Adapter自身の設定、Manifestの版、
+   *   復旧DBのコード表とコード用途と一致しなければ、restoringへ更新せず拒否する（ADR #278 論点6）。
    * @returns 隔離状態のgeneration_version。commit不明ではthrowする。
    */
   isolate(
     fence: AuthenticationRestoreFence,
     manifest: AuthenticationBackupManifest,
+    configuration: Readonly<{ recipientCodes: boolean }>,
   ): Promise<number>;
   /**
    * 外部削除意思を隔離下で再適用する。破棄済みDEKの復号を要求しない。

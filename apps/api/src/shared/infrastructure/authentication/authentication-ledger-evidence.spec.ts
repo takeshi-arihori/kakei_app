@@ -191,7 +191,30 @@ describe('認証Ledgerの独立証跡検証', () => {
       }),
     ).rejects.toThrow();
   });
-  it('ManifestのrecoveryPointIdを列挙して扱い、受理版6ではFieldありを拒否する', async () => {
+  it('受理版{6, 11}だけを受理し、v11はrecoveryPointIdを必須にする', async () => {
+    const f = fixture();
+    const recoveryPointId = '44444444-4444-4444-8444-444444444444';
+    const manifest = {
+      createdAt: 1000,
+      schemaVersion: 11,
+      keyStateVersion: 1,
+      epoch: operationId,
+      checkpoint: { sequence: 0, hash: '0'.repeat(64) },
+    };
+    await expect(
+      f.evidence.latest({ ...manifest, recoveryPointId }),
+    ).resolves.toBeDefined();
+    await expect(f.evidence.latest(manifest)).rejects.toThrow();
+    // 中間版7〜9と未知の版はallowlistの外なので、書式が正しくても拒否する。
+    for (const schemaVersion of [7, 8, 9, 10])
+      await expect(
+        f.evidence.latest({ ...manifest, schemaVersion }),
+      ).rejects.toThrow();
+    await expect(
+      f.evidence.latest({ ...manifest, schemaVersion: 12, recoveryPointId }),
+    ).rejects.toThrow();
+  });
+  it('v6はrecoveryPointIdなしだけを受理する', async () => {
     const f = fixture();
     const manifest = {
       createdAt: 1000,
@@ -204,14 +227,6 @@ describe('認証Ledgerの独立証跡検証', () => {
     await expect(
       f.evidence.latest({
         ...manifest,
-        recoveryPointId: '44444444-4444-4444-8444-444444444444',
-      }),
-    ).rejects.toThrow();
-    // 版11の書式は正しくても、受理版（6）の外なので拒否する。
-    await expect(
-      f.evidence.latest({
-        ...manifest,
-        schemaVersion: 11,
         recoveryPointId: '44444444-4444-4444-8444-444444444444',
       }),
     ).rejects.toThrow();

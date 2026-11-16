@@ -13,6 +13,7 @@ import type {
   AuthenticationVerifiedHead,
   AuthenticationVerifiedIntent,
 } from '../../application/authentication/authentication-maintenance-ports.js';
+import { authenticationRestoreSchemaVersions } from '../../application/authentication/authentication-maintenance-ports.js';
 import { AuthenticationCryptoUnavailable } from '../../application/authentication/authentication-record-protection.js';
 import {
   authenticationKeyVersion,
@@ -254,10 +255,14 @@ export const createAuthenticationLedgerEvidence = (
     }
     let backupHead: AuthenticationLedgerHead | undefined;
     if (manifest !== undefined) {
-      // recoveryPointIdは版規則だけ検査し、受理版6ではFieldを持たない。
+      // 受理版{6, 11}だけを扱う。recoveryPointIdの版規則（v11で必須、v6で不在）はcodecが検査する。
       const m = authenticationManifestObject(manifest);
       integer(m.createdAt);
-      if (m.schemaVersion !== 6) return fail();
+      if (
+        typeof m.schemaVersion !== 'number' ||
+        !authenticationRestoreSchemaVersions.includes(m.schemaVersion)
+      )
+        return fail();
       integer(m.keyStateVersion, 1);
       authenticationUuid(m.epoch);
       backupHead = headCopy(m.checkpoint);

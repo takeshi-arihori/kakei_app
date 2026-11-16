@@ -32,7 +32,7 @@ Actorの過去業務参照、GM Invitation/成功operationは既存GMの保持Ru
 
 新epochだけで既存Invitation/operationの一貫性を証明したとは扱わない。API全体と外部Providerの同時侵害、全DB整合rollbackをMACで防げると主張しない。Restore訓練と実配置のEvidenceなしにProduction wiringを許可しない。
 
-#278の採用設計（#282で証跡Port、`recoveryPointId`、P1〜P3、`evidenceDigest`への束縛を、#284でコードticket・closure・0-row（[下記](#284-restoreへのコード参加)）を実装。受理版は6のままで、受理版の拡張と構成確認は未実装）: 上の手順2／3／6／7の全Context整合は、[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）の契約で実装する。全Context共通の`recoveryPointId`、証跡Port（P1は削除再適用の前、P2はrecovery appendの前、P3は`activate`の前）、`evidenceDigest`への束縛、Manifestの受理版`{6, 11}`と構成確認、Restoreのコードticket（`dueAt`はrunの最初のfence閉鎖UTCで固定）、Providerが知らないコード行での停止、コード表の0-rowを含む。GM側のRestore検証は、Epic #202ではなくProduction Gate側の別の設計Taskとする。実装は#245の後続Taskで、合成の証跡で検証する。上の手順と受入Evidenceは緩和しない。
+#278の採用設計（#282で証跡Port、`recoveryPointId`、P1〜P3、`evidenceDigest`への束縛を、#284でコードticket・closure・0-row（[下記](#284-restoreへのコード参加)）を、#285で受理版`{6, 11}`、公開世代のコード2用途、構成確認を実装。本番Compositionは未接続）: 上の手順2／3／6／7の全Context整合は、[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）の契約で実装する。全Context共通の`recoveryPointId`、証跡Port（P1は削除再適用の前、P2はrecovery appendの前、P3は`activate`の前）、`evidenceDigest`への束縛、Manifestの受理版`{6, 11}`と構成確認、Restoreのコードticket（`dueAt`はrunの最初のfence閉鎖UTCで固定）、Providerが知らないコード行での停止、コード表の0-rowを含む。GM側のRestore検証は、Epic #202ではなくProduction Gate側の別の設計Taskとする。実装は#245の後続Taskで、合成の証跡で検証する。上の手順と受入Evidenceは緩和しない。
 
 ## 受入Evidenceと停止条件
 
@@ -87,7 +87,7 @@ GM Invitation・過去Actor参照・成功結果・proof鍵は対象外で、認
 
 ## #284 Restoreへのコード参加
 
-[内部入口](../../apps/api/src/shared/application/authentication/recipient-code-restore-discard.ts)が[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)の論点5・7を実装する。Restore Serviceの任意設定（`recipientCodes`）で参加し、未設定（既定値）はコード不参加で、コード表を扱わない。本番Compositionは未接続で、受理版は6のまま。受理版`{6, 11}`、公開世代のコード用途、構成確認は#285が入れる。実PGと合成Providerで検証した（v6のDBへコード表だけを足した合成構成）。
+[内部入口](../../apps/api/src/shared/application/authentication/recipient-code-restore-discard.ts)が[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)の論点5・7を実装する。Restore Serviceの任意設定（`recipientCodes`）で参加し、未設定（既定値）はコード不参加で、コード表を扱わない。本番Compositionは未接続。#285以降、コード参加はv11のBackupだけで受理し、v6はコード不参加の構成だけで受理する（ADR #278 論点6）。実PGと合成Providerで検証した（認証Schemaをv11へ進めたDB、コード2用途、合成の整合証跡）。
 
 | 手順 | 実装の内容 |
 | --- | --- |
@@ -97,11 +97,11 @@ GM Invitation・過去Actor参照・成功結果・proof鍵は対象外で、認
 | 再開と採用 | 同runの再開は同じ`closedAt`で再実行し、窓を延ばさない。別run・清掃・Actor削除の未完了ticketは採用して前倒しだけ行い、完了済みticketは充足として採用し、Backupから戻った行を除去して所有operationのclosureを再検証する。Providerは完了済みscopeを固定snapshotから落としてよいので、snapshotにない行は、完了済みticketを`scopes`で同じActorへ解決できる場合だけ受理する（未完了なら停止）。同runの再実行でも、完了して列挙から落ちたticketを`byOperation`から再検証する |
 | 停止 | Providerが知らない行、行とProviderの束縛Actorの不一致、列挙の不完全、全世代版の不一致、再snapshotの不一致（scopeの増加、版またはActorの変化。完了したscopeが落ちるのは許す）、closure／0-rowの失敗、ClockがdueAt未達では、開通せず既存規則で再閉鎖して隔離する。1件の失敗でも他のコードの破棄は試してから止める |
 | `OVERDUE` | 所有・採用した未完了ticketが`deadline`に到達していれば、最古の窓で`OVERDUE`を通知する。それだけでは隔離しない（restoring中は受付を閉じている。副論点B）。通知を確認できなければ成功にしない |
-| DB境界 | [Restore専用のPG Adapter](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-recipient-code-restore.ts)は、外部閉鎖を前後で確認し、`key_state`の排他Lock下で`restoring`だけを許可する。期限・MACに関係なく行を除去する。key-stateは、コード用途の世代をあってもなくても受理する専用readerで読む。Restoreの他の操作はコード用途で止まる（停止契約）。`readAuthenticationRestoreKeyState`は変えない |
+| DB境界 | [Restore専用のPG Adapter](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-recipient-code-restore.ts)は、外部閉鎖を前後で確認し、`key_state`の排他Lock下で`restoring`だけを許可する。期限・MACに関係なく行を除去する。key-stateは、コード用途の世代をあってもなくても受理する専用readerで読む。Restoreの他の操作（`readAuthenticationRestoreKeyState`）は、参加時はコード2用途を必須として受理し、不参加時はコード用途で止まる（停止契約。#285） |
 | 開通の前提 | Restore DB Adapterの`recipientCodes: true`で、fingerprintへコード表を加え、`activate`はコード表の0-rowを要求する。不参加では照会しない |
 | 証跡 | 検証した全closure（codeId、所有operation、全世代版、証跡参照）をcodeId順の固定書式でSHA-256し、`evidenceDigest`の要素2（presence=1）へ入れる。コード0件も「参加して0件」の値を持つ |
 
-既知の限界: v11のコード用途の世代は`migrateIdentity`の公開世代に含まれない（#285で追加）ので、実PGで通しているのはコード用途のないv6構成だけである。合成Providerの成功を実Providerの線形化・耐久性・IAMの証拠にしない。
+既知の限界: 合成Provider・合成Control・合成の整合証跡の成功を、実Providerの線形化・耐久性・IAMや実GM検証の証拠にしない。
 
 ## #240 管理Storeから保守へ引き継ぐInventory
 

@@ -44,7 +44,7 @@ OperatorがTrafficと他の認証／保守Writerを外部fenceで閉じてから
 
 外部所有fence確認 → Manifestの全Metadata検査／key_state排他Lock／Writer drain／restoring CAS → 最新Ledger検証・適用と未完了削除再開 → 全Attempt／Sessionのdurable ticket登録・全行／全DEK除去 → 外部revision CASで新epoch公開・再確認 → 保持Identityの旧鍵Seal停止／独立新DEK・Nonce世代で再Seal → 全required Alias再構築、重複・破損・Actor MAC検査 → 最新head再検証 → recovery checkpoint条件付きappend／Witness一致 → DB active CAS → 同run／epoch／revision／headへの外部Traffic open CASの順とする。
 
-削除再適用は真正なLedger binding下で行い、既にDestroyedのIdentityを復号必須にしない。保持Identityは復号・本人一意性を必須とする。未完了Actor票はProvider所有の固定snapshot cursorで全Pageを先行照合し、1,000件の先頭だけで打ち切らない。集合／版／inventoryの途中変更、別Provider cursor、重複operation、繰返cursor、空の中間Pageは拒否する。真の末尾だけnextCursor=nullとし、全件照合後に不可逆DB変更へ進む。全9用途の鍵Stateを検証し、公開されたLedger MAC書込世代とVerifierの現行世代も一致させる。新headが到着したら最大3回再適用し、収束しなければ隔離する。
+削除再適用は真正なLedger binding下で行い、既にDestroyedのIdentityを復号必須にしない。保持Identityは復号・本人一意性を必須とする。未完了Actor票はProvider所有の固定snapshot cursorで全Pageを先行照合し、1,000件の先頭だけで打ち切らない。集合／版／inventoryの途中変更、別Provider cursor、重複operation、繰返cursor、空の中間Pageは拒否する。真の末尾だけnextCursor=nullとし、全件照合後に不可逆DB変更へ進む。全9用途（コード参加の構成ではコード2用途を加えた11用途）の鍵Stateを検証し、公開されたLedger MAC書込世代とVerifierの現行世代も一致させる。新headが到着したら最大3回再適用し、収束しなければ隔離する。
 
 保持Actorは世代切替前、同一Transactionのkey_state排他LockとActor Row Lock下で、旧`actorRead`へのMAC世代の所属と旧状態MACを検証する。Providerが鍵を読めてMACが真正でも、旧公開集合に属さない世代は拒否する。新しい`actorRead`に旧MAC世代が含まれない場合も、検証済みの行を現行`actorWrite`で再MAC化し、版を進めてCASする。新しい読取集合への旧世代所属を再MAC化の前提にしない。旧鍵Materialの読取可否やBackup参照Windowの保持条件はProvider側の既存契約を維持する。旧ActorのMACが不正、または旧公開集合の世代外なら新MACで認証し直さず、世代公開・Actor更新をrollbackし、completionと外部Traffic開通を許可しない。
 
@@ -52,9 +52,11 @@ OperatorがTrafficと他の認証／保守Writerを外部fenceで閉じてから
 
 招待コードと全Context整合証跡への拡張は[ADR #278](../adr/restore-consistency-evidence-and-recipient-code-participation.md)（2026-11-12 Accepted）が定める。Manifestへの`recoveryPointId`の追加、受理版のallowlist、証跡の検証時点（P1〜P3）、`evidenceDigest`の範囲、コード表の0-rowを`activate`の前提へ加えることを含む。
 
-#282で実装した全Context整合証跡の要求: 認証側consumer Port（`authentication-consistency-evidence.ts`）は`runId`、`recoveryPointId`、検証済みLedger head（sequence、hash）だけを入力に、証跡Adapterのregistryが発行する不透明handleを受け取り、同じbindingで単回消費する。registryは偽造、別registry、別binding、再利用、catalog一致の0件／複数件、`recoveryPointId`の不一致を拒否し、不一致のbindingを渡されたhandleも失効させる。`consistencyDigest`は各Contextの検証済み状態（復旧点に束縛したhead revisionを含む）を覆う値と定め、P2／P3の不変確認はこの値、`recoveryPointId`、Context集合の一致で行う。各handleは発行時のLedger headへ束縛する。P2はP1と同じLedger headであることも要求し、このrunの削除Complete appendなどでheadが進んでいれば、隔離せずにActor票照合とP1から再試行する（既存の最大3回）。P3はrecovery append後のheadを使う。必須Context集合（現在は`group-management`）と完全一致しない証跡、Portの未注入、受理版外のManifestは隔離する。受理版は6のままで、構成確認は後続Task（#285）が入れる。本節のRestore順序と開通条件はそれ以外は現行のままである。
+#282で実装した全Context整合証跡の要求: 認証側consumer Port（`authentication-consistency-evidence.ts`）は`runId`、`recoveryPointId`、検証済みLedger head（sequence、hash）だけを入力に、証跡Adapterのregistryが発行する不透明handleを受け取り、同じbindingで単回消費する。registryは偽造、別registry、別binding、再利用、catalog一致の0件／複数件、`recoveryPointId`の不一致を拒否し、不一致のbindingを渡されたhandleも失効させる。`consistencyDigest`は各Contextの検証済み状態（復旧点に束縛したhead revisionを含む）を覆う値と定め、P2／P3の不変確認はこの値、`recoveryPointId`、Context集合の一致で行う。各handleは発行時のLedger headへ束縛する。P2はP1と同じLedger headであることも要求し、このrunの削除Complete appendなどでheadが進んでいれば、隔離せずにActor票照合とP1から再試行する（既存の最大3回）。P3はrecovery append後のheadを使う。必須Context集合（現在は`group-management`）と完全一致しない証跡、Portの未注入、受理版外のManifestは隔離する。本節のRestore順序と開通条件はそれ以外は現行のままである。
 
 #284で実装した全招待コードの破棄への参加: Restore Serviceの任意設定`recipientCodes`で参加し、未設定（既定値）では順序・fingerprint・`evidenceDigest`を変えない。参加時は、P1の後、Attempt／Session破棄の後、epoch公開の前に、Restore runを所有operationとするコードticketを`dueAt=closedAt`で登録・採用し、全世代closureとコードの0-row、再snapshotの一致、コード表全体の0-rowを確認する。Providerが知らない行や列挙の不完全では隔離する。closure集合のdigestを`evidenceDigest`の要素2へ入れる。Restore DB Adapterは`recipientCodes: true`でfingerprintへコード表を加え、`activate`でコード表の0-rowを要求する。手順と停止条件は[運用設計の#284](../operations/invitation-code-retention-restore.md#284-restoreへのコード参加)に従う。
+
+#285で実装した受理版と構成確認: 受理版は`{6, 11}`の明示allowlistで、Restore Service、PG `isolate`、Ledger証跡が同じ定数を使う。v6はコード不参加、v11はコード参加と整合証跡の構成だけで受理し、Manifestの版、復旧DBのコード表とコード2用途、Restore Serviceの`recipientCodes`、PG Adapterの`recipientCodes: true`が一致しない構成は、`isolate`がrestoringへ更新する前に隔離する（ADR #278 論点6）。参加時は公開世代とRestoreの各操作がコード2用途を必須にする。
 
 ## Done CriteriaとEvidence
 

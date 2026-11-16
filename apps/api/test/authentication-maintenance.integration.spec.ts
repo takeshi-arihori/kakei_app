@@ -9,15 +9,20 @@ import type {
   AuthenticationMacPurpose,
 } from '../src/shared/application/authentication/authentication-crypto-keys.js';
 import type {
+  AuthenticationBackupManifest,
   AuthenticationDestructionTicket,
   AuthenticationKeyDestructionPort,
 } from '../src/shared/application/authentication/authentication-maintenance-ports.js';
+import type { AuthenticationRestoreDatabase } from '../src/shared/application/authentication/authentication-maintenance-database.js';
 import {
   createAuthenticationDigests,
   importAuthenticationMacKey,
 } from '../src/shared/infrastructure/authentication/authentication-digests.js';
 import { createAuthenticationRecordCodec } from '../src/shared/infrastructure/authentication/authentication-record-codec.js';
-import { createAuthenticationRestoreEvidenceDigest } from '../src/shared/infrastructure/authentication/authentication-consistency-evidence.js';
+import {
+  createAuthenticationConsistencyEvidenceRegistry,
+  createAuthenticationRestoreEvidenceDigest,
+} from '../src/shared/infrastructure/authentication/authentication-consistency-evidence.js';
 import { createPostgresAuthenticationCleanup } from '../src/shared/infrastructure/authentication/postgres/postgres-authentication-cleanup.js';
 import { createPostgresAuthenticationDeletion } from '../src/shared/infrastructure/authentication/postgres/postgres-authentication-deletion.js';
 import { createPostgresAuthenticationRestore } from '../src/shared/infrastructure/authentication/postgres/postgres-authentication-restore.js';
@@ -82,6 +87,9 @@ const purposes = [
   'deleted-actor',
   'deletion-ledger-mac',
 ];
+
+/** コード不参加（v6）のRestore構成。PG Adapterの既定設定と一致する。 */
+const v6Configuration = { recipientCodes: false };
 
 describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
   const url =
@@ -764,7 +772,7 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       };
       const runId = randomUUID();
       const fence = await control.control.close(runId);
-      const version = await restore.isolate(fence, manifest);
+      const version = await restore.isolate(fence, manifest, v6Configuration);
       for (const ticket of await restore.discardCredentials(fence)) {
         const proof = await destruction.destroy(ticket);
         expect(await destruction.verify(proof, ticket)).toBe(true);
@@ -887,13 +895,17 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       );
       const restore = components(pool, control).dbRestore;
       const fence = await control.control.close(randomUUID());
-      const version = await restore.isolate(fence, {
-        createdAt: now,
-        schemaVersion: 6,
-        keyStateVersion: 1,
-        epoch: ids.epoch,
-        checkpoint: { sequence: 0, hash: '0'.repeat(64) },
-      });
+      const version = await restore.isolate(
+        fence,
+        {
+          createdAt: now,
+          schemaVersion: 6,
+          keyStateVersion: 1,
+          epoch: ids.epoch,
+          checkpoint: { sequence: 0, hash: '0'.repeat(64) },
+        },
+        v6Configuration,
+      );
       for (const ticket of await restore.discardCredentials(fence)) {
         const proof = await destruction.destroy(ticket);
         expect(await destruction.verify(proof, ticket)).toBe(true);
@@ -987,14 +999,18 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       };
       if (fault === 'foreign-fence') {
         await expect(
-          c.dbRestore.isolate({} as typeof fence, manifest),
+          c.dbRestore.isolate({} as typeof fence, manifest, v6Configuration),
         ).rejects.toThrow();
         expect(
           await c.dbRestore.activate({} as typeof fence, 1, ids.epoch),
         ).toBe(false);
         return;
       }
-      const version = await c.dbRestore.isolate(fence, manifest);
+      const version = await c.dbRestore.isolate(
+        fence,
+        manifest,
+        v6Configuration,
+      );
       for (const ticket of await c.dbRestore.discardCredentials(fence)) {
         expect(
           await destruction.verify(await destruction.destroy(ticket), ticket),
@@ -1111,13 +1127,17 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       'UPDATE authentication.key_state SET generation_version=2',
     );
     await expect(
-      c.dbRestore.isolate(fence, {
-        createdAt: now,
-        schemaVersion: 6,
-        keyStateVersion: 1,
-        epoch: ids.epoch,
-        checkpoint: { sequence: 0, hash: '0'.repeat(64) },
-      }),
+      c.dbRestore.isolate(
+        fence,
+        {
+          createdAt: now,
+          schemaVersion: 6,
+          keyStateVersion: 1,
+          epoch: ids.epoch,
+          checkpoint: { sequence: 0, hash: '0'.repeat(64) },
+        },
+        v6Configuration,
+      ),
     ).rejects.toThrow();
     expect(
       authenticationDatabaseRow(
@@ -1126,7 +1146,7 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       ).status,
     ).toBe('active');
   });
-  it('受理版6のPG isolateはrecoveryPointIdなしを受理し、ありを拒否する', async () => {
+  it('不参加のPG isolateはコード表のないv6をrecoveryPointIdなしだけ受理し、v11と中間版7〜9を拒否する', async () => {
     const c = components();
     const fence = await c.control.control.close(randomUUID());
     const manifest = {
@@ -1148,11 +1168,15 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
         schemaVersion: 11,
         recoveryPointId: '44444444-4444-4444-8444-444444444444',
       },
+      // コード表のないDBと不参加の構成では、版7〜9を止めるのは受理版のallowlistだけである。
+      ...[7, 8, 9].map((schemaVersion) => ({ ...manifest, schemaVersion })),
     ]) {
-      await expect(c.dbRestore.isolate(fence, rejected)).rejects.toThrow();
+      await expect(
+        c.dbRestore.isolate(fence, rejected, v6Configuration),
+      ).rejects.toThrow();
       expect(await status()).toBe('active');
     }
-    expect(await c.dbRestore.isolate(fence, manifest)).toBe(2);
+    expect(await c.dbRestore.isolate(fence, manifest, v6Configuration)).toBe(2);
     expect(await status()).toBe('restoring');
   });
   it('Prepared前の孤児ticketから再受付せず元operationを隔離する', async () => {
@@ -1182,17 +1206,27 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       epoch: ids.epoch,
       checkpoint: { sequence: 0, hash: '0'.repeat(64) },
     };
-    expect(await c.dbRestore.isolate(fence, manifest)).toBe(2);
+    expect(await c.dbRestore.isolate(fence, manifest, v6Configuration)).toBe(2);
     expect(
-      await components(pool, c.control).dbRestore.isolate(fence, manifest),
+      await components(pool, c.control).dbRestore.isolate(
+        fence,
+        manifest,
+        v6Configuration,
+      ),
     ).toBe(2);
     await expect(
-      c.dbRestore.isolate(fence, { ...manifest, createdAt: now - 1 }),
+      c.dbRestore.isolate(
+        fence,
+        { ...manifest, createdAt: now - 1 },
+        v6Configuration,
+      ),
     ).rejects.toThrow();
     await observer.query(
       'UPDATE authentication.key_state SET generation_version=3',
     );
-    await expect(c.dbRestore.isolate(fence, manifest)).rejects.toThrow();
+    await expect(
+      c.dbRestore.isolate(fence, manifest, v6Configuration),
+    ).rejects.toThrow();
     expect(c.control.isClosed()).toBe(true);
   });
   const crashes = [
@@ -1717,13 +1751,17 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
     let isolating: ReturnType<typeof restore.isolate> | undefined;
     try {
       await bounded(entered.promise);
-      isolating = restore.isolate(fence, {
-        createdAt: now,
-        schemaVersion: 6,
-        keyStateVersion: 1,
-        epoch: ids.epoch,
-        checkpoint: { sequence: 0, hash: '0'.repeat(64) },
-      });
+      isolating = restore.isolate(
+        fence,
+        {
+          createdAt: now,
+          schemaVersion: 6,
+          keyStateVersion: 1,
+          epoch: ids.epoch,
+          checkpoint: { sequence: 0, hash: '0'.repeat(64) },
+        },
+        v6Configuration,
+      );
       await blockedBy(() => restorers.pids.at(-1), writers.pids.at(-1)!);
     } finally {
       release.resolve();
@@ -2371,22 +2409,42 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
     expect(await count('session_record')).toBe(0);
   }, 15000);
 
-  // ここより後だけコード表（0008）を足す。前のCaseのv6構成とgoldenには影響しない。
-  // 受理版とコード用途の世代は#285の範囲なので、v6 Manifestと既存9用途のまま、
-  // コード表とコード参加のService設定だけを足した合成構成で検証する。
-  describe('全招待コードの破棄への参加（v6 DBへコード表だけを足した合成構成）', () => {
+  // ここより後だけ認証Schemaをv11（0007〜0011）へ進める。前のCaseのv6構成とgoldenには影響しない。
+  describe('全招待コードの破棄への参加（v11構成: コード表、コード2用途、整合証跡）', () => {
     const day = 86_400_000;
     let codeKeys: ReturnType<typeof syntheticRecipientCodeManagedKeys>;
+    let httpOwned = false;
     beforeAll(async () => {
-      await observer.query(
-        await readFile(
-          new URL(
-            '../migrations/authentication/0008_recipient_code_schema.sql',
-            import.meta.url,
+      // 0007の別Schema（authentication_http）はRestoreの対象外だが、v11の実構成どおり適用する。
+      const http = authenticationDatabaseRow(
+        (
+          await observer.query(
+            "SELECT to_regnamespace('authentication_http') IS NOT NULL AS present",
+          )
+        ).rows[0],
+      ).present;
+      if (http) throw new Error('既存のauthentication_http Schemaを変更しない');
+      for (const name of [
+        '0007_authentication_http_rate',
+        '0008_recipient_code_schema',
+        '0009_recipient_code_audit',
+        '0011_recipient_code_consumption_audit',
+      ]) {
+        await observer.query(
+          await readFile(
+            new URL(
+              '../migrations/authentication/' + name + '.sql',
+              import.meta.url,
+            ),
+            'utf8',
           ),
-          'utf8',
-        ),
-      );
+        );
+        if (name.startsWith('0007')) httpOwned = true;
+      }
+    });
+    afterAll(async () => {
+      if (httpOwned)
+        await observer.query('DROP SCHEMA authentication_http CASCADE');
     });
     beforeEach(() => {
       codeKeys = syntheticRecipientCodeManagedKeys();
@@ -2438,16 +2496,67 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
           ).rows[0],
         ).count,
       );
-    const manifestOf = async () => ({
-      createdAt: now,
-      schemaVersion: 6,
-      keyStateVersion: 1,
-      epoch: ids.epoch,
-      checkpoint: ledger.evidence.head(await ledger.evidence.latest()),
+    const codePurposes = [
+      'recipient-code-lookup',
+      'recipient-code-state-mac',
+    ] as const;
+    /**
+     * コード2用途の現行世代を登録する。通常認証Storeはコード用途で止まる（停止契約）ので、
+     * Actorのログイン等を済ませた後、Backup取得の時点で登録する。
+     */
+    const provisionCodePurposes = async () => {
+      for (const purpose of codePurposes)
+        await observer.query(
+          'INSERT INTO authentication.key_generation(generation_id,purpose,key_version,epoch,searchable,write_required) VALUES($1,$2,$3,NULL,true,true)',
+          [randomUUID(), purpose, 'v1'],
+        );
+    };
+    const recoveryPointId = '44444444-4444-4444-8444-444444444444';
+    /** v11のBackup。コード2用途を登録した時点の構成をManifestに束縛する。 */
+    const backupManifest = async (options: { codePurposes?: boolean } = {}) => {
+      if (options.codePurposes !== false) await provisionCodePurposes();
+      return {
+        createdAt: now,
+        schemaVersion: 11,
+        keyStateVersion: 1,
+        epoch: ids.epoch,
+        checkpoint: ledger.evidence.head(await ledger.evidence.latest()),
+        recoveryPointId,
+      };
+    };
+    const evidenceOf = (binding: { recoveryPointId: string }) => ({
+      recoveryPointId: binding.recoveryPointId,
+      contexts: ['group-management'],
+      consistencyDigest: new Uint8Array(32).fill(7),
     });
+    /** 合成の全Context整合証跡。本番の証跡Providerの能力の証拠ではない。 */
+    const consistency = () => ({
+      evidence: createAuthenticationConsistencyEvidenceRegistry({
+        source: {
+          verify: (binding) => Promise.resolve([evidenceOf(binding)]),
+        },
+      }),
+      requiredContexts: ['group-management'],
+    });
+    const keyGenerations = async () =>
+      (
+        await observer.query(
+          "SELECT purpose::text AS purpose,key_version,write_required FROM authentication.key_generation WHERE purpose::text LIKE 'recipient-code-%' ORDER BY 1",
+        )
+      ).rows.map(authenticationDatabaseRow);
+    const keyStatus = async () =>
+      authenticationDatabaseRow(
+        (await observer.query('SELECT status FROM authentication.key_state'))
+          .rows[0],
+      ).status;
+    /**
+     * コード参加の構成。`service`と`adapter`はRestore ServiceとPG Adapterそれぞれのコード参加で、
+     * 一致確認のTestだけが片方を外す。
+     */
     const participating = (
       control: ReturnType<typeof syntheticAuthenticationRestoreControl>,
       connections: AuthenticationConnectionPool = pool,
+      configuration: { service?: boolean; adapter?: boolean } = {},
     ) => {
       const base = components(connections, control);
       const dbRestore = createPostgresAuthenticationRestore({
@@ -2458,7 +2567,7 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
         clock,
         ledger: ledger.evidence,
         control: control.control,
-        recipientCodes: true,
+        recipientCodes: configuration.adapter !== false,
       });
       const migrateIdentity = dbRestore.migrateIdentity.bind(dbRestore);
       dbRestore.migrateIdentity = async (...args) => {
@@ -2482,6 +2591,7 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       return {
         codes,
         signals,
+        dbRestore,
         restore: createAuthenticationRestoreService({
           control: control.control,
           database: dbRestore,
@@ -2492,17 +2602,27 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
           clock,
           monitor,
           evidenceDigest,
-          recipientCodes: createRecipientCodeRestoreDiscard({
-            maintenance: guardRecipientCodeMaintenance(codeKeys),
-            database: codes,
-            clock,
-            monitor,
-          }),
+          consistency: consistency(),
+          recipientCodes:
+            configuration.service === false
+              ? undefined
+              : createRecipientCodeRestoreDiscard({
+                  maintenance: guardRecipientCodeMaintenance(codeKeys),
+                  database: codes,
+                  clock,
+                  monitor,
+                }),
         }),
       };
     };
     const controlAtNow = () =>
-      syntheticAuthenticationRestoreControl(managed, ledger, 'v1', () => now);
+      syntheticAuthenticationRestoreControl(
+        managed,
+        ledger,
+        'v1',
+        () => now,
+        true,
+      );
 
     it('期限切れの行と孤立scopeを含む全コードを初回閉鎖UTC起算で破棄し、closureをevidenceDigestへ入れて開通する', async () => {
       const { actorId } = await login();
@@ -2520,7 +2640,7 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
         (await purgeAudits()) +
         (await count('session_record')) +
         (await count('login_attempt'));
-      const manifest = await manifestOf();
+      const manifest = await backupManifest();
       now += day;
       const control = controlAtNow();
       const runId = randomUUID();
@@ -2560,16 +2680,135 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
           evidenceDigest.digest({
             fingerprint: migratedFingerprints.at(-1)!,
             codeClosure: evidenceDigest.codeClosure(closures),
-            consistency: null,
+            consistency: evidenceOf({ recoveryPointId }),
           }),
         ).toString('hex'),
       );
+      expect(await keyStatus()).toBe('active');
+      // 公開世代のコード2用途（現行の書込世代）が、開通後のkey_generationに残る。
+      expect(await keyGenerations()).toEqual([
+        {
+          purpose: 'recipient-code-lookup',
+          key_version: 'v1',
+          write_required: true,
+        },
+        {
+          purpose: 'recipient-code-state-mac',
+          key_version: 'v1',
+          write_required: true,
+        },
+      ]);
+    });
+
+    it('v6 Manifestは、コード表がある復旧DBでは不参加の既定構成でもrestoringへ更新せず隔離する', async () => {
+      const { actorId } = await login();
+      await insertCode(actorId);
+      const manifest = {
+        createdAt: now,
+        schemaVersion: 6,
+        keyStateVersion: 1,
+        epoch: ids.epoch,
+        checkpoint: ledger.evidence.head(await ledger.evidence.latest()),
+      };
+      const control = controlAtNow();
+      const c = components(pool, control);
+      expect((await c.restore.run(randomUUID(), manifest)).status).toBe(
+        'quarantined',
+      );
+      // isolateが拒否したのでrestoringを経ず、清掃の封鎖だけが残る。
+      expect(await keyStatus()).toBe('quarantined');
+      expect(control.events).not.toContain('before-publish');
+      expect(await count('recipient_code')).toBe(1);
+    });
+
+    it('v11でコード用途の世代がない復旧DBは、ticketもepochも作らず隔離する', async () => {
+      const { actorId } = await login();
+      const codeId = await insertCode(actorId);
+      const manifest = await backupManifest({ codePurposes: false });
+      const control = controlAtNow();
       expect(
-        authenticationDatabaseRow(
-          (await observer.query('SELECT status FROM authentication.key_state'))
-            .rows[0],
-        ).status,
-      ).toBe('active');
+        (await participating(control).restore.run(randomUUID(), manifest))
+          .status,
+      ).toBe('quarantined');
+      expect(await keyStatus()).toBe('quarantined');
+      expect(control.events).not.toContain('before-publish');
+      expect(await codeKeys.maintenance.find(codeId)).toBeNull();
+      expect(await count('recipient_code')).toBe(1);
+    });
+
+    it.each([
+      ['Restore Serviceだけがコード参加', { adapter: false }],
+      ['PG Adapterだけがコード参加', { service: false }],
+    ])(
+      '%sの構成は、ticketもepochも作らず隔離する',
+      async (_name, configuration) => {
+        const { actorId } = await login();
+        const codeId = await insertCode(actorId);
+        const manifest = await backupManifest();
+        const control = controlAtNow();
+        expect(
+          (
+            await participating(control, pool, configuration).restore.run(
+              randomUUID(),
+              manifest,
+            )
+          ).status,
+        ).toBe('quarantined');
+        expect(await keyStatus()).toBe('quarantined');
+        expect(control.events).not.toContain('before-publish');
+        expect(await codeKeys.maintenance.find(codeId)).toBeNull();
+        expect(await count('recipient_code')).toBe(1);
+      },
+    );
+
+    it('PG isolateは受理版{6, 11}と、Service設定・Adapter設定・版・DBの構成が一致する場合だけrestoringへ更新する', async () => {
+      await login();
+      const manifest = await backupManifest();
+      const v6 = {
+        createdAt: manifest.createdAt,
+        schemaVersion: 6,
+        keyStateVersion: manifest.keyStateVersion,
+        epoch: manifest.epoch,
+        checkpoint: manifest.checkpoint,
+      };
+      const control = controlAtNow();
+      const fence = await control.control.close(randomUUID());
+      const adapter = participating(control).dbRestore;
+      type Rejected = [
+        AuthenticationRestoreDatabase,
+        AuthenticationBackupManifest,
+        { recipientCodes: boolean },
+      ];
+      const rejected: Rejected[] = [
+        // Service設定とAdapter設定の不一致。
+        [adapter, manifest, v6Configuration],
+        [
+          components(pool, control).dbRestore,
+          manifest,
+          { recipientCodes: true },
+        ],
+        // コード表のあるDBで、不参加のv6。
+        [components(pool, control).dbRestore, v6, v6Configuration],
+        // 参加でもv6は受理しない（接続済み）。
+        [adapter, v6, { recipientCodes: true }],
+        // allowlist外（中間版と未知の版）。
+        ...[7, 8, 9].map((schemaVersion): Rejected => [
+          components(pool, control).dbRestore,
+          { ...v6, schemaVersion },
+          v6Configuration,
+        ]),
+        [adapter, { ...manifest, schemaVersion: 12 }, { recipientCodes: true }],
+      ];
+      for (const [database, input, configuration] of rejected) {
+        await expect(
+          database.isolate(fence, input, configuration),
+        ).rejects.toThrow();
+        expect(await keyStatus()).toBe('active');
+      }
+      expect(
+        await adapter.isolate(fence, manifest, { recipientCodes: true }),
+      ).toBe(2);
+      expect(await keyStatus()).toBe('restoring');
     });
 
     it('Providerが知らない行があれば、ticketもepochも作らず行を残して隔離する', async () => {
@@ -2579,7 +2818,7 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
         known: false,
         state: 'consumed',
       });
-      const manifest = await manifestOf();
+      const manifest = await backupManifest();
       const control = controlAtNow();
       const runId = randomUUID();
       expect(
@@ -2602,7 +2841,7 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
       const { actorId } = await login();
       const createdAt = now;
       const codeId = await insertCode(actorId);
-      const manifest = await manifestOf();
+      const manifest = await backupManifest();
       now += day;
       const control = controlAtNow();
       const runId = randomUUID();
@@ -2755,31 +2994,33 @@ describe('PostgreSQL認証Dataの清掃・削除・復旧', () => {
         expect(await codes.empty(fence)).toBe(false);
       });
 
-      it('コード用途の世代があっても動き、Restoreの他の操作はコード用途で止まる（停止契約）', async () => {
-        const { actorId, fence, codes } = await setup();
+      it('コード破棄Adapterは用途の有無に依らず動き、Restoreの他の操作は不参加ならコード用途で止まり、参加ならコード2用途を必須にする（停止契約）', async () => {
+        const { actorId, control, fence, codes } = await setup();
         const codeId = await insertCode(actorId);
-        for (const purpose of [
-          'recipient-code-lookup',
-          'recipient-code-state-mac',
-        ])
-          await observer.query(
-            'INSERT INTO authentication.key_generation(generation_id,purpose,key_version,epoch,searchable,write_required) VALUES($1,$2,$3,NULL,true,true)',
-            [randomUUID(), purpose, 'v1'],
-          );
         await restoring();
+        // 同じControlが閉鎖を確認できるfenceで、停止の原因をコード用途に限定する。
+        const notParticipating = components(pool, control).dbRestore;
+        const participatingRestore = participating(control).dbRestore;
         expect(
           (await codes.rows(fence, null, 10)).map((r) => r.codeId),
         ).toEqual([codeId]);
-        const dbRestore = createPostgresAuthenticationRestore({
-          pool,
-          codec,
-          digests,
-          keys: destruction,
-          clock,
-          ledger: ledger.evidence,
-          control: controlAtNow().control,
-        });
-        await rejects(dbRestore.discardCredentials(fence));
+        await rejects(participatingRestore.discardCredentials(fence));
+        await expect(
+          notParticipating.discardCredentials(fence),
+        ).resolves.toBeDefined();
+        await provisionCodePurposes();
+        expect(
+          (await codes.rows(fence, null, 10)).map((r) => r.codeId),
+        ).toEqual([codeId]);
+        await rejects(notParticipating.discardCredentials(fence));
+        await expect(
+          participatingRestore.discardCredentials(fence),
+        ).resolves.toEqual([]);
+        // 参加の構成でも、コード用途の片方が欠ければ止まる。
+        await observer.query(
+          "DELETE FROM authentication.key_generation WHERE purpose='recipient-code-state-mac'",
+        );
+        await rejects(participatingRestore.discardCredentials(fence));
       });
 
       it('fingerprintは参加時だけコード表を覆い、不参加ではコード表を照会しない', async () => {

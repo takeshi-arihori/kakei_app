@@ -18,6 +18,7 @@ import { AuthenticationCryptoUnavailable } from '../src/shared/application/authe
 import type { AuthenticationTransactionScope } from '../src/shared/application/authentication/authentication-transaction-scope.js';
 import type { RecipientCodeSecret } from '../src/shared/application/authentication/recipient-code-input.js';
 import {
+  readAuthenticationRestoreKeyState,
   readAuthenticationCleanupKeyState,
   readAuthenticationKeyState,
   readAuthenticationMaintenanceKeyState,
@@ -488,6 +489,20 @@ describe('招待コード保守の停止契約（実PG17）', () => {
         readRecipientCodeMaintenanceKeyState,
         true,
         ['active', 'rotating', 'quarantined'],
+      ],
+      // Restoreの各操作は、不参加（v6）ならコード用途で止まり、参加（v11）なら受理する（ADR #278 論点6）。
+      [
+        'Restore（コード不参加）',
+        readAuthenticationRestoreKeyState,
+        false,
+        ['restoring'],
+      ],
+      [
+        'Restore（コード参加）',
+        (connection: Parameters<typeof readAuthenticationRestoreKeyState>[0]) =>
+          readAuthenticationRestoreKeyState(connection, true),
+        true,
+        ['restoring'],
       ],
     ] as const)(
       '%sのreaderが受理する状態を固定する',
