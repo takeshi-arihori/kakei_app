@@ -29,7 +29,7 @@ Context／Layer／共有基盤の配置・責務やwiring、公開Operationを�
 - `GET /auth/session`: idle非延長のSession照会200、本人性なし401
 - `POST /auth/logout`: 現在Sessionだけ失効204
 
-`apps/api/src/app.ts`はGraphQL YogaのUI／transport／preflight境界として`GET`／`OPTIONS /graphql`も受理します。これらは現行の公開業務API契約ではなく、Clientが依存する安定Methodとして扱いません。業務AuthorizationやProduction Deploymentの未決事項をこの文書で採用しません。認証4操作は下記の承認済みHTTP契約へ分離します。
+`apps/api/src/app.ts`はGraphQL YogaのUI／transport境界として`GET`／`OPTIONS /graphql`もYogaへ渡します。WebとAPIは同一Originへ集約するため、`/graphql`はCORSのResponse Header（`Access-Control-Allow-*`）を返さず、他Originのpreflight（`OPTIONS`）へは405を返して許可しません。同一OriginのClientへの影響はなく、問題があればForward-fixで修正します。`GET`／`OPTIONS`は現行の公開業務API契約ではなく、Clientが依存する安定Methodとして扱いません。業務AuthorizationやProduction Deploymentの未決事項をこの文書で採用しません。認証4操作は下記の承認済みHTTP契約へ分離します。
 
 ## Swagger UI
 
