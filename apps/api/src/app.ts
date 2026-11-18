@@ -35,6 +35,8 @@ export const createApp = (options: CreateAppOptions = {}) => {
     schema,
     graphqlEndpoint: '/graphql',
     maskedErrors: true,
+    // WebとAPIは同一Originへ集約するため、他OriginへCORS Headerを返さない。
+    cors: false,
   });
 
   const authenticationMethods = {

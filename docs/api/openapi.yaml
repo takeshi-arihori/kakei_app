@@ -39,6 +39,12 @@ paths:
 
         intentionally not duplicated in this OpenAPI document.
 
+        Web and API share one origin. This endpoint returns no CORS response
+
+        headers (Access-Control-Allow-*), and a cross-origin preflight (OPTIONS)
+
+        gets 405 without them.
+
         '
       requestBody:
         required: true
