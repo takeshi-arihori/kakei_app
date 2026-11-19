@@ -33,21 +33,36 @@ paths:
     post:
       operationId: executeGraphQL
       summary: Execute a GraphQL operation
-      description: 'Executes the operation defined by the canonical GraphQL SDL at
+      description: 'Executes one operation defined by the canonical GraphQL SDL at
 
         ../../apps/api/schema.graphql. GraphQL business types and fields are
 
         intentionally not duplicated in this OpenAPI document.
 
-        Web and API share one origin. This endpoint returns no CORS response
+        Only POST with application/json is accepted. Any other method (GET, OPTIONS,
 
-        headers (Access-Control-Allow-*), and a cross-origin preflight (OPTIONS)
+        HEAD and so on) gets 405 with Allow: POST. GraphiQL, introspection
 
-        gets 405 without them.
+        (__typename is allowed), batching and extensions are not supported.
+
+        Before execution the document is limited to 1,000 tokens, depth 5, 5
+
+        aliases, 5 top-level fields, 1 authenticated top-level field, 1 mutation
+
+        top-level field and 10 directives (../adr/graphql-entry-hardening.md).
+
+        Every violation returns the same fixed INVALID_REQUEST shape in every
+
+        composition. Web and API share one origin. This endpoint returns no CORS
+
+        response headers (Access-Control-Allow-*).
 
         '
       requestBody:
         required: true
+        description: At most 18,432 bytes, measured on the stream regardless of
+          Content-Length, read within 5 seconds. Content-Encoding must be absent
+          or identity.
         content:
           application/json:
             schema:
@@ -55,16 +70,42 @@ paths:
       responses:
         '200':
           description: GraphQL response envelope; inspect errors before data
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/ContentTypeOptions'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GraphQLResponse'
         '400':
-          description: Invalid GraphQL-over-HTTP request envelope
+          description: Invalid JSON or body shape, Content-Length mismatch, read
+            timeout, syntax, validation, introspection, limit, operation selection
+            or variable violation
+          $ref: '#/components/responses/GraphQLInvalidRequest'
+        '405':
+          description: Method other than POST
+          headers:
+            Allow:
+              schema:
+                type: string
+                const: POST
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+            X-Content-Type-Options:
+              $ref: '#/components/headers/ContentTypeOptions'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GraphQLResponse'
+                $ref: '#/components/schemas/GraphQLInvalidRequestBody'
+        '413':
+          description: Body larger than 18,432 bytes
+          $ref: '#/components/responses/GraphQLInvalidRequest'
+        '415':
+          description: Content-Type other than application/json or Content-Encoding
+            other than identity
+          $ref: '#/components/responses/GraphQLInvalidRequest'
   /auth/google/attempt:
     post:
       operationId: beginGoogleLogin
@@ -326,11 +367,41 @@ components:
             - object
             - 'null'
           additionalProperties: true
-        extensions:
-          type:
-            - object
-            - 'null'
-          additionalProperties: true
+    GraphQLInvalidRequestBody:
+      type: object
+      additionalProperties: false
+      description: Fixed pre-execution rejection. No data, locations, path or
+        graphql-js message.
+      required:
+        - errors
+      properties:
+        errors:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - message
+              - extensions
+            properties:
+              message:
+                type: string
+                description: Fixed text that does not reflect input or cause
+              extensions:
+                type: object
+                additionalProperties: false
+                required:
+                  - code
+                  - requestId
+                properties:
+                  code:
+                    type: string
+                    const: INVALID_REQUEST
+                  requestId:
+                    type: string
+                    format: uuid
     GraphQLResponse:
       type: object
       additionalProperties: true
@@ -523,7 +594,7 @@ components:
       description: Profileに対応するHttpOnly Cookie。重複/不正構文は400。不在・不正な秘密値の意味は各操作で処理する。
   headers:
     CacheControl:
-      description: 認証Responseを保存しない。
+      description: Responseを保存しない。
       schema:
         type: string
         const: no-store
@@ -537,6 +608,17 @@ components:
       schema:
         type: string
   responses:
+    GraphQLInvalidRequest:
+      description: Fixed INVALID_REQUEST rejection before execution
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/ContentTypeOptions'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/GraphQLInvalidRequestBody'
     Authentication400:
       description: JSON/重複Field/未知Field/Cookie Header違反/認証Cookieの値構文・重複/GET Body等の入力拒否。
       headers:

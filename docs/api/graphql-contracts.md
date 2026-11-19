@@ -23,7 +23,7 @@ Knowledge Stateは次の3値だけを使う。
 - Authorization: 現行Compositionには認証Guardと業務認可がない。将来の認証方式を採用する根拠にはしない
 - Input: 引数なし。HTTP request envelopeは[`openapi.yaml`](openapi.yaml)を参照する
 - Result: `ApiStatus!`を返す。Type／Field構造はSchemaを参照する
-- Error: Operation固有の業務Errorはない。GraphQL validation／transport ErrorはYogaが処理し、予期しないErrorは現行Compositionでmaskする
+- Error: Operation固有の業務Errorはない。構文・検証・上限違反は[入口制限](#入口制限)の`INVALID_REQUEST`（400）。予期しないErrorは`NODE_ENV`に関係なくmaskし、`originalError`を出さない
 - Idempotency: 状態を変更しないQueryで、operation IDまたはidempotency keyを使用しない
 - Concurrency / Retry: 共有状態を変更しないため同じQueryを再実行できる。再試行Policyは採用していない
 - Compatibility: Field名またはResult型の変更はSDL変更としてReviewする。Versioning方針は未決であり、このentryでは採用しない
@@ -31,10 +31,21 @@ Knowledge Stateは次の3値だけを使う。
 - Implementation: [`resolvers.ts`](../../apps/api/src/presentation/graphql/resolvers.ts)
 - Test: [`app.spec.ts`](../../apps/api/src/app.spec.ts)
 
+## 入口制限
+
+- Knowledge State: Confirmed（[Accepted ADR](../adr/graphql-entry-hardening.md)、#293・#316）
+- 全Operationに共通の実行前検査。Operation entryへ個別に複製しない
+- Transport: POST＋`application/json`の単一Operationだけ。GET・batch・`extensions`・GraphiQL・introspection（`__typename`は許可）は受け付けない。HTTP statusとBody上限は[`openapi.yaml`](openapi.yaml)を参照する
+- 上限: token 1,000、深さ5、alias 5、top-level field 5、認証付きtop-level field 1、Mutationのtop-level field 1、directive 10。文書内のすべてのOperationに適用する
+- 認証付きfield: 未認証で公開するroot fieldの許可List（[`graphql-entry.ts`](../../apps/api/src/presentation/graphql/graphql-entry.ts)の`PUBLIC_ROOT_FIELDS`、現在は`Query.apiStatus`だけ）にないroot field。Operationを追加するTaskは、未認証で公開する場合だけ許可Listへ足す
+- Error: 違反は`{ errors: [{ message, extensions: { code: 'INVALID_REQUEST', requestId } }] }`（`data`なし、固定message）。全Compositionで同じ形
+- Complexity: 導入しない。引数付きPagination・ネストList・Context横断fieldを追加するTaskでCost分析の要否を判定する
+- Test: [`graphql-request-body.spec.ts`](../../apps/api/src/presentation/graphql/graphql-request-body.spec.ts)、[`graphql-document-limits.spec.ts`](../../apps/api/src/presentation/graphql/graphql-document-limits.spec.ts)、[`graphql-entry.spec.ts`](../../apps/api/src/presentation/graphql/graphql-entry.spec.ts)、[`app.spec.ts`](../../apps/api/src/app.spec.ts)
+
 ## Open Questions / Gate
 
 - Group Management、Expense Recording、Settlementの公開Operationは、対応Use Case、本人性、認証認可、公開Error契約がReadyになったTaskで追加する
-- 認証Provider、Token、存在非開示、公開Error code、Pagination、Complexity、N+1、Rate limitは未決または別Taskの対象である
+- 認証Provider、Token、存在非開示、公開Error code（`INVALID_REQUEST`以外）、Pagination、N+1、Rate limitは未決または別Taskの対象である。Complexityは[入口制限](#入口制限)のReview Triggerで判定する
 - 未決事項をこのcatalogだけでAcceptedにせず、必要なDecisionと実装Evidenceが揃うまで`Confirmed`にしない
 
 関連Task: [#142](https://github.com/takeshi-arihori/kakei_app/issues/142)
