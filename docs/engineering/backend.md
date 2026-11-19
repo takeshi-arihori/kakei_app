@@ -159,3 +159,7 @@ Event Sourcing、CQRS、Projection、Outboxの採否と適用範囲は[domain-de
 ### #243の内部Composition確認基準
 
 develop `fc64e0aa887ef7dcaa45ea5b9e1362b78a54a31e`を基点とする#243差分（2026-11-01）で、上表の内部共通commit Factory、認証postgresの実消費Writer/共有終端CAS、消費Audit用Migration11を追加した。`src/recipient-invitation-runtime.ts`の正確なPathだけを共通Compositionとして分類し、Context/共有Moduleからの逆参照は許可しない。通常app/main/Dev・公開GraphQL/HTTP・本番Providerは接続しない。Entity関連やDomain/公開契約の追加ではなく、具体Capabilityと清掃/Restore/公開Gateを維持する。
+
+### #316のGraphQL入口確認基準
+
+Epic Branch `epic/303-group-create-list`（基点`bf356c31c9c1250f628c5bd025dcddffb67178c1`）を基点とする#316差分（2026-11-20）で、共通`src/presentation/graphql/`に入口Module 3件（`graphql-request-body.ts`、`graphql-document-limits.ts`、`graphql-entry.ts`）を追加し、`app.ts`は`/graphql`の全Methodをこの入口へ渡すようにした。依存表は変えず、共通GraphQLは認証HTTPを参照しない。公開Operationは引き続き`Query.apiStatus`だけで、認証lease・Origin・CSRF・公開Error写像（#317）、Context Resolverの接続、Production有効化は別Taskである。Decisionは[GraphQL入口制限ADR](../adr/graphql-entry-hardening.md)。

@@ -17,10 +17,14 @@ export const INVALID_REQUEST_MESSAGE = 'Requestを処理できません。';
 
 /** 実行前拒否の公開形。`data`・`locations`・`path`を持たない。 */
 export interface PublicGraphQLErrorBody {
+  /** 固定の拒否1件だけ。検証Errorを列挙しない。 */
   readonly errors: readonly [
     {
+      /** 固定文。入力値・原因・Rule名を含めない。 */
       readonly message: string;
+      /** Clientが判断に使う最小の情報。 */
       readonly extensions: {
+        /** 実行前拒否は常に`INVALID_REQUEST`。 */
         readonly code: 'INVALID_REQUEST';
         /** Serverが発行するUUIDv4。Client値を使わない。 */
         readonly requestId: string;
