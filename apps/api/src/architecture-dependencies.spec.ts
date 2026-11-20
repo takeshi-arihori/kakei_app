@@ -942,6 +942,48 @@ describe('API architecture dependencies', () => {
         validateDependency(fixturePath(source), '../dev/local.js', dev),
       ).not.toBeNull();
   });
+  it('開発用Group鍵はdevだけに置き、Production入口から到達させずTest-only fixtureを参照させない', () => {
+    const groupKeys = fixturePath(
+      '../dev/group-management-development-keys.ts',
+    );
+    expect(
+      validateDependency(
+        groupKeys,
+        './local.js',
+        fixturePath(
+          'group-management/infrastructure/postgres/group-repository.ts',
+        ),
+      ),
+    ).toBeNull();
+    expect(
+      validateDependency(
+        groupKeys,
+        './local.js',
+        fixturePath('../test/support/recipient-invitation-fixture.ts'),
+      ),
+    ).not.toBeNull();
+    for (const source of [
+      'app.ts',
+      'main.ts',
+      'recipient-invitation-runtime.ts',
+      'group-management/infrastructure/postgres/group-repository.ts',
+    ])
+      expect(
+        validateDependency(fixturePath(source), '../dev/local.js', groupKeys),
+      ).not.toBeNull();
+    const production = reachableModules(
+      ['app.ts', 'main.ts', 'recipient-invitation-runtime.ts'].map(fixturePath),
+    );
+    // 探索が入口の外へ届かなければ、次の検査は何も証明しない。
+    expect(
+      production.has(
+        fixturePath(
+          'group-management/application/use-cases/registered-recipient-invitation-service.ts',
+        ),
+      ),
+    ).toBe(true);
+    expect(production.has(groupKeys)).toBe(false);
+  });
   it('IPの標準解析はHTTP共有Rate Adapterの正確なPathだけで許可する', () => {
     expect(
       validateDependency(

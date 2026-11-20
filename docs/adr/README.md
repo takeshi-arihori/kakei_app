@@ -6,6 +6,7 @@ Decision本文はこのディレクトリで管理する。Owner承認、関連T
 
 | Decision | Status | 関係・証拠 |
 | --- | --- | --- |
+| [使い捨て開発CompositionへのGroup Managementと開発用Group鍵の追加](development-composition-group-management.md) | Accepted（設計。配線は#314、Production Gateは別） | [#307](https://github.com/takeshi-arihori/kakei_app/issues/307)。2026-11-19 Owner会話承認（推奨案1A〜4Aを採用、許可Listへ既存用途fingerprintを補足）。Supplements 認証HTTP境界ADR・ADR #55。実装は#313（鍵Provider）・#314（配線） |
 | [実装前Planの置き場所とEpic統合Branch](plan-location-and-epic-integration-branch.md) | Accepted | [#281](https://github.com/takeshi-arihori/kakei_app/issues/281)。2026-11-17 Owner会話承認（論点1〜4を推奨案で採用）。Supplements GitHub正本への切替（#17）。進行中のEpic #202は従来のRuleのまま進める |
 | [Restoreの全Context整合証跡と招待コード参加の契約](restore-consistency-evidence-and-recipient-code-participation.md) | Accepted（設計。実装・個別Ready・Production有効化は別Gate） | [#278](https://github.com/takeshi-arihori/kakei_app/issues/278)。2026-11-12 Owner会話承認「採用する」（論点1〜8と副論点A・Bを推奨どおり）。Supplements 招待コードADR・鍵inventory ADR・認証保護保存ADR。後続は[#245](https://github.com/takeshi-arihori/kakei_app/issues/245)の分割。GM側のRestore検証はProduction Gate側の別の設計Task |
 | [招待コードのLifecycle・保護保存・原子的消費](invitation-code-lifecycle-and-protected-storage.md) | Accepted（詳細設計） | [設計Task #233](https://github.com/takeshi-arihori/kakei_app/issues/233)。2026-10-27 Owner会話承認「はいお願いします。」。10分/一Actor一つ/不可逆検索値/共通commit/清掃・Restore。承認同期のdevelop統合・個別Ready・Production Gateは維持 |
