@@ -19,17 +19,17 @@ Knowledge Stateは次の3値だけを使う。
 - Knowledge State: Confirmed
 - Context: Shared API。業務Bounded Contextに属さない疎通確認
 - Use Case: ClientがGraphQL endpointの疎通状態を確認する
-- Actor: 現行のGraphQL transportへ到達できるClient。本人性は要求していない
-- Authorization: 現行Compositionには認証Guardと業務認可がない。将来の認証方式を採用する根拠にはしない
+- Actor: 現行のGraphQL transportへ到達できるClient。本人性は要求しない（認証leaseを開かない未認証field）
+- Authorization: 業務認可なし。共通GraphQL境界のRequest前提（`X-Kakei-Request: 1`、Originは存在すれば設定Originと完全一致、`Sec-Fetch-Site`は存在すれば`same-origin`）だけを満たす（[業務GraphQLの認証境界ADR](../adr/business-graphql-authentication-boundary.md)）
 - Input: 引数なし。HTTP request envelopeは[`openapi.yaml`](openapi.yaml)を参照する
 - Result: `ApiStatus!`を返す。Type／Field構造はSchemaを参照する
-- Error: Operation固有の業務Errorはない。構文・検証・上限違反は[入口制限](#入口制限)の`INVALID_REQUEST`（400）。予期しないErrorは`NODE_ENV`に関係なくmaskし、`originalError`を出さない
+- Error: Operation固有の業務Errorはない。構文・検証・上限違反は[入口制限](#入口制限)の`INVALID_REQUEST`（400）、Request前提（`X-Kakei-Request`・Origin・`Sec-Fetch-Site`）の違反は403＋`REQUEST_REJECTED`。予期しないErrorは`NODE_ENV`に関係なく`SERVICE_UNAVAILABLE`へmaskし、`originalError`を出さない。公開Errorは8 code・固定文・requestIdだけ
 - Idempotency: 状態を変更しないQueryで、operation IDまたはidempotency keyを使用しない
 - Concurrency / Retry: 共有状態を変更しないため同じQueryを再実行できる。再試行Policyは採用していない
 - Compatibility: Field名またはResult型の変更はSDL変更としてReviewする。Versioning方針は未決であり、このentryでは採用しない
 - Schema: [`apps/api/schema.graphql`](../../apps/api/schema.graphql)
 - Implementation: [`resolvers.ts`](../../apps/api/src/presentation/graphql/resolvers.ts)
-- Test: [`app.spec.ts`](../../apps/api/src/app.spec.ts)
+- Test: [`app.spec.ts`](../../apps/api/src/app.spec.ts)、[`graphql-entry-authentication.spec.ts`](../../apps/api/src/presentation/graphql/graphql-entry-authentication.spec.ts)
 
 ## 入口制限
 
@@ -45,7 +45,8 @@ Knowledge Stateは次の3値だけを使う。
 ## Open Questions / Gate
 
 - Group Management、Expense Recording、Settlementの公開Operationは、対応Use Case、本人性、認証認可、公開Error契約がReadyになったTaskで追加する
-- 認証Provider、Token、存在非開示、公開Error code（`INVALID_REQUEST`以外）、Pagination、N+1、Rate limitは未決または別Taskの対象である。Complexityは[入口制限](#入口制限)のReview Triggerで判定する
+- 業務Operationの本人性（Operation単位の認証lease）、Origin・CSRF、公開Error code 8種、存在非開示の公開形（`NOT_FOUND`の同一化）、no-storeは[業務GraphQLの認証境界ADR](../adr/business-graphql-authentication-boundary.md)でAcceptedとなり、共通境界は#317で実装済み。業務Operationへの適用は各公開Task（#312ほか）で`Confirmed`にする
+- Pagination、N+1は未決または別Taskの対象である。Complexityは[入口制限](#入口制限)のReview Triggerで判定する。Rate limitはProduction Gate（同ADR Decision 6）
 - 未決事項をこのcatalogだけでAcceptedにせず、必要なDecisionと実装Evidenceが揃うまで`Confirmed`にしない
 
 関連Task: [#142](https://github.com/takeshi-arihori/kakei_app/issues/142)

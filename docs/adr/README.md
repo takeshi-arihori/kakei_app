@@ -6,6 +6,8 @@ Decision本文はこのディレクトリで管理する。Owner承認、関連T
 
 | Decision | Status | 関係・証拠 |
 | --- | --- | --- |
+| [業務GraphQLの認証・CSRF・公開Errorの境界](business-graphql-authentication-boundary.md) | Accepted | [#304](https://github.com/takeshi-arihori/kakei_app/issues/304#issuecomment-7006879293)。2026-11-19 Owner会話承認（1A〜6A）。Supplements Googleログイン・Actor・Session（Decision 5）と認証HTTP ADR。実装[#317](https://github.com/takeshi-arihori/kakei_app/issues/317)。Rate limitはProduction Gate |
+| [Browserから見えるOriginを1つにする配置方針](single-browser-origin-deployment.md) | Accepted | [#302](https://github.com/takeshi-arihori/kakei_app/issues/302#issuecomment-6969415774)。2026-11-18 Owner会話承認（案B）。WebとAPIは別Deployでよく、Browserから見えるOriginは1つ。同一サイト別Origin・別サイトは採らない。本番の振り分けはDeployment Gate |
 | [GraphQL入口のGraphiQL・introspection・GET・Query制限](graphql-entry-hardening.md) | Accepted | [#293](https://github.com/takeshi-arihori/kakei_app/issues/293)。2026-11-19 Owner会話承認（論点1A〜8Aを推奨案で採用）。実装[#316](https://github.com/takeshi-arihori/kakei_app/issues/316)。業務GraphQLの認証・CSRF・公開Error（#304）と対になる。Rate limit・Trusted DocumentsはProduction Gate |
 | [実装前Planの置き場所とEpic統合Branch](plan-location-and-epic-integration-branch.md) | Accepted | [#281](https://github.com/takeshi-arihori/kakei_app/issues/281)。2026-11-17 Owner会話承認（論点1〜4を推奨案で採用）。Supplements GitHub正本への切替（#17）。進行中のEpic #202は従来のRuleのまま進める |
 | [Restoreの全Context整合証跡と招待コード参加の契約](restore-consistency-evidence-and-recipient-code-participation.md) | Accepted（設計。実装・個別Ready・Production有効化は別Gate） | [#278](https://github.com/takeshi-arihori/kakei_app/issues/278)。2026-11-12 Owner会話承認「採用する」（論点1〜8と副論点A・Bを推奨どおり）。Supplements 招待コードADR・鍵inventory ADR・認証保護保存ADR。後続は[#245](https://github.com/takeshi-arihori/kakei_app/issues/245)の分割。GM側のRestore検証はProduction Gate側の別の設計Task |

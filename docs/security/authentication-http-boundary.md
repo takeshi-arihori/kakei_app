@@ -108,6 +108,15 @@ Webは同じlocalhost Originの相対`/auth/*`を使い、開発時だけ固定l
 
 既存#218を更新し、新Epicや重複HTTP Taskは作らない。前提PR230統合済み、Stack不要、#218通常PR→統合後#219個別評価。実装規模はPlanningで5人日/SP8とした。OpenAPI/README/API-docs validator、backend/Architecture Test、認証仕様、開発Runbook/環境Template、Rate Schema/保持、既存EpicのTraceを同じTaskで同期する。Accepted ADRの履歴は保持し、承認履歴と対応するOpenAPIを維持する。
 
+## 業務GraphQLの本人性境界
+
+業務GraphQL（`/graphql`）は、本書のOrigin・`X-Kakei-Request`・`Sec-Fetch-Site`・固定名Cookie選択・Session束縛CSRFの定数時間照合を、共通`src/presentation/graphql`で同じ規則として適用する。差分と詳細は[業務GraphQLの認証境界ADR](../adr/business-graphql-authentication-boundary.md)（#304、#317）を正本とする。
+
+- Queryは`X-Kakei-Request: 1`を必須とし、Originは存在すれば完全一致（欠落はServer Component経路として許可）。Mutationは一致Originとcanonical形式の`X-CSRF-Token`を実行前に要求し、認証lease（`activity`）内で`actor.csrf`と照合してから業務を実行する。
+- 本人性は業務Operation単位のleaseから得た`actorSubject`だけで、Clientが渡すActor・Role・Participantを使わない。業務Transactionはlease内でcommitし、その後に認証がcommitする。
+- 公開Errorは8 codeと固定文・Server requestIdだけを返し、許可外の例外を`SERVICE_UNAVAILABLE`へmaskする。全Responseをno-store・nosniffにし、Cookieを発行・削除しない。
+- GraphQL能力が注入されない通常mainでは、認証付きfieldを封鎖し、Origin付きRequestを拒否する。Rate limitはProduction Gateで扱う。
+
 ## 外部根拠とDecisionの区別
 
 2026-10-21に[Googleの開発Client設定](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid)でlocalhostのOrigin登録、[OWASP CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)でOrigin/Proxy/Tokenの境界、[MDN Set-Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie)でSecure/HttpOnly/host prefix、[PostgreSQL17 INSERT](https://www.postgresql.org/docs/17/sql-insert.html)で競合時UPSERTの原子性を確認した。HTTP/CSRF/Rate全体の正しさをUPSERT一つから保証しない。具体Cookie名/上限/保持/localhost例外/使い捨てProviderは2026-10-21にOwnerが承認したProjectのDecisionであり、公式推奨値ではない。
