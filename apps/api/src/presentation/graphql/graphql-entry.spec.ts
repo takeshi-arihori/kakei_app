@@ -6,6 +6,7 @@ import {
   PUBLIC_ROOT_FIELDS,
   createGraphQLEntry,
 } from './graphql-entry.js';
+import { PUBLIC_GRAPHQL_ERROR_MESSAGES } from './public-graphql-error.js';
 
 const uuidV4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -49,7 +50,11 @@ const entry = () =>
 const post = (body: unknown, headers: Record<string, string> = {}) =>
   new Request('http://api.test/graphql', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
+    headers: {
+      'content-type': 'application/json',
+      'x-kakei-request': '1',
+      ...headers,
+    },
     body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 
@@ -120,8 +125,30 @@ describe('createGraphQLEntry', () => {
       post({ query: '{ secret { status } apiStatus { status } }' }),
     );
     expect(query.status).toBe(200);
-    const mutation = await entry()(
-      post({ query: 'mutation { change { status } }' }),
+    // Mutationは一致Originとcanonical形式のCSRFを要求する（#317）。
+    const mutation = await createGraphQLEntry({
+      schema,
+      publicRootFields: PUBLIC_ROOT_FIELDS,
+      capability: {
+        origin: 'http://localhost:3000',
+        profile: 'local-development',
+        service: {
+          withAuthenticatedActor: () =>
+            Promise.resolve({ status: 'unavailable' }),
+        },
+        security: {
+          createRequestId: () => '6f1c2f8e-3b1a-4c5d-9e7f-0a1b2c3d4e5f',
+          equalSecrets: () => false,
+        },
+      },
+    })(
+      post(
+        { query: 'mutation { change { status } }' },
+        {
+          origin: 'http://localhost:3000',
+          'x-csrf-token': Buffer.alloc(32, 5).toString('base64url'),
+        },
+      ),
     );
     expect(mutation.status).toBe(200);
     await expect(mutation.json()).resolves.toEqual({
@@ -279,7 +306,12 @@ describe('createGraphQLEntry', () => {
       expect(text).not.toMatch(/originalError|stack|leaked-value|password/);
       expect(JSON.parse(text)).toMatchObject({
         data: { fail: null },
-        errors: [{ message: 'Unexpected error.' }],
+        errors: [
+          {
+            message: PUBLIC_GRAPHQL_ERROR_MESSAGES.SERVICE_UNAVAILABLE,
+            extensions: { code: 'SERVICE_UNAVAILABLE' },
+          },
+        ],
       });
     });
 
