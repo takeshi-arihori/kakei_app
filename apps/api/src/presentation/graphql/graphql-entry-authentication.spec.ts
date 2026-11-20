@@ -27,6 +27,12 @@ const message = (code: ConstructorParameters<typeof PublicGraphQLError>[0]) =>
 
 /** 業務fieldが未公開でも境界を検証できるTest専用Schema。 */
 const business = vi.fn<(actorSubject: string) => Promise<string>>();
+/** ResolverがYoga Contextから読めるRequest Header。秘密値が渡らないことを確かめる。 */
+const seenHeaders: string[][] = [];
+const recordHeaders = (context: unknown) => {
+  const request = (context as { request?: Request }).request;
+  seenHeaders.push(request ? [...request.headers.keys()] : []);
+};
 const schema = createSchema<GraphQLContext>({
   typeDefs: /* GraphQL */ `
     type Query {
@@ -40,16 +46,20 @@ const schema = createSchema<GraphQLContext>({
   resolvers: {
     Query: {
       open: () => 'ok',
-      me: (_parent, _args, context, info) =>
-        context.authenticated.run(info, (current) =>
+      me: (_parent, _args, context, info) => {
+        recordHeaders(context);
+        return context.authenticated.run(info, (current) =>
           business(current.actorSubject),
-        ),
+        );
+      },
     },
     Mutation: {
-      create: (_parent, _args, context, info) =>
-        context.authenticated.run(info, (current) =>
+      create: (_parent, _args, context, info) => {
+        recordHeaders(context);
+        return context.authenticated.run(info, (current) =>
           business(current.actorSubject),
-        ),
+        );
+      },
     },
   },
 });
@@ -147,6 +157,7 @@ const expectPublic = async (
 
 afterEach(() => {
   business.mockReset();
+  seenHeaders.length = 0;
   vi.unstubAllEnvs();
 });
 
@@ -390,7 +401,56 @@ describe('業務GraphQL境界: 公開Errorとmask', () => {
   });
 });
 
+describe('業務GraphQL境界: Resolverへ秘密値を渡さない', () => {
+  it('Yoga ContextのRequestにCookie・CSRF・Originを残さない', async () => {
+    const { handler } = setup();
+    business.mockResolvedValue('created');
+
+    const response = await handler(
+      post('mutation { create }', {
+        ...mutationHeaders,
+        'sec-fetch-site': 'same-origin',
+        authorization: 'Bearer leaked',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(seenHeaders).toHaveLength(1);
+    expect([...(seenHeaders[0] ?? [])].sort()).toEqual([
+      'accept',
+      'content-type',
+    ]);
+  });
+});
+
 describe('業務GraphQL境界: 入口の拒否', () => {
+  it('実行前の予期しない障害は503＋SERVICE_UNAVAILABLEで原因を返さない', async () => {
+    const endpoint = createGraphQLEntry({
+      schema,
+      publicRootFields,
+      capability: {
+        origin,
+        profile: 'local-development',
+        service: {
+          withAuthenticatedActor: () =>
+            Promise.resolve({ status: 'unavailable' }),
+        },
+        security: {
+          createRequestId: () => {
+            throw new Error('rng secret');
+          },
+          equalSecrets: () => false,
+        },
+      },
+    });
+
+    const response = await endpoint(post('{ open }'));
+    const text = await response.clone().text();
+
+    expect(text).not.toMatch(/rng|secret|stack/);
+    await expectPublic(response, 503, 'SERVICE_UNAVAILABLE');
+  });
+
   it('Server発行のrequestIdを能力のsecurityから使う', async () => {
     const { handler } = setup();
     const response = await handler(

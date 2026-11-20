@@ -161,16 +161,12 @@ export const createGraphQLEntry = (
         !(originVerified && isCanonicalCsrfToken(csrfToken))
       )
         throw new GraphQLRequestRejection('REQUEST_REJECTED', 403);
-      const headers = new Headers(request.headers);
-      for (const name of [
-        'content-length',
-        'content-encoding',
-        'transfer-encoding',
-      ])
-        headers.delete(name);
-      headers.set('Content-Type', 'application/json');
-      // SSE／incremental deliveryを選ばせず、応答をJSONだけにする。
-      headers.set('Accept', 'application/json');
+      // ResolverはYoga Contextの`request`を読めるので、Cookie・CSRF・Origin等の元Headerを
+      // 引き継がず、実行に要るものだけで組み立てる。SSE／incremental deliveryも選ばせない。
+      const headers = new Headers({
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      });
       const context: ServerContext = {
         authenticated: createAuthenticatedOperation({
           service: capability?.service,
