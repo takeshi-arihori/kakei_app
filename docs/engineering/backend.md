@@ -164,3 +164,7 @@ develop `fc64e0aa887ef7dcaa45ea5b9e1362b78a54a31e`を基点とする#243差分�
 ### #316のGraphQL入口確認基準
 
 Epic Branch `epic/303-group-create-list`（基点`bf356c31c9c1250f628c5bd025dcddffb67178c1`）を基点とする#316差分（2026-11-20）で、共通`src/presentation/graphql/`に入口Module 3件（`graphql-request-body.ts`、`graphql-document-limits.ts`、`graphql-entry.ts`）を追加し、`app.ts`は`/graphql`の全Methodをこの入口へ渡すようにした。依存表は変えず、共通GraphQLは認証HTTPを参照しない。公開Operationは引き続き`Query.apiStatus`だけで、認証lease・Origin・CSRF・公開Error写像（#317）、Context Resolverの接続、Production有効化は別Taskである。Decisionは[GraphQL入口制限ADR](../adr/graphql-entry-hardening.md)。
+
+### #317の業務GraphQL境界確認基準
+
+#316のBranch `feat/316-graphql-entry-limits`（Head `47195e0b4906d1c4de800f09088569b9d2e9110e`）を基点とするStacked差分（2026-11-20）で、共通`src/presentation/graphql/`に`graphql-request-identity.ts`、`authenticated-operation.ts`、`public-graphql-error.ts`を追加し、#316の`graphql-entry.ts`へ本人性の前提（`X-Kakei-Request`・`Sec-Fetch-Site`・Origin・Session Cookie選択）、Mutationの実行前条件（一致Origin・CSRF形式）、公開Error 8種・mask・requestIdを組み込んだ。Yogaへ渡すRequestには元のHeaderを引き継がない。依存表は、共通GraphQL→`shared/application/authentication`（型・Port）と、Context Presentation→`authenticated-operation.ts`・`public-graphql-error.ts`を許可するよう変えた。`createApp`は`graphql`能力を受け取るが、通常mainと開発Compositionはまだ注入しない。公開Operationは引き続き`Query.apiStatus`だけで、業務field（#312）、開発Compositionへの接続とPool分離（#314）、Webの転送RouteとServer Component fetch（#315）、Production有効化は別Taskである。Decisionは[業務GraphQLの認証境界ADR](../adr/business-graphql-authentication-boundary.md)。

@@ -455,6 +455,20 @@ components:
       additionalProperties: true
       required:
         - message
+      properties:
+        message:
+          type: string
+        locations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        path:
+          type: array
+          items: {}
+        extensions:
+          type: object
+          additionalProperties: true
     PublicGraphQLErrorResponse:
       type: object
       additionalProperties: false
@@ -495,20 +509,6 @@ components:
                   requestId:
                     type: string
                     format: uuid
-      properties:
-        message:
-          type: string
-        locations:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        path:
-          type: array
-          items: {}
-        extensions:
-          type: object
-          additionalProperties: true
     AuthenticationSecret:
       type: string
       pattern: ^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$
