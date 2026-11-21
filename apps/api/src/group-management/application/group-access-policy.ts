@@ -3,9 +3,13 @@ import type { CommitGroupRequest } from './group-repository.js';
 
 export {
   actorAccessIndexDigestInput,
+  actorMembershipIndexDigestInput,
   membershipDigestInput,
   operationFingerprintDigestInput,
   operationLocatorDigestInput,
+  type GroupActorMembershipIndexCandidate,
+  type GroupActorMembershipIndexDigestInput,
+  type GroupActorMembershipIndexKeyPort,
   type GroupOperationLocatorCandidate,
   type GroupOperationLocatorDigestInput,
   type GroupOperationLocatorKeyPort,
