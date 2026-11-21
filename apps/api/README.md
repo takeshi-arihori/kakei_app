@@ -24,7 +24,7 @@ pnpm -C apps/api build
 
 GraphQL契約の正本はRepositoryの[`apps/api/schema.graphql`](schema.graphql)です。Repository rootで`pnpm codegen`を実行し、Resolver型とWeb Operation型を更新します。
 
-`apps/api/src/app.ts`はGraphQL YogaのUI／transport／preflight境界として`GET`／`OPTIONS /graphql`も受理しますが、現行の公開業務API契約は`POST /graphql`だけです。ClientはGET／OPTIONSによる業務Operation実行へ依存しません。
+`apps/api/src/app.ts`は`/graphql`の全Methodを共通GraphQL入口へ渡し、`POST`＋`application/json`以外は実行前に拒否します（`GET`／`OPTIONS`等は405）。上限と拒否形は[入口制限ADR](../../docs/adr/graphql-entry-hardening.md)を参照します。全`POST`は`X-Kakei-Request: 1`を要求し（欠落は403）、Originは存在すれば設定Originと完全一致、Mutationは一致Originと`X-CSRF-Token`を要求します。公開Errorは`errors[].extensions.code`の8種類と`requestId`だけで、全Responseを`Cache-Control: no-store`にします（[業務GraphQLの認証境界ADR](../../docs/adr/business-graphql-authentication-boundary.md)）。
 
 HTTP transportのOpenAPI設計書とローカルSwagger UIの利用方法は[`docs/api/README.md`](../../docs/api/README.md)を参照してください。OpenAPIはGraphQL Type／Fieldを再定義しません。
 

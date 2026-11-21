@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import { Hono } from 'hono';
-import { createYoga } from 'graphql-yoga';
 
+import {
+  PUBLIC_ROOT_FIELDS,
+  createGraphQLEntry,
+} from './presentation/graphql/graphql-entry.js';
+import type { GraphQLAuthenticationCapability } from './presentation/graphql/graphql-request-identity.js';
 import { schema } from './presentation/graphql/schema.js';
 
 /** Node接続情報はHeaderではなくAdapterのenvだけから受け取る。 */
@@ -22,6 +26,11 @@ export interface CreateAppOptions {
     request: Request,
     peer: string | null,
   ) => Promise<Response>;
+  /**
+   * 業務GraphQLの本人性能力。未指定なら認証付きOperationをSERVICE_UNAVAILABLEで封鎖し、
+   * 照合先がないためOrigin付きRequestを拒否する。
+   */
+  readonly graphql?: GraphQLAuthenticationCapability;
 }
 
 /**
@@ -31,12 +40,12 @@ export interface CreateAppOptions {
  */
 export const createApp = (options: CreateAppOptions = {}) => {
   const app = new Hono<{ Bindings: ApiBindings }>();
-  const yoga = createYoga({
+  // POST＋JSONの単一Operationだけを上限内で実行し、違反は実行前に拒否する（#293）。
+  // 本人性・Origin・CSRF・公開Errorも同じ入口で扱う（#304）。
+  const graphql = createGraphQLEntry({
     schema,
-    graphqlEndpoint: '/graphql',
-    maskedErrors: true,
-    // WebとAPIは同一Originへ集約するため、他OriginへCORS Headerを返さない。
-    cors: false,
+    publicRootFields: PUBLIC_ROOT_FIELDS,
+    capability: options.graphql,
   });
 
   const authenticationMethods = {
@@ -78,9 +87,7 @@ export const createApp = (options: CreateAppOptions = {}) => {
   }
 
   app.get('/health', (context) => context.json({ status: 'ok' }));
-  app.on(['GET', 'POST', 'OPTIONS'], '/graphql', (context) =>
-    yoga.fetch(context.req.raw),
-  );
+  app.all('/graphql', (context) => graphql(context.req.raw));
 
   return app;
 };

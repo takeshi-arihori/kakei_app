@@ -183,6 +183,12 @@ const validateProductionModuleLocation = (path: string): string | null => {
   return null;
 };
 
+/** Context Presentationが参照できる共通GraphQLの契約（認証能力の型と公開Error）。 */
+const sharedGraphQLContracts: readonly string[] = [
+  'presentation/graphql/authenticated-operation.ts',
+  'presentation/graphql/public-graphql-error.ts',
+];
+
 const validateDependency = (
   sourcePath: string,
   specifier: string,
@@ -270,10 +276,15 @@ const validateDependency = (
       : 'shared infrastructure may depend only on shared infrastructure or shared application';
   }
   if (source.kind === 'shared-presentation') {
+    // 本人性・CSRFは共通GraphQLへ集約し、認証Application（型・Port）だけを参照させる。
     return target.kind === 'shared-presentation' ||
-      (target.kind === 'context' && target.layer === 'presentation')
+      (target.kind === 'context' && target.layer === 'presentation') ||
+      (target.kind === 'shared-application' &&
+        relativeToSource(resolvedPath).startsWith(
+          'shared/application/authentication/',
+        ))
       ? null
-      : 'shared GraphQL composition may depend only on shared or context presentation';
+      : 'shared GraphQL may depend only on shared/context presentation or authentication application';
   }
 
   if (source.kind === 'authentication-http') {
@@ -305,7 +316,9 @@ const validateDependency = (
       : `${source.context} application has an inward dependency violation`;
   }
   if (source.layer === 'presentation') {
-    return (target.kind === 'shared-presentation' && target.generated) ||
+    return (target.kind === 'shared-presentation' &&
+      (target.generated ||
+        sharedGraphQLContracts.includes(relativeToSource(resolvedPath)))) ||
       (target.kind === 'context' &&
         ['presentation', 'application'].includes(target.layer))
       ? null
@@ -912,6 +925,46 @@ describe('API architecture dependencies', () => {
         http,
       ),
     ).not.toBeNull();
+  });
+  it('共通GraphQLは認証Applicationだけに依存し、Context Presentationは共通の認証型・公開Errorだけを使う', () => {
+    const endpoint = fixturePath('presentation/graphql/graphql-entry.ts');
+    for (const target of [
+      'shared/application/authentication/google-authentication-service.ts',
+      'shared/application/authentication/authentication-http-ports.ts',
+    ])
+      expect(
+        validateDependency(endpoint, './local.js', fixturePath(target)),
+      ).toBeNull();
+    for (const target of [
+      'shared/infrastructure/authentication/authentication-http-security.ts',
+      'shared/application/purpose-separated-digest.ts',
+      'presentation/http/authentication/authentication-http-input.ts',
+      'group-management/application/group-command-service.ts',
+    ])
+      expect(
+        validateDependency(endpoint, './local.js', fixturePath(target)),
+      ).not.toBeNull();
+
+    const resolver = fixturePath(
+      'group-management/presentation/graphql/resolvers.ts',
+    );
+    for (const target of [
+      'presentation/graphql/authenticated-operation.ts',
+      'presentation/graphql/public-graphql-error.ts',
+      'presentation/graphql/generated/resolvers.ts',
+    ])
+      expect(
+        validateDependency(resolver, './local.js', fixturePath(target)),
+      ).toBeNull();
+    for (const target of [
+      'presentation/graphql/graphql-entry.ts',
+      'shared/application/authentication/google-authentication-service.ts',
+      'shared/application/authentication/authentication-ports.ts',
+      'presentation/http/authentication/authentication-http.ts',
+    ])
+      expect(
+        validateDependency(resolver, './local.js', fixturePath(target)),
+      ).not.toBeNull();
   });
   it('開発入口は実Adapterを組めるがProductionとTest-only Providerの境界を守る', () => {
     const dev = fixturePath('../dev/authentication-development-runtime.ts');
