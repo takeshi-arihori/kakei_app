@@ -6,6 +6,7 @@
 - Decision Check: 方針変更あり（Group作成と一覧の公開契約を新しく決める）
 - 承認記録: [Issue #305](https://github.com/takeshi-arihori/kakei_app/issues/305#issuecomment-7007086597)（Owner会話承認「推奨案をすべて採用する」、論点1A〜5A。親Agentによる会話証跡の転記であり、Owner本人のGitHub操作は主張しない）
 - 関係: Epic [#303](https://github.com/takeshi-arihori/kakei_app/issues/303)。前提は[#304](https://github.com/takeshi-arihori/kakei_app/issues/304)（業務GraphQLの認証・CSRF・公開Error、2026-11-19承認）と[#302](https://github.com/takeshi-arihori/kakei_app/issues/302)（Browserから見えるOriginは1つ）。Supplements [Group Commandの本人性・認可・再試行](group-management-command-authorization.md)（#36）、[Snapshot Revisionの保護と保持境界](snapshot-revision-security-and-retention.md)（#55）§4・§5
+- Amended By: [Actor単位のGroup索引と存在非開示](group-actor-membership-index.md)（#306、2026-11-20。論点4の再認可で否のときは、Lock後に索引行が消えていれば競合として黙って除外し、残っている場合だけ不整合としてAlertする）
 - 実装: [#308](https://github.com/takeshi-arihori/kakei_app/issues/308)（一覧のQuery Use CaseとPort）、[#309](https://github.com/takeshi-arihori/kakei_app/issues/309)（索引保守）、[#310](https://github.com/takeshi-arihori/kakei_app/issues/310)（索引からの読取）、[#312](https://github.com/takeshi-arihori/kakei_app/issues/312)（GraphQL公開）、[#315](https://github.com/takeshi-arihori/kakei_app/issues/315)（Web）。このADRは#308と#309のうち先にEpic BranchへMergeするPRに同梱し、後のPRはこれを参照する
 
 ## Context

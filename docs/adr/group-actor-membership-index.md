@@ -5,7 +5,7 @@
 - 承認日: 2026-11-20
 - Decision Check: 方針変更あり（ADR #55 §4のKey scopeに、Context単位の用途を追加する）
 - 承認記録: [Issue #306](https://github.com/takeshi-arihori/kakei_app/issues/306#issuecomment-7033381622)（Owner会話承認。推奨案1A・2A・3A・4Aをすべて採用）
-- 関係: Amends [Snapshot Revisionの保護と保持境界](snapshot-revision-security-and-retention.md)（ADR #55。§2の平文許可、§4のKey scope、§7の0件確認対象）。Related [Group operation locatorとGroup IDの保存契約](group-operation-locator-and-group-id-contract.md)（ADR #85）、[Group作成と自分のGroup一覧の公開契約](group-create-and-my-group-list-contract.md)（#305）、[使い捨て開発CompositionへのGroup Managementと開発用Group鍵の追加](development-composition-group-management.md)（#307）
+- 関係: Amends [Snapshot Revisionの保護と保持境界](snapshot-revision-security-and-retention.md)（ADR #55。§2の平文許可、§4のKey scope、§7の0件確認対象）。Amends [Group作成と自分のGroup一覧の公開契約](group-create-and-my-group-list-contract.md)（#305。論点4のAlert条件だけを§2のとおり補正する）。Related [Group operation locatorとGroup IDの保存契約](group-operation-locator-and-group-id-contract.md)（ADR #85）、[使い捨て開発CompositionへのGroup Managementと開発用Group鍵の追加](development-composition-group-management.md)（#307）
 - Related: Epic [#303](https://github.com/takeshi-arihori/kakei_app/issues/303)、実装[#309](https://github.com/takeshi-arihori/kakei_app/issues/309)（索引・書込）、[#310](https://github.com/takeshi-arihori/kakei_app/issues/310)（読取）、[#314](https://github.com/takeshi-arihori/kakei_app/issues/314)（開発Composition配線）
 
 ## Context
