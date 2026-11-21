@@ -62,3 +62,7 @@ caller-only missと専用lease内の再照合、コードLock待機後の再照�
 - Portの`Unavailable`・例外、要求件数の超過、`groupId`の重複、`joinOrder = 1`の参加者がないGroup、通知の失敗は、一覧全体を`MyGroupListApplicationError('UNAVAILABLE')`にする。
 
 `list-my-groups.spec.ts`はfake Portで対象・写像・並び・上限・除外と通知・障害を検証する。fakeの成功はPostgreSQLのLock、復号、索引の存在非開示の証明ではなく、#310で実PG検証する。GraphQL公開は#312で、Security auditは書かない（ADR論点4）。
+
+## #312 公開Transportからの入力組立
+
+`use-case-inputs.ts`の`createGroupCommandFrom`と`listMyGroupsQueryFrom`は、認証leaseが与えたActorとClientの`operationId`（文字列）から、`createGroup`のCommandと一覧のQueryをDomain Value Objectで組み立てる。依存表上PresentationはDomainを参照できないため、Value Objectの生成だけをここに置く。業務Ruleと再送照合は既存Use Caseのままで、`operationId`のUUIDv4形式の公開検査は[GraphQL Presentation](../presentation/graphql/README.md)が先に行う。

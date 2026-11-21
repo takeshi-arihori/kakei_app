@@ -1,7 +1,47 @@
 type Query {
   apiStatus: ApiStatus!
+  myGroups: MyGroupList!
+}
+
+type Mutation {
+  createGroup(input: CreateGroupInput!): CreateGroupResult!
 }
 
 type ApiStatus {
   status: String!
+}
+
+input CreateGroupInput {
+  operationId: ID!
+}
+
+type CreateGroupResult {
+  groupId: ID!
+}
+
+type MyGroupList {
+  items: [MyGroupSummary!]!
+  hasMore: Boolean!
+}
+
+type MyGroupSummary {
+  groupId: ID!
+  lifecycle: GroupLifecycle!
+  myRole: GroupRole!
+  activeParticipantCount: Int!
+  createdAt: String!
+  joinedAt: String!
+  deleteEligibleAt: String
+}
+
+enum GroupLifecycle {
+  ACTIVE
+  CLOSING
+  CANCELING
+  ARCHIVED
+}
+
+enum GroupRole {
+  OWNER
+  PARTICIPANT
 }
