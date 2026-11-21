@@ -31,6 +31,40 @@ Knowledge Stateは次の3値だけを使う。
 - Implementation: [`resolvers.ts`](../../apps/api/src/presentation/graphql/resolvers.ts)
 - Test: [`app.spec.ts`](../../apps/api/src/app.spec.ts)、[`graphql-entry-authentication.spec.ts`](../../apps/api/src/presentation/graphql/graphql-entry-authentication.spec.ts)
 
+## Mutation.createGroup
+
+- Knowledge State: Confirmed
+- Context: Group Management（[Group一覧ADR](../adr/group-create-and-my-group-list-contract.md) §1、#312）
+- Use Case: ログインした本人がGroupを作成し、作成者が最初のActive ParticipantかつOwnerになる（`GroupCommandService.createGroup`）
+- Actor: 認証lease（`activity`）の`actorSubject`だけ。Inputに`actorSubject`・Role・Participantを持たせない
+- Authorization: 業務GraphQLの共通境界（`X-Kakei-Request`、一致Origin必須、canonical形式の`X-CSRF-Token`、lease内のSession束縛CSRF照合。[業務GraphQLの認証境界ADR](../adr/business-graphql-authentication-boundary.md)）を通った本人なら作成できる。Group単位の認可はない
+- Input: `CreateGroupInput.operationId`だけ。小文字canonicalのUUIDv4以外は、本人性とCSRFを確かめた後にUse Caseを呼ばず`INVALID_INPUT`
+- Result: `CreateGroupResult.groupId`だけ。`participantId`・`version`は返さない
+- Error: `AUTHENTICATION_REQUIRED`、`REQUEST_REJECTED`、`INVALID_INPUT`、`OPERATION_MISMATCH`（同じ`operationId`を別Commandで使用済み）、`SERVICE_UNAVAILABLE`（`UNAVAILABLE`、`GROUP_ALREADY_EXISTS`、その他のApplication Error、想定外例外、業務commit後の認証commit失敗による結果不明、Use Case未注入）。写像は[`group-public-error.ts`](../../apps/api/src/group-management/presentation/graphql/group-public-error.ts)の1 Module。構文・検証違反（未知のInput field等）は[入口制限](#入口制限)の`INVALID_REQUEST`
+- Idempotency: 同じActor・同じ`operationId`の再送は最初と同じ`groupId`を返す（Use Caseの既存再送照合）。別のActorには結果を返さず、再送の成功は一覧の閲覧権限を与えない
+- Concurrency / Retry: Clientは作成の1回の意図ごとに`crypto.randomUUID()`で生成し、結果不明（`SERVICE_UNAVAILABLE`、通信断）では同じ値で再送する。成功または確定Errorの後は破棄する
+- Compatibility: 結果へのGroup要約の追加は互換的に行える。Field名・型の変更はSDL変更としてReviewする
+- Schema: [`apps/api/schema.graphql`](../../apps/api/schema.graphql)
+- Implementation: [`group-management-resolvers.ts`](../../apps/api/src/group-management/presentation/graphql/group-management-resolvers.ts)、[`group-graphql-mapping.ts`](../../apps/api/src/group-management/presentation/graphql/group-graphql-mapping.ts)、[`use-case-inputs.ts`](../../apps/api/src/group-management/application/use-case-inputs.ts)。Use Caseは`createApp`の`groupManagement`へ注入する（開発Compositionへの注入は#314）
+- Test: [`group-management-graphql.spec.ts`](../../apps/api/src/group-management/presentation/graphql/group-management-graphql.spec.ts)（Fakeの認証能力とUse Case）、[`app.spec.ts`](../../apps/api/src/app.spec.ts)。実DBでの作成と再送は#314
+
+## Query.myGroups
+
+- Knowledge State: Confirmed
+- Context: Group Management（[Group一覧ADR](../adr/group-create-and-my-group-list-contract.md) §2〜§4、#308・#312）
+- Use Case: ログインした本人が、いま参照できる自分のGroupを一覧で確認する（`MyGroupQueryService.listMyGroups`）
+- Actor: 認証lease（`activity`）の`actorSubject`だけ。引数なし
+- Authorization: 業務GraphQLの共通境界（`X-Kakei-Request`、Originは存在すれば一致、CSRF不要）を通った本人。一覧の対象と再認可（Archived以外は自分のActive Participant、ArchivedはownerAtArchiveだけ）はApplicationが行う
+- Input: なし
+- Result: `MyGroupList`（`items`と`hasMore`）。各要素は`groupId`、`lifecycle`（ACTIVE／CLOSING／CANCELING／ARCHIVED）、`myRole`（OWNER／PARTICIPANT）、`activeParticipantCount`、`createdAt`、`joinedAt`、`deleteEligibleAt`（Archivedだけ値あり）。時刻はRFC 3339 UTC（ミリ秒）。作成の新しい順（同時刻は`groupId`昇順）に最大50件。空は`items: []`・`hasMore: false`
+- Error: `AUTHENTICATION_REQUIRED`、`REQUEST_REJECTED`、`SERVICE_UNAVAILABLE`（読取障害、Application Error、写像できない値、想定外例外、Use Case未注入。一部だけは返さない）。非在籍のGroupは含まれないだけで、`NOT_FOUND`を使わない
+- Idempotency: 状態を変更しないQuery。認証leaseのidle延長だけが起こる
+- Concurrency / Retry: 同じQueryを再実行できる。読取の固定版照合は読取Port（#310）が行う
+- Compatibility: cursor pagination（`after`引数と`endCursor`）は後から互換的に追加できる。Group名等の表示属性は未提供
+- Schema: [`apps/api/schema.graphql`](../../apps/api/schema.graphql)
+- Implementation: [`group-management-resolvers.ts`](../../apps/api/src/group-management/presentation/graphql/group-management-resolvers.ts)、[`group-graphql-mapping.ts`](../../apps/api/src/group-management/presentation/graphql/group-graphql-mapping.ts)、[`list-my-groups.ts`](../../apps/api/src/group-management/application/use-cases/list-my-groups.ts)。PostgreSQLの読取Adapterは#310、開発Compositionへの注入は#314
+- Test: [`group-management-graphql.spec.ts`](../../apps/api/src/group-management/presentation/graphql/group-management-graphql.spec.ts)、[`list-my-groups.spec.ts`](../../apps/api/src/group-management/application/use-cases/list-my-groups.spec.ts)、[`app.spec.ts`](../../apps/api/src/app.spec.ts)。実DBでの一覧は#310・#314
+
 ## 入口制限
 
 - Knowledge State: Confirmed（[Accepted ADR](../adr/graphql-entry-hardening.md)、#293・#316）
@@ -44,8 +78,8 @@ Knowledge Stateは次の3値だけを使う。
 
 ## Open Questions / Gate
 
-- Group Management、Expense Recording、Settlementの公開Operationは、対応Use Case、本人性、認証認可、公開Error契約がReadyになったTaskで追加する
-- 業務Operationの本人性（Operation単位の認証lease）、Origin・CSRF、公開Error code 8種、存在非開示の公開形（`NOT_FOUND`の同一化）、no-storeは[業務GraphQLの認証境界ADR](../adr/business-graphql-authentication-boundary.md)でAcceptedとなり、共通境界は#317で実装済み。業務Operationへの適用は各公開Task（#312ほか）で`Confirmed`にする
+- Group Managementのその他のOperation（概要、Membership、招待等）、Expense Recording、Settlementの公開Operationは、対応Use Case、本人性、認証認可、公開Error契約がReadyになったTaskで追加する
+- 業務Operationの本人性（Operation単位の認証lease）、Origin・CSRF、公開Error code 8種、存在非開示の公開形（`NOT_FOUND`の同一化）、no-storeは[業務GraphQLの認証境界ADR](../adr/business-graphql-authentication-boundary.md)でAcceptedとなり、共通境界は#317で実装済み。`Mutation.createGroup`と`Query.myGroups`（#312）で`Confirmed`とした。後続の業務Operationも各公開Taskで`Confirmed`にする
 - Pagination、N+1は未決または別Taskの対象である。Complexityは[入口制限](#入口制限)のReview Triggerで判定する。Rate limitはProduction Gate（同ADR Decision 6）
 - 未決事項をこのcatalogだけでAcceptedにせず、必要なDecisionと実装Evidenceが揃うまで`Confirmed`にしない
 

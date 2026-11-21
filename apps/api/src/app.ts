@@ -2,12 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import { Hono } from 'hono';
 
+import type { GroupManagementGraphQLUseCases } from './group-management/presentation/graphql/group-management-resolvers.js';
 import {
   PUBLIC_ROOT_FIELDS,
   createGraphQLEntry,
 } from './presentation/graphql/graphql-entry.js';
 import type { GraphQLAuthenticationCapability } from './presentation/graphql/graphql-request-identity.js';
-import { schema } from './presentation/graphql/schema.js';
+import { createGraphQLSchema } from './presentation/graphql/schema.js';
 
 /** Node接続情報はHeaderではなくAdapterのenvだけから受け取る。 */
 interface ApiBindings {
@@ -31,6 +32,11 @@ export interface CreateAppOptions {
    * 照合先がないためOrigin付きRequestを拒否する。
    */
   readonly graphql?: GraphQLAuthenticationCapability;
+  /**
+   * GraphQLで公開するGroup ManagementのUse Case。未指定なら`createGroup`・`myGroups`を
+   * 認証leaseを開かずに`SERVICE_UNAVAILABLE`で封鎖する。
+   */
+  readonly groupManagement?: GroupManagementGraphQLUseCases;
 }
 
 /**
@@ -43,7 +49,7 @@ export const createApp = (options: CreateAppOptions = {}) => {
   // POST＋JSONの単一Operationだけを上限内で実行し、違反は実行前に拒否する（#293）。
   // 本人性・Origin・CSRF・公開Errorも同じ入口で扱う（#304）。
   const graphql = createGraphQLEntry({
-    schema,
+    schema: createGraphQLSchema({ groupManagement: options.groupManagement }),
     publicRootFields: PUBLIC_ROOT_FIELDS,
     capability: options.graphql,
   });

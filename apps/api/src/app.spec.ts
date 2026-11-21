@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
-import { createApp } from './app.js';
+import { createApp, type CreateAppOptions } from './app.js';
 
 describe('Hono API', () => {
   const app = createApp();
@@ -26,6 +26,73 @@ describe('Hono API', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       data: { apiStatus: { status: 'ok' } },
+    });
+  });
+
+  describe('Group ManagementのGraphQL能力（#312）', () => {
+    const myGroups = {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-kakei-request': '1',
+        cookie: 'kakei_dev_auth_session=session',
+      },
+      body: JSON.stringify({ query: '{ myGroups { hasMore } }' }),
+    };
+    const withLease = (
+      groupManagement?: CreateAppOptions['groupManagement'],
+    ) => {
+      const calls: string[] = [];
+      const configured = createApp({
+        graphql: {
+          origin: 'http://localhost:3000',
+          profile: 'local-development',
+          service: {
+            withAuthenticatedActor: (_secret, usage) => {
+              calls.push(usage);
+              return Promise.resolve({ status: 'unauthenticated' });
+            },
+          },
+          security: {
+            createRequestId: () => randomUUID(),
+            equalSecrets: () => false,
+          },
+        },
+        groupManagement,
+      });
+      return { configured, calls };
+    };
+    const codeOf = async (response: Response) => {
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        errors: { extensions: { code: string } }[];
+      };
+      return body.errors[0]?.extensions.code;
+    };
+
+    it('通常main（能力なし）ではmyGroupsをSERVICE_UNAVAILABLEで封鎖する', async () => {
+      expect(await codeOf(await app.request('/graphql', myGroups))).toBe(
+        'SERVICE_UNAVAILABLE',
+      );
+    });
+
+    it('Use Case未注入なら認証能力があってもleaseを開かずSERVICE_UNAVAILABLE', async () => {
+      const { configured, calls } = withLease();
+      expect(await codeOf(await configured.request('/graphql', myGroups))).toBe(
+        'SERVICE_UNAVAILABLE',
+      );
+      expect(calls).toEqual([]);
+    });
+
+    it('注入したUse Caseは認証lease（activity）の後ろに接続される', async () => {
+      const { configured, calls } = withLease({
+        commands: { createGroup: () => Promise.reject(new Error('unused')) },
+        queries: { listMyGroups: () => Promise.reject(new Error('unused')) },
+      });
+      expect(await codeOf(await configured.request('/graphql', myGroups))).toBe(
+        'AUTHENTICATION_REQUIRED',
+      );
+      expect(calls).toEqual(['activity']);
     });
   });
 
