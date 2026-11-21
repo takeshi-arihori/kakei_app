@@ -15,7 +15,7 @@
 
 - `src/<context>/domain`: Aggregate、Entity、Value Object、Domain Service、Domain Event、不変条件を持つ。
 - `src/<context>/application`: Use Caseの順序、認可、Transaction境界、Port呼出しを調整する。
-- `src/<context>/presentation`: Context固有の認証Guard、Input／Output変換、Command／Query呼出しだけを行う。
+- `src/<context>/presentation`: 共通GraphQLの`AuthenticatedOperation`を使った本人性の受渡し、Input／Output変換、Command／Query呼出しだけを行う。Session・CSRFを自前で検査しない。
 - `src/<context>/infrastructure`: Prisma、PostgreSQL、Firestore、KMS、Email、OAuthなどのAdapterを実装する。
 - `src/shared/domain`: 複数Contextで意味と変更理由が一致するDomain型だけを置く。
 - `src/shared/application`: API内で共有する技術契約の型・Portを置く。用途別Digestの契約を含み、業務Modelや具体暗号実装を置かない。他の共有Applicationだけを参照し、外部ModuleやContext内部へ依存しない。
@@ -26,7 +26,7 @@
 - 認証の清掃／削除／Restoreは[保守契約](../security/authentication-maintenance.md)に従い、共有Applicationへ純粋Retention Policy／再試行Coordinator／opaque証跡Portを置く。専用Ledger HMAC／chain検証は認証Infrastructure、Lock／CAS／隔離移行はpostgresへ置く。通常Storeの許可状態を広げず、具体Provider・Scheduler・HTTP・退会認可を混在させない。
 - Context Applicationは共有Applicationを、Context Infrastructureは共有Application／共有Infrastructureを参照できる。Domain・Presentationから共有技術基盤への参照、Applicationから共有Infrastructureへの参照を許可しない。複数Contextでの利用だけを理由に独立Packageを追加しない。
 - `src/shared/infrastructure/authentication/postgres/`は[Store README](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md)に従い、同一接続の認証保存・Audit・Scope leaseを所有する。このPath以下だけが共有Infrastructureから`pg`本体を参照でき、Application・認証暗号・他の共有Module・pg内部subpathへ許可を広げない。Callbackは共有ApplicationのScopeで本文handleを確定し、参加Repositoryへquery限定能力だけを渡す。Transaction所有・受付終了・commit／rollback・接続解放は参加能力に含めない。具体Provider・HTTP・業務Repository wiringを混在させない。
-- `src/presentation/graphql`: GraphQL Schemaの読込、生成型、Context ResolverのCompositionなどTransport全体の共通処理だけを置く。Context固有のResolver、Input／Output変換、GraphQL認証・認可Adapterは`src/<context>/presentation/graphql`へ置く。
+- `src/presentation/graphql`: GraphQL Schemaの読込、生成型、Context ResolverのComposition、全Context共通の本人性境界（Request前提・Session Cookie選択・Origin・CSRF・認証lease付き`AuthenticatedOperation`・公開Error 8種とmask・no-store）などTransport全体の共通処理だけを置く。認証Applicationは`shared/application/authentication`の型・Portだけを参照する。Context固有のResolver、Input／Output変換、業務Errorから公開Errorへの写像は`src/<context>/presentation/graphql`へ置き、業務の認可はContext Applicationが行う（[業務GraphQLの認証境界ADR](../adr/business-graphql-authentication-boundary.md)）。
 - DomainからHono、GraphQL、Prisma、Cloud SDKをImportしない。
 - ApplicationはPortへ依存し、Infrastructureが内向きにPortを実装する。
 - Resolverへ業務Rule、Repository呼出しの組立、個別の例外変換を散在させない。
@@ -71,8 +71,9 @@
 | [`src/shared/infrastructure/protected-record/`](../../apps/api/src/shared/infrastructure/protected-record)、[`authentication/google-id-token-verifier.ts`](../../apps/api/src/shared/infrastructure/authentication/google-id-token-verifier.ts)、[`authentication/`](../../apps/api/src/shared/infrastructure/authentication) | 保存用暗号Wrapper、Google公式SDK Adapter、認証専用Codec／Digest／Ledger検証。業務Modelや認可、具体Cloud Providerの所有先ではない。 |
 | [`src/shared/infrastructure/authentication/postgres/`](../../apps/api/src/shared/infrastructure/authentication/postgres)、[`postgres-authentication-store.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-store.ts)、[`postgres-authentication-cleanup.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-cleanup.ts)、[`postgres-authentication-deletion.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-deletion.ts)、[`postgres-authentication-restore.ts`](../../apps/api/src/shared/infrastructure/authentication/postgres/postgres-authentication-restore.ts) | 認証Store・同Transaction Audit・Scope lease、および保守用のLock／CAS／隔離移行Adapter。#218の専用開発Compositionが認証Storeを接続する。本番Providerは未接続。[Store README](../../apps/api/src/shared/infrastructure/authentication/postgres/README.md)を参照。 |
 | [`src/presentation/graphql/schema.ts`](../../apps/api/src/presentation/graphql/schema.ts)、[`generated/resolvers.ts`](../../apps/api/src/presentation/graphql/generated/resolvers.ts)、[`resolvers.ts`](../../apps/api/src/presentation/graphql/resolvers.ts) | SDL読込・Schema組立、生成型、Transport全体のResolver集約の入口。現行Resolverは`Query.apiStatus`のみで、Context Resolverの集約は今後の接続時に行う。 |
-| [`src/presentation/graphql/graphql-entry.ts`](../../apps/api/src/presentation/graphql/graphql-entry.ts)、[`graphql-request-body.ts`](../../apps/api/src/presentation/graphql/graphql-request-body.ts)、[`graphql-document-limits.ts`](../../apps/api/src/presentation/graphql/graphql-document-limits.ts) | `/graphql`の入口制限（#316、[ADR](../adr/graphql-entry-hardening.md)）。POST＋JSONのBody検査、parse・検証・上限・Operation選択・変数の実行前検査、Yoga設定、固定の`INVALID_REQUEST`とno-store。認証HTTPのBody読取は依存表上参照できないため、同じ値の読取をここに置く |
-| [`src/app.ts`](../../apps/api/src/app.ts) | Honoで`/health`を提供し、`/graphql`の全Methodを共通GraphQL入口へ渡す。4認証HTTP経路は注入能力へ委譲し、不在なら503で封鎖する。業務Use Case/Repositoryは組み立てない。 |
+| [`src/presentation/graphql/graphql-entry.ts`](../../apps/api/src/presentation/graphql/graphql-entry.ts)、[`graphql-request-body.ts`](../../apps/api/src/presentation/graphql/graphql-request-body.ts)、[`graphql-document-limits.ts`](../../apps/api/src/presentation/graphql/graphql-document-limits.ts) | `/graphql`の入口制限（#316、[ADR](../adr/graphql-entry-hardening.md)）。POST＋JSONのBody検査、parse・検証・上限・Operation選択・変数の実行前検査、Yoga設定、固定の`INVALID_REQUEST`とno-store。認証HTTPのBody読取は依存表上参照できないため、同じ値の読取をここに置く。#317で本人性の前提（下行）もこの入口から呼ぶ |
+| [`src/presentation/graphql/graphql-request-identity.ts`](../../apps/api/src/presentation/graphql/graphql-request-identity.ts)、[`authenticated-operation.ts`](../../apps/api/src/presentation/graphql/authenticated-operation.ts)、[`public-graphql-error.ts`](../../apps/api/src/presentation/graphql/public-graphql-error.ts) | #317の業務GraphQL境界。Request前提（`X-Kakei-Request`・`Sec-Fetch-Site`・Origin）と固定名Session Cookie選択、Mutationの実行前条件（Origin必須・CSRF形式）、Operation単位の認証lease（`activity`）内でのCSRF照合と業務実行、公開Error 8種・mask・requestIdを所有する。Context Presentationは`AuthenticatedOperation`の型と公開Errorだけを参照する。業務fieldは未公開（#312）。 |
+| [`src/app.ts`](../../apps/api/src/app.ts) | Honoで`/health`を提供し、`/graphql`の全Methodを共通GraphQL入口へ渡す。4認証HTTP経路と業務GraphQLの本人性は注入能力へ委譲し、不在なら認証HTTPは503、認証付きGraphQL fieldは`SERVICE_UNAVAILABLE`、Origin付きGraphQL Requestは403で封鎖する。業務Use Case/Repositoryは組み立てない。 |
 | [`src/main.ts`](../../apps/api/src/main.ts) | `createApp`をNode HTTP Serverへ渡し、Port・終了Signalを扱う起動入口。具体業務／認証Adapterを生成・注入していない。 |
 | [`src/recipient-invitation-runtime.ts`](../../apps/api/src/recipient-invitation-runtime.ts) | #243の内部Composition専用Factory。実認証lease/コード消費/GM Application/参加保存/両Auditを同registryへ束縛する。通常main/app/Dev/HTTPから未参照。公開するのは内部Use Caseだけで、接続/registry/証跡issuerは返さない。 |
 | [`src/presentation/http/authentication/`](../../apps/api/src/presentation/http/authentication) | #218の共有認証HTTP境界。Origin/JSON/Cookie/公開Errorを所有し、認証Application/HTTP Portだけを使う。GraphQLへ認証Mutationを追加しない。 |
@@ -92,10 +93,10 @@ Context固有Resolverを追加するときの配置例は`src/group-management/p
 | --- | --- |
 | Context Domain | 同Context Domain、shared Domain |
 | Context Application | 同Context Application／Domain、shared Domain／Application |
-| Context Presentation | 同Context Presentation／Application、共通GraphQLの生成型 |
+| Context Presentation | 同Context Presentation／Application、共通GraphQLの生成型・`authenticated-operation.ts`（`AuthenticatedOperation`の型）・`public-graphql-error.ts`（公開Error）。共有認証を直接参照しない |
 | Context Infrastructure | 同Context Infrastructure／Application／Domain、shared Application／Infrastructure |
 | shared Domain / Application / Infrastructure | Domainはshared Domainのみ、Applicationはshared Applicationのみ、Infrastructureはshared Application／Infrastructureのみ |
-| 共通GraphQL | 共通GraphQL、各Context Presentation。Context Application／Domain／Infrastructureを直接参照しない |
+| 共通GraphQL | 共通GraphQL、各Context Presentation、`shared/application/authentication`（型・Port）。共有Infrastructure、認証HTTP Presentation、Context Application／Domain／Infrastructureを直接参照しない |
 | 認証HTTP | 同じ認証HTTP Presentationと`shared/application/authentication`だけ。具体SDK/pg/cryptoと業務Contextへ依存しない |
 | `dev/` | 専用開発Composition。分類済みProduction Moduleと開発Moduleを組み立て、Testへの参照を禁止する。ProductionからのImportも禁止する |
 | `app.ts` / `main.ts` | 分類済みのProduction Moduleを組み立てる入口。ProductionからTest/開発Moduleへの参照禁止は適用される |
@@ -163,3 +164,7 @@ develop `fc64e0aa887ef7dcaa45ea5b9e1362b78a54a31e`を基点とする#243差分�
 ### #316のGraphQL入口確認基準
 
 Epic Branch `epic/303-group-create-list`（基点`bf356c31c9c1250f628c5bd025dcddffb67178c1`）を基点とする#316差分（2026-11-20）で、共通`src/presentation/graphql/`に入口Module 3件（`graphql-request-body.ts`、`graphql-document-limits.ts`、`graphql-entry.ts`）を追加し、`app.ts`は`/graphql`の全Methodをこの入口へ渡すようにした。依存表は変えず、共通GraphQLは認証HTTPを参照しない。公開Operationは引き続き`Query.apiStatus`だけで、認証lease・Origin・CSRF・公開Error写像（#317）、Context Resolverの接続、Production有効化は別Taskである。Decisionは[GraphQL入口制限ADR](../adr/graphql-entry-hardening.md)。
+
+### #317の業務GraphQL境界確認基準
+
+#316のBranch `feat/316-graphql-entry-limits`（Head `47195e0b4906d1c4de800f09088569b9d2e9110e`）を基点とするStacked差分（2026-11-20）で、共通`src/presentation/graphql/`に`graphql-request-identity.ts`、`authenticated-operation.ts`、`public-graphql-error.ts`を追加し、#316の`graphql-entry.ts`へ本人性の前提（`X-Kakei-Request`・`Sec-Fetch-Site`・Origin・Session Cookie選択）、Mutationの実行前条件（一致Origin・CSRF形式）、公開Error 8種・mask・requestIdを組み込んだ。Yogaへ渡すRequestには元のHeaderを引き継がない。依存表は、共通GraphQL→`shared/application/authentication`（型・Port）と、Context Presentation→`authenticated-operation.ts`・`public-graphql-error.ts`を許可するよう変えた。`createApp`は`graphql`能力を受け取るが、通常mainと開発Compositionはまだ注入しない。公開Operationは引き続き`Query.apiStatus`だけで、業務field（#312）、開発Compositionへの接続とPool分離（#314）、Webの転送RouteとServer Component fetch（#315）、Production有効化は別Taskである。Decisionは[業務GraphQLの認証境界ADR](../adr/business-graphql-authentication-boundary.md)。

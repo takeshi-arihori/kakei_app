@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
@@ -15,7 +17,7 @@ describe('Hono API', () => {
   it('POST /graphqlでAPI疎通状態を返す', async () => {
     const response = await app.request('/graphql', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-kakei-request': '1' },
       body: JSON.stringify({
         query: 'query ApiStatus { apiStatus { status } }',
       }),
@@ -24,6 +26,22 @@ describe('Hono API', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       data: { apiStatus: { status: 'ok' } },
+    });
+  });
+
+  it('POST /graphqlはX-Kakei-Requestなしを403で拒否する（#304）', async () => {
+    const response = await app.request('/graphql', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        query: 'query ApiStatus { apiStatus { status } }',
+      }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    await expect(response.json()).resolves.toMatchObject({
+      errors: [{ extensions: { code: 'REQUEST_REJECTED' } }],
     });
   });
 
@@ -47,7 +65,10 @@ describe('Hono API', () => {
     it('formの単純Requestは実行せず415を返す', async () => {
       const response = await app.request('/graphql', {
         method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-kakei-request': '1',
+        },
         body: `query=${apiStatusQuery}`,
       });
       expect(response.status).toBe(415);
@@ -59,13 +80,13 @@ describe('Hono API', () => {
     it('introspectionは400、成功を含む全Responseにno-store／nosniffを付ける', async () => {
       const rejected = await app.request('/graphql', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-kakei-request': '1' },
         body: JSON.stringify({ query: '{ __schema { types { name } } }' }),
       });
       expect(rejected.status).toBe(400);
       const accepted = await app.request('/graphql', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-kakei-request': '1' },
         body: JSON.stringify({ query: '{ apiStatus { status } }' }),
       });
       expect(accepted.status).toBe(200);
@@ -100,25 +121,62 @@ describe('Hono API', () => {
         expect(response.headers.has(name), name).toBe(false);
     });
 
-    it('他OriginのOrigin付きPOSTへCORS Headerを返さない', async () => {
+    it('他OriginのOrigin付きPOSTを403で拒否しCORS Headerを返さない', async () => {
       const response = await app.request('/graphql', {
         method: 'POST',
-        headers: { origin: otherOrigin, 'content-type': 'application/json' },
+        headers: {
+          origin: otherOrigin,
+          'content-type': 'application/json',
+          'x-kakei-request': '1',
+        },
         body: JSON.stringify({
           query: 'query ApiStatus { apiStatus { status } }',
         }),
       });
 
+      expect(response.status).toBe(403);
+
       for (const name of corsResponseHeaders)
         expect(response.headers.has(name), name).toBe(false);
     });
 
-    it('同一Origin転送のOrigin付きPOSTは成功しCORS Headerを返さない', async () => {
+    it('GraphQL能力が未注入なら同一OriginのOrigin付きPOSTも照合先がなく403', async () => {
       const response = await app.request('/graphql', {
         method: 'POST',
         headers: {
           origin: 'http://localhost:3000',
           'content-type': 'application/json',
+          'x-kakei-request': '1',
+        },
+        body: JSON.stringify({
+          query: 'query ApiStatus { apiStatus { status } }',
+        }),
+      });
+
+      expect(response.status).toBe(403);
+    });
+
+    it('同一Origin転送のOrigin付きPOSTは能力の設定Originと一致すれば成功しCORS Headerを返さない', async () => {
+      const configured = createApp({
+        graphql: {
+          origin: 'http://localhost:3000',
+          profile: 'local-development',
+          service: {
+            withAuthenticatedActor: () =>
+              Promise.resolve({ status: 'unavailable' }),
+          },
+          security: {
+            createRequestId: () => randomUUID(),
+            equalSecrets: () => false,
+          },
+        },
+      });
+      const response = await configured.request('/graphql', {
+        method: 'POST',
+        headers: {
+          origin: 'http://localhost:3000',
+          'content-type': 'application/json',
+          'x-kakei-request': '1',
         },
         body: JSON.stringify({
           query: 'query ApiStatus { apiStatus { status } }',

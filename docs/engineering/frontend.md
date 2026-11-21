@@ -54,6 +54,7 @@ Feature名は責務例であり、TaskのBounded ContextやAggregateを先に確
 - 入力、Browser API、Event Handler、局所状態が必要な最小境界だけ`use client`にする。
 - Client Component化をData Fetchの既定手段にしない。
 - Server専用ModuleをClient Bundleへ到達させない。
+- 業務GraphQLは、Server ComponentからはQueryだけをAPIへServer間で送る（受信RequestのSession Cookie 1つだけを転送し、`X-Kakei-Request: 1`を付け、Originを付けない、no-store）。MutationはBrowserから同一Originの`/graphql`転送経由で送り、`X-CSRF-Token`を付ける。Server Actionsを業務Mutationに使わない（[業務GraphQLの認証境界ADR](../adr/business-graphql-authentication-boundary.md)）。
 - Next.jsのAPIやConventionは`node_modules/next/dist/docs/`の該当Versionを確認する。
 
 ## 状態設計

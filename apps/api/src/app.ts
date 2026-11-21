@@ -6,6 +6,7 @@ import {
   PUBLIC_ROOT_FIELDS,
   createGraphQLEntry,
 } from './presentation/graphql/graphql-entry.js';
+import type { GraphQLAuthenticationCapability } from './presentation/graphql/graphql-request-identity.js';
 import { schema } from './presentation/graphql/schema.js';
 
 /** Node接続情報はHeaderではなくAdapterのenvだけから受け取る。 */
@@ -25,6 +26,11 @@ export interface CreateAppOptions {
     request: Request,
     peer: string | null,
   ) => Promise<Response>;
+  /**
+   * 業務GraphQLの本人性能力。未指定なら認証付きOperationをSERVICE_UNAVAILABLEで封鎖し、
+   * 照合先がないためOrigin付きRequestを拒否する。
+   */
+  readonly graphql?: GraphQLAuthenticationCapability;
 }
 
 /**
@@ -35,9 +41,11 @@ export interface CreateAppOptions {
 export const createApp = (options: CreateAppOptions = {}) => {
   const app = new Hono<{ Bindings: ApiBindings }>();
   // POST＋JSONの単一Operationだけを上限内で実行し、違反は実行前に拒否する（#293）。
+  // 本人性・Origin・CSRF・公開Errorも同じ入口で扱う（#304）。
   const graphql = createGraphQLEntry({
     schema,
     publicRootFields: PUBLIC_ROOT_FIELDS,
+    capability: options.graphql,
   });
 
   const authenticationMethods = {
