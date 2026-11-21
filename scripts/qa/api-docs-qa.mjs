@@ -134,12 +134,12 @@ for (const [name, source] of [
 }
 
 assert(
-  app.includes("app.on(['GET', 'POST', 'OPTIONS'], '/graphql'"),
-  'The documented Yoga transport boundary must match app.ts',
+  app.includes("app.all('/graphql'"),
+  'The documented GraphQL entry boundary must match app.ts',
 );
 assert(
-  apiDocsReadme.includes('GET`／`OPTIONS /graphql`'),
-  'The non-public Yoga transport methods must be documented',
+  apiDocsReadme.includes('`POST`以外（`GET`／`OPTIONS`／`HEAD`等、`apiStatus`も例外なし）は405'),
+  'The rejected /graphql methods must be documented',
 );
 assert(
   compose.includes('docker.swagger.io/swaggerapi/swagger-ui:v5.33.0'),
