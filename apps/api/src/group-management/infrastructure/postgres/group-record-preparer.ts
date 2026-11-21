@@ -7,6 +7,8 @@ import { randomUUID } from 'node:crypto';
 
 import {
   actorAccessIndexDigestInput,
+  actorMembershipIndexDigestInput,
+  type GroupActorMembershipIndexKeyPort,
   type GroupPolicyDigestPort,
 } from '../../application/group-access-policy.js';
 import type {
@@ -49,11 +51,15 @@ export type PreparedGroupRecords = Readonly<{
   invitationHistory: readonly PreparedProtectedRow[];
   closeHistory: readonly PreparedProtectedRow[];
   accessIndex: readonly PreparedAccessIndexEntry[];
+  /** Actor単位Group索引。accessIndexと同じActor集合から現行鍵版だけで作る。 */
+  membershipIndex: readonly PreparedAccessIndexEntry[];
 }>;
 
 export type GroupRecordPreparerOptions = Readonly<{
   codec: Pick<ProtectedRecordCodec, 'seal'>;
   accessIndexDigests: Pick<GroupPolicyDigestPort, 'digest'>;
+  /** Context単位のActor単位Group索引鍵。書込は現行鍵版だけ。 */
+  membershipIndexKeys: Pick<GroupActorMembershipIndexKeyPort, 'currentDigest'>;
   now?: () => Date;
   nextRecordId?: () => string;
 }>;
@@ -224,6 +230,24 @@ const actorsAllowedByCurrentGroupState = (group: Group) => {
   ];
 };
 
+/** 既存索引と新索引で同じ検証を行い、不正値は保存全体をrollbackさせる。 */
+const validIndexEntry = (
+  value: Readonly<{ digest: Uint8Array; digestKeyVersion: string }>,
+): PreparedAccessIndexEntry => {
+  if (
+    !(value.digest instanceof Uint8Array) ||
+    value.digest.length === 0 ||
+    typeof value.digestKeyVersion !== 'string' ||
+    !KEY_VERSION_PATTERN.test(value.digestKeyVersion)
+  ) {
+    throw new TypeError('Invalid index digest');
+  }
+  return {
+    actorDigest: value.digest,
+    digestKeyVersion: value.digestKeyVersion,
+  };
+};
+
 export class GroupRecordPreparer {
   constructor(private readonly options: GroupRecordPreparerOptions) {}
 
@@ -301,25 +325,32 @@ export class GroupRecordPreparer {
         ),
       ),
     );
+    const indexedActors = actorsAllowedByCurrentGroupState(request.group);
     const accessIndex = await Promise.all(
-      actorsAllowedByCurrentGroupState(request.group).map(
-        async (actorSubject) => {
-          const digest = await this.options.accessIndexDigests.digest({
+      indexedActors.map(async (actorSubject) =>
+        validIndexEntry(
+          await this.options.accessIndexDigests.digest({
             ...actorAccessIndexDigestInput(request.group.id, actorSubject),
-          });
-          if (
-            digest.digest.length === 0 ||
-            !KEY_VERSION_PATTERN.test(digest.digestKeyVersion)
-          ) {
-            throw new TypeError('Invalid access-index digest');
-          }
-          return {
-            actorDigest: digest.digest,
-            digestKeyVersion: digest.digestKeyVersion,
-          };
-        },
+          }),
+        ),
       ),
     );
+    const membershipIndex = await Promise.all(
+      indexedActors.map(async (actorSubject) =>
+        validIndexEntry(
+          await this.options.membershipIndexKeys.currentDigest(
+            actorMembershipIndexDigestInput(actorSubject),
+          ),
+        ),
+      ),
+    );
+    // 準備中にProviderの現行鍵が切り替わっても、1つのGroupの行を複数の鍵版へ分けない。
+    if (
+      new Set(membershipIndex.map(({ digestKeyVersion }) => digestKeyVersion))
+        .size > 1
+    ) {
+      throw new TypeError('Mixed membership-index key versions');
+    }
 
     return {
       aggregate,
@@ -329,6 +360,7 @@ export class GroupRecordPreparer {
       invitationHistory,
       closeHistory,
       accessIndex,
+      membershipIndex,
     };
   }
 

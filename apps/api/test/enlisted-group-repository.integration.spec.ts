@@ -59,6 +59,10 @@ import {
 } from '../src/group-management/infrastructure/group-invitation-audit.js';
 import { PostgresGroupInvitationAuditWriter } from '../src/group-management/infrastructure/postgres/group-invitation-audit-writer.js';
 import { applySqlMigrations } from '../src/group-management/infrastructure/postgres/sql-migration.js';
+import {
+  createTestGroupActorMembershipIndexKeys,
+  groupActorMembershipIndexMigration,
+} from './support/group-actor-membership-index.js';
 
 const url =
   process.env.TEST_DATABASE_URL ??
@@ -120,6 +124,9 @@ describe('GM実保存の認証Scope参加（認証owner/コードWriterだけ合
         })),
       ),
     );
+    await applySqlMigrations(admin, [
+      await groupActorMembershipIndexMigration(),
+    ]);
     await admin.query(
       "UPDATE group_operation_locator_key_state SET current_key_version = 'locator-v1' WHERE id = 1",
     );
@@ -215,6 +222,7 @@ describe('GM実保存の認証Scope参加（認証owner/コードWriterだけ合
     const stateWriter = new PostgresGroupStateWriter({
       codec,
       accessIndexDigests: digests,
+      membershipIndexKeys: createTestGroupActorMembershipIndexKeys(),
       now: () => new Date(epoch),
     });
     const state = {
@@ -487,6 +495,8 @@ describe('GM実保存の認証Scope参加（認証owner/コードWriterだけ合
 
   it('実GMの状態/Policy/履歴/operation/locator/最小Auditを同scopeへstageする', async () => {
     await seed();
+    // enlisted保存が新索引を作り直すことを観測するため、seedで作られた行を先に消す。
+    await pool.query('DELETE FROM group_actor_membership_index');
     const body = JSON.parse(await create()) as Record<string, unknown>;
     expect(Object.keys(body).sort()).toEqual(
       ['kind', 'groupId', 'version', 'invitationId'].sort(),
@@ -500,6 +510,14 @@ describe('GM実保存の認証Scope参加（認証owner/コードWriterだけ合
       audit: '1',
       consumed: '1',
     });
+    // IX-INV-1（#309）: 招待コード経由の保存でも、同じscopeで両索引を同じActor集合へ置き換える。
+    const indexes = await pool.query<{ access: string; membership: string }>(
+      `SELECT
+         (SELECT count(*)::text FROM group_actor_access_index WHERE group_id = $1) AS access,
+         (SELECT count(*)::text FROM group_actor_membership_index WHERE group_id = $1) AS membership`,
+      [groupId.value],
+    );
+    expect(indexes.rows[0]).toEqual({ access: '1', membership: '1' });
     const loaded = await standalone.load(groupId);
     expect(loaded?.group.accessPolicyVersion).toBe(2);
     expect(loaded?.group.invitations[0]?.expiryAt.value).toBe(

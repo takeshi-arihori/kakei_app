@@ -81,6 +81,7 @@ describe('PostgresGroupStateWriter', () => {
     const writer = new PostgresGroupStateWriter({
       codec,
       accessIndexDigests: { digest: vi.fn() },
+      membershipIndexKeys: { currentDigest: vi.fn() },
       now: () => new Date('2026-09-23T02:00:00.000Z'),
       nextRecordId: () => '0194a8aa-3d44-7cc1-8ea0-2c76e48131ac',
     });
@@ -106,6 +107,7 @@ describe('PostgresGroupStateWriter', () => {
     const writer = new PostgresGroupStateWriter({
       codec,
       accessIndexDigests: { digest: vi.fn() },
+      membershipIndexKeys: { currentDigest: vi.fn() },
       now: () => new Date('2026-09-23T02:00:00.000Z'),
       nextRecordId: () => '0194a8aa-3d44-7cc1-8ea0-2c76e48131ad',
     });
@@ -124,6 +126,7 @@ describe('PostgresGroupStateWriter', () => {
     const writer = new PostgresGroupStateWriter({
       codec: { seal: vi.fn() },
       accessIndexDigests: { digest: vi.fn() },
+      membershipIndexKeys: { currentDigest: vi.fn() },
       now: () => new Date('2026-09-23T02:00:00.000Z'),
       nextRecordId: () => '0194a8aa-3d44-7cc1-8ea0-2c76e48131ae',
     });
