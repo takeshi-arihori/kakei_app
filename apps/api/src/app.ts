@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import { Hono } from 'hono';
-import { createYoga } from 'graphql-yoga';
 
+import {
+  PUBLIC_ROOT_FIELDS,
+  createGraphQLEntry,
+} from './presentation/graphql/graphql-entry.js';
 import { schema } from './presentation/graphql/schema.js';
 
 /** Node接続情報はHeaderではなくAdapterのenvだけから受け取る。 */
@@ -31,12 +34,10 @@ export interface CreateAppOptions {
  */
 export const createApp = (options: CreateAppOptions = {}) => {
   const app = new Hono<{ Bindings: ApiBindings }>();
-  const yoga = createYoga({
+  // POST＋JSONの単一Operationだけを上限内で実行し、違反は実行前に拒否する（#293）。
+  const graphql = createGraphQLEntry({
     schema,
-    graphqlEndpoint: '/graphql',
-    maskedErrors: true,
-    // WebとAPIは同一Originへ集約するため、他OriginへCORS Headerを返さない。
-    cors: false,
+    publicRootFields: PUBLIC_ROOT_FIELDS,
   });
 
   const authenticationMethods = {
@@ -78,9 +79,7 @@ export const createApp = (options: CreateAppOptions = {}) => {
   }
 
   app.get('/health', (context) => context.json({ status: 'ok' }));
-  app.on(['GET', 'POST', 'OPTIONS'], '/graphql', (context) =>
-    yoga.fetch(context.req.raw),
-  );
+  app.all('/graphql', (context) => graphql(context.req.raw));
 
   return app;
 };

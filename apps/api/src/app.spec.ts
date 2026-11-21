@@ -27,6 +27,55 @@ describe('Hono API', () => {
     });
   });
 
+  describe('/graphqlの入口制限（#293）', () => {
+    const apiStatusQuery = encodeURIComponent('{ apiStatus { status } }');
+
+    it('GETはapiStatusでも405＋Allow: POSTで、GraphiQLのHTMLを返さない', async () => {
+      for (const accept of ['application/json', 'text/html']) {
+        const response = await app.request(`/graphql?query=${apiStatusQuery}`, {
+          headers: { accept },
+        });
+        expect(response.status).toBe(405);
+        expect(response.headers.get('allow')).toBe('POST');
+        expect(response.headers.get('content-type')).toMatch(
+          /^application\/json/,
+        );
+        expect(await response.text()).not.toMatch(/<html|graphiql/i);
+      }
+    });
+
+    it('formの単純Requestは実行せず415を返す', async () => {
+      const response = await app.request('/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: `query=${apiStatusQuery}`,
+      });
+      expect(response.status).toBe(415);
+      await expect(response.json()).resolves.toMatchObject({
+        errors: [{ extensions: { code: 'INVALID_REQUEST' } }],
+      });
+    });
+
+    it('introspectionは400、成功を含む全Responseにno-store／nosniffを付ける', async () => {
+      const rejected = await app.request('/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: '{ __schema { types { name } } }' }),
+      });
+      expect(rejected.status).toBe(400);
+      const accepted = await app.request('/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: '{ apiStatus { status } }' }),
+      });
+      expect(accepted.status).toBe(200);
+      for (const response of [rejected, accepted]) {
+        expect(response.headers.get('cache-control')).toBe('no-store');
+        expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+      }
+    });
+  });
+
   describe('/graphqlのCORS（同一Origin方針）', () => {
     const otherOrigin = 'https://evil.example';
     const corsResponseHeaders = [

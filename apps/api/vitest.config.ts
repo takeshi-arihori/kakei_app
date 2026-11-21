@@ -1,4 +1,5 @@
 import { configDefaults, defineConfig } from 'vitest/config';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { repositoryTestDatabaseUrl } from './test/support/repository-test-database-url.js';
@@ -8,6 +9,15 @@ const testDatabaseUrl = repositoryTestDatabaseUrl(
 );
 
 export default defineConfig({
+  resolve: {
+    // Nodeの実行時と同じくgraphqlをCJS版1つへ解決し、Yogaと別realmのSchema/ASTを作らない。
+    alias: [
+      {
+        find: /^graphql$/,
+        replacement: createRequire(import.meta.url).resolve('graphql'),
+      },
+    ],
+  },
   test: {
     env: testDatabaseUrl ? { TEST_DATABASE_URL: testDatabaseUrl } : {},
     // 大きな境界Fixture追加後もCPUを過剰共有せず、既存の全組合せTestを飢餓させない。
