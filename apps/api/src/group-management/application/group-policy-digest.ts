@@ -140,6 +140,59 @@ export const operationLocatorDigestInput = (
     ]),
   });
 
+/**
+ * 自分のGroup一覧の候補列挙だけに使う、Actor単位のGroup索引（#306、ADR
+ * `group-actor-membership-index`）。Actorから全Groupを横断して引くため、
+ * 入力にGroupIdを含めず、鍵の名前空間はContext単位とする。認可の根拠にしない。
+ */
+export type GroupActorMembershipIndexDigestInput = Readonly<{
+  purpose: 'group-actor-membership-index/v1';
+  canonicalInput: Uint8Array;
+}>;
+
+export type GroupActorMembershipIndexCandidate = Readonly<{
+  digest: GroupPolicyDigest;
+  digestKeyVersion: string;
+}>;
+
+/**
+ * Actor単位Group索引の専用鍵Port。Group DEK、Group単位HMAC、operation locator、
+ * Audit鍵とMaterialを共有しない。
+ */
+export interface GroupActorMembershipIndexKeyPort {
+  /**
+   * 書込用。現行鍵版だけでdigestを作る。
+   * @param input `actorMembershipIndexDigestInput`が作った固定入力。
+   * @returns 非空digestと現行鍵版。
+   * @throws Error 現行鍵がない等のProvider障害。Commandはfail-closedする。
+   */
+  currentDigest(
+    input: GroupActorMembershipIndexDigestInput,
+  ): Promise<GroupActorMembershipIndexCandidate>;
+
+  /**
+   * 読取用。現行鍵とRetired鍵の全候補でdigestを作る。全候補missなら復号しない。
+   * @param input `actorMembershipIndexDigestInput`が作った固定入力。
+   * @returns 鍵版ごとの候補。
+   * @throws Error Provider障害。
+   */
+  candidateDigests(
+    input: GroupActorMembershipIndexDigestInput,
+  ): Promise<readonly GroupActorMembershipIndexCandidate[]>;
+}
+
+export const actorMembershipIndexDigestInput = (
+  actorSubject: ActorSubject,
+): GroupActorMembershipIndexDigestInput =>
+  Object.freeze({
+    purpose: 'group-actor-membership-index/v1',
+    canonicalInput: encodeCanonicalTlv([
+      { tag: 0x01, value: 'group-actor-membership-index/v1' },
+      { tag: 0x02, value: 'actor-membership-index' },
+      { tag: 0x03, value: actorSubject.value },
+    ]),
+  });
+
 export const operationFingerprintDigestInput = (
   groupId: GroupId,
   commandKind: string,

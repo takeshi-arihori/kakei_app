@@ -47,3 +47,15 @@ MigrationはCredential、Connection Pool、Timeout、本番Deploy設定を選び
 追加DDLは既存RunnerでTransaction適用・Checksum記録・再実行Skipを行う。適用後もcurrentを自動初期化せず、Provider/GM側の明示準備まで新規経路を開かない。[down](0010_recipient_invitation_enlistment.down.sql)は未初期化かつAuditと保持operationが空の開発・Test環境だけに限定し、Data/制御済み環境はforward-fixする。operationの新旧形式を復号せず保守的に全件確認し、Audit清掃済み/current=nullを未使用の証拠にしない。Downはproof key-state→結果→AuditのTable Lockを取り、確認とDROPを一つのStatementで行う。保存済みAuditやoperationを削除して切り戻し条件を満たさず、古いコード/破棄鍵を復活させない。
 
 実PG検証では追加Migrationの再実行/初期null/形式制約/許可Columnと、GM保存・Audit故障の全rollbackを確認する。認証owner/コードWriterは合成であり、実消費/両Context業務atomicityは#243、清掃/Restoreと具体Provider運用・通常起動接続は既存Gateに残す。
+
+## Version 12: Actor単位のGroup索引（#309）
+
+[`0012_group_actor_membership_index.sql`](0012_group_actor_membership_index.sql)は[Actor単位のGroup索引ADR](../../../../docs/adr/group-actor-membership-index.md)（#306）に従い、自分のGroup一覧の候補列挙専用の`group_actor_membership_index`を追加する。Migration番号は認証と共通の`app_schema_migrations`全体で12を使用する。
+
+| Table | 平文Inventoryと制約 | 保持/責務 |
+| --- | --- | --- |
+| `group_actor_membership_index` | Context単位の用途鍵`group-actor-membership-index/v1`による非空Actor digest、鍵版、Random Group ID、技術Timestamp。主キー`(actor_digest, digest_key_version, group_id)`、`group_id`副索引 | `group_aggregate_record`へFK `ON DELETE CASCADE`。Retention削除と同じTransactionで消える。唯一のState Writerが既存の`group_actor_access_index`と同じActor集合を同じTransactionで置き換える。認可の根拠にしない |
+
+Actor subjectは暗号化Payload内にあり、既存Group行からSQLだけでは索引を作れない。0012は`group_aggregate_record`を`SHARE`ModeでLockし、1行でもあれば中断してSchemaを変えない。既存Dataのある環境のbackfillは別のOwner Decisionで扱う。[down](0012_group_actor_membership_index.down.sql)は索引が空の開発・Test環境だけで使い、表をLockして0件を確認してからDROPする。Data適用後はForward-fixする。
+
+鍵の具体Providerとkey-stateは持たない。書込は現行鍵版だけで、旧鍵版の行は次の置き換えで消える。Rotation用の再構築処理、本番Provider、Restoreの再構築はProduction Gateに残す。実PG検証は`test/group-actor-membership-index.integration.spec.ts`（中断・適用・再実行・Down、全遷移後の両索引一致、鍵故障と後続故障の全rollback、鍵版の置き換え）と、Retention削除後0件（`test/group-management-retention.integration.spec.ts`）で行う。

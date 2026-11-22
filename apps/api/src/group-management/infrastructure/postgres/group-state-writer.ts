@@ -1,7 +1,10 @@
 import type { ProtectedRecordCodec } from '../../../shared/infrastructure/protected-record/index.js';
 import type { QueryResultRow } from 'pg';
 
-import type { GroupPolicyDigestPort } from '../../application/group-access-policy.js';
+import type {
+  GroupActorMembershipIndexKeyPort,
+  GroupPolicyDigestPort,
+} from '../../application/group-access-policy.js';
 import type {
   GroupSqlQuery,
   GroupStateWritePlan,
@@ -31,6 +34,11 @@ export class PostgresGroupStateWriter {
     private readonly options: Readonly<{
       codec: Pick<ProtectedRecordCodec, 'seal'>;
       accessIndexDigests: Pick<GroupPolicyDigestPort, 'digest'>;
+      /** Actor単位Group索引の現行鍵。既存索引と同じTransactionで置き換える。 */
+      membershipIndexKeys: Pick<
+        GroupActorMembershipIndexKeyPort,
+        'currentDigest'
+      >;
       now?: () => Date;
       nextRecordId?: () => string;
       onUnavailable?: () => void;
@@ -129,6 +137,12 @@ export class PostgresGroupStateWriter {
         prepared.accessIndex,
         prepared.aggregate.createdAt,
       );
+      await this.replaceMembershipIndex(
+        transaction,
+        request.group.id.value,
+        prepared.membershipIndex,
+        prepared.aggregate.createdAt,
+      );
       await this.appendHistory(transaction, request.group.id.value, prepared);
       return { kind: 'Committed', version: nextVersion };
     } catch {
@@ -175,6 +189,12 @@ export class PostgresGroupStateWriter {
       transaction,
       request.group.id.value,
       prepared.accessIndex,
+      prepared.aggregate.createdAt,
+    );
+    await this.replaceMembershipIndex(
+      transaction,
+      request.group.id.value,
+      prepared.membershipIndex,
       prepared.aggregate.createdAt,
     );
     await this.appendHistory(transaction, request.group.id.value, prepared);
@@ -267,6 +287,30 @@ export class PostgresGroupStateWriter {
            group_id, actor_digest, digest_key_version, created_at, updated_at
          ) VALUES ($1, $2, $3, $4, $4)`,
         [groupId, Buffer.from(entry.actorDigest), entry.digestKeyVersion, at],
+      );
+    }
+  }
+
+  /**
+   * Actor単位Group索引を対象Groupについて全削除→現行鍵版で再挿入する。
+   * 旧鍵版の行もここで消えるため、1つのGroupの行が複数の鍵版に分かれない。
+   */
+  private async replaceMembershipIndex(
+    transaction: SqlTransaction,
+    groupId: string,
+    entries: readonly PreparedAccessIndexEntry[],
+    at: Date,
+  ): Promise<void> {
+    await transaction.query(
+      'DELETE FROM group_actor_membership_index WHERE group_id = $1',
+      [groupId],
+    );
+    for (const entry of entries) {
+      await transaction.query(
+        `INSERT INTO group_actor_membership_index (
+           actor_digest, digest_key_version, group_id, created_at
+         ) VALUES ($1, $2, $3, $4)`,
+        [Buffer.from(entry.actorDigest), entry.digestKeyVersion, groupId, at],
       );
     }
   }

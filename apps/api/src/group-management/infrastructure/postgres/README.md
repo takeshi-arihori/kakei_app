@@ -7,6 +7,7 @@
 - [PostgresGroupCommitKernel](group-commit-kernel.ts)が既存locator key-state、CloseIntent登録、State Writer、保護operation、共通locatorを所有する。PoolやTransaction制御を持たない。
 - [PostgresGroupRepository](group-repository.ts)はstandaloneのBEGIN/COMMIT/rollback/releaseと、Unique敗者の全rollback後の成功照会を所有する。COMMIT送信後の障害は接続を破棄し、確定失敗とせず同operationで照合する。
 - [State Writer](group-state-writer.ts)と[Preparer](group-record-preparer.ts)はoperation形式に依存せず、既存CAS/Policy版/現在行/追記履歴/在籍索引を共用する。
+- #309: 同じState Writerが、[Actor単位のGroup索引](../../../../../../docs/adr/group-actor-membership-index.md)`group_actor_membership_index`も既存の在籍索引と同じActor集合・同じTransactionで置き換える。digestはContext単位の`GroupActorMembershipIndexKeyPort.currentDigest`（現行鍵版だけ）で作り、GroupIdを入力に含めない。鍵の失敗・不正値は保存全体を`Unavailable`にする。読取（候補鍵での照会・再認可）は#310。
 - [共通Reader](group-read-repository.ts)はActor/opの全Command・全Group共通namespaceを読む。[operation codec](group-operation-record.ts)は旧payloadVersion1をbyte不変で使い、新payloadVersion2だけを追加する。Envelope/AAD/schemaVersionは既存形式を維持する。新旧actionの衝突は両側でMismatchにし、新actionを文字列fingerprintへ偽装しない。
 
 ## 認証Scopeへの参加

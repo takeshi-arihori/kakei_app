@@ -61,6 +61,8 @@ caller-only missと専用lease内の再照合、コードLock待機後の再照�
 - `hasMore`は除外前の候補が51件あるかで決める。除外が起きた場合も、続きがある可能性を隠さない。
 - Portの`Unavailable`・例外、要求件数の超過、`groupId`の重複、`joinOrder = 1`の参加者がないGroup、通知の失敗は、一覧全体を`MyGroupListApplicationError('UNAVAILABLE')`にする。
 
+索引のKeyは[Actor単位のGroup索引ADR](../../../../../docs/adr/group-actor-membership-index.md)（#306）に従い、`group-policy-digest.ts`の`actorMembershipIndexDigestInput`とContext単位の`GroupActorMembershipIndexKeyPort`で作る。GroupIdを入力に含めず、Group DEK・Group単位HMAC・locator・Audit鍵と共有しない。書込は#309のState Writer、読取は#310。
+
 `list-my-groups.spec.ts`はfake Portで対象・写像・並び・上限・除外と通知・障害を検証する。fakeの成功はPostgreSQLのLock、復号、索引の存在非開示の証明ではなく、#310で実PG検証する。GraphQL公開は#312で、Security auditは書かない（ADR論点4）。
 
 ## #312 公開Transportからの入力組立
