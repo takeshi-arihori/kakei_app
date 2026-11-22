@@ -72,6 +72,10 @@ import {
 } from '../../src/group-management/infrastructure/group-invitation-audit.js';
 import { PostgresGroupInvitationAuditWriter } from '../../src/group-management/infrastructure/postgres/group-invitation-audit-writer.js';
 import { applySqlMigrations } from '../../src/group-management/infrastructure/postgres/sql-migration.js';
+import {
+  createTestGroupActorMembershipIndexKeys,
+  groupActorMembershipIndexMigration,
+} from './group-actor-membership-index.js';
 
 /** 公開済み合成本人参照。実Actor/Session/鍵を使わない。 */
 export const actors = {
@@ -278,6 +282,9 @@ export class RecipientInvitationFixture {
         })),
       ),
     );
+    await applySqlMigrations(this.admin, [
+      await groupActorMembershipIndexMigration(),
+    ]);
     this.pool = new Pool({
       connectionString: this.url,
       options: `-c search_path=${this.schema}`,
@@ -445,6 +452,7 @@ export class RecipientInvitationFixture {
     const stateWriter = new PostgresGroupStateWriter({
       codec: this.groupCodec,
       accessIndexDigests,
+      membershipIndexKeys: createTestGroupActorMembershipIndexKeys(),
       now: () => new Date(this.now),
     });
     const group = {
@@ -723,6 +731,7 @@ export class RecipientInvitationFixture {
       'group_invitation_history_record',
       'group_operation_result_record',
       'group_actor_access_index',
+      'group_actor_membership_index',
       'group_operation_locator_v2',
       'group_recipient_invitation_audit_record',
       'authentication.recipient_code',

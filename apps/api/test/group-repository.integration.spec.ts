@@ -42,6 +42,10 @@ import {
   applySqlMigrations,
   type SqlMigration,
 } from '../src/group-management/infrastructure/postgres/sql-migration.js';
+import {
+  createTestGroupActorMembershipIndexKeys,
+  groupActorMembershipIndexMigration,
+} from './support/group-actor-membership-index.js';
 
 const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
@@ -130,6 +134,7 @@ describe('PostgresGroupRepository', () => {
         await loadMigration(1),
         await loadMigration(2),
         await loadMigration(3),
+        await groupActorMembershipIndexMigration(),
       ]);
     } finally {
       await client.end();
@@ -169,6 +174,7 @@ describe('PostgresGroupRepository', () => {
     stateWriter = new PostgresGroupStateWriter({
       codec,
       accessIndexDigests: digestPort,
+      membershipIndexKeys: createTestGroupActorMembershipIndexKeys(),
       now: () => new Date('2026-09-24T01:00:00.000Z'),
       nextRecordId: () => {
         recordCounter += 1;

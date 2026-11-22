@@ -47,12 +47,13 @@ const migrationFiles = [
   '0002_group_locator_v2',
   '0003_close_intent_registry',
   '0004_group_management_retention',
+  '0012_group_actor_membership_index',
 ] as const;
 
 const loadMigrations = async (): Promise<readonly SqlMigration[]> =>
   Promise.all(
-    migrationFiles.map(async (file, index) => ({
-      version: index + 1,
+    migrationFiles.map(async (file) => ({
+      version: Number(file.slice(0, 4)),
       name: file.slice(5).replaceAll('_', '-'),
       sql: await readFile(
         resolve(
@@ -205,6 +206,32 @@ describe('Postgres Group Management Retention adapter', () => {
     },
   );
 
+  it('IX-RET-1（#309）: 削除後は対象GroupのActor単位Group索引が0件になり、他Groupの行は残る', async () => {
+    await seedGroup(pool, true);
+    const otherGroupId = '00000000-0000-4000-8000-000000000309';
+    await seedRoot(pool, otherGroupId);
+    await pool.query(
+      `INSERT INTO group_actor_membership_index (
+         actor_digest, digest_key_version, group_id, created_at
+       ) VALUES (decode('07', 'hex'), 'test-membership-v1', $1, $2)`,
+      [otherGroupId, '2025-01-01Z'],
+    );
+    const adapter = new PostgresGroupManagementRetentionAdapter({
+      pool,
+      now: () => new Date('2025-03-15T01:30:00.000Z'),
+    });
+
+    await expect(adapter.deleteGroupData(deleteRequest())).resolves.toEqual({
+      kind: 'Deleted',
+      record: receipt,
+    });
+
+    const rows = await pool.query<{ group_id: string }>(
+      'SELECT group_id FROM group_actor_membership_index ORDER BY group_id',
+    );
+    expect(rows.rows).toEqual([{ group_id: otherGroupId }]);
+  });
+
   it.each([
     'afterRegistryRetired',
     'afterGroupDeleted',
@@ -227,7 +254,7 @@ describe('Postgres Group Management Retention adapter', () => {
       await expect(adapter.deleteGroupData(deleteRequest())).resolves.toEqual({
         kind: 'Unavailable',
       });
-      expect(await countGroupOwnedRows(pool)).toBe(10);
+      expect(await countGroupOwnedRows(pool)).toBe(11);
       expect(
         await pool.query(
           `SELECT 1 FROM group_close_intent_registry
@@ -475,6 +502,12 @@ async function seedGroup(pool: Pool, withChildren = false): Promise<void> {
     [groupId.value, '2025-01-01Z'],
   );
   await pool.query(
+    `INSERT INTO group_actor_membership_index (
+       actor_digest, digest_key_version, group_id, created_at
+     ) VALUES (decode('07', 'hex'), 'test-membership-v1', $1, $2)`,
+    [groupId.value, '2025-01-01Z'],
+  );
+  await pool.query(
     `INSERT INTO group_operation_locator (
        actor_digest, operation_digest, command_fingerprint,
        digest_key_version, group_id, operation_result_record_id, created_at
@@ -504,6 +537,7 @@ async function countGroupOwnedRows(pool: Pool): Promise<number> {
     'group_invitation_history_record',
     'group_operation_result_record',
     'group_actor_access_index',
+    'group_actor_membership_index',
     'group_operation_locator',
     'group_operation_locator_v2',
     'group_close_history_record',
