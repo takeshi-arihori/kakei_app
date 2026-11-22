@@ -1,13 +1,22 @@
 import type { ActorSubject, Group, GroupId } from '../domain/group.js';
 
 export type MyGroupCandidateReadResult =
-  | Readonly<{ kind: 'Read'; groups: readonly Group[] }>
+  | Readonly<{
+      kind: 'Read';
+      groups: readonly Group[];
+      /**
+       * Lock前に索引からhitした件数（`limit`以下）。Lock後の再確認で競合として
+       * 除いたGroupも数える。`hasMore`はこの件数で決める（#306 2A）。
+       */
+      indexHitCount: number;
+    }>
   | Readonly<{ kind: 'Unavailable' }>;
 
 /**
  * 自分のGroup一覧の候補を読む。Group一覧ADR（#305）の論点4に従い、実装は1 Transactionで
  * Actor単位の索引から作成の新しい順に最大`limit`件を引き、GroupId昇順に固定版で読み、
- * 復号したGroupを版の不一致がないと確かめてから返す。
+ * 復号したGroupを版の不一致がないと確かめてから返す。Lock後に自分の索引行が
+ * 消えていたGroupは、退出等との競合として復号せずに除く（#306 2A）。
  *
  * 索引のhitは認可の根拠ではない。返したGroupの再認可はApplicationが行う。
  * Lock、接続、復号、版不一致等の障害は一部だけ返さず`Unavailable`にする。

@@ -125,9 +125,13 @@ const setup = (
   return { service, readCandidates, reportDeniedIndexHit };
 };
 
-const read = (groups: readonly Group[]): MyGroupCandidateReadResult => ({
+const read = (
+  groups: readonly Group[],
+  indexHitCount = groups.length,
+): MyGroupCandidateReadResult => ({
   kind: 'Read',
   groups,
+  indexHitCount,
 });
 
 const expectUnavailable = async (promise: Promise<unknown>) => {
@@ -405,6 +409,38 @@ describe('MyGroupQueryService.listMyGroups', () => {
     expect(list.hasMore).toBe(true);
     expect(reportDeniedIndexHit).toHaveBeenCalledTimes(1);
   });
+
+  it('reports more from the index hit count when a 51st hit was excluded by a concurrent change', async () => {
+    const { service } = setup(read(many(50), 51));
+
+    const list = await service.listMyGroups({ actorSubject: me });
+
+    expect(list.items).toHaveLength(50);
+    expect(list.hasMore).toBe(true);
+  });
+
+  it('does not report more when 50 hits remain after a concurrent exclusion', async () => {
+    const { service } = setup(read(many(49), 50));
+
+    const list = await service.listMyGroups({ actorSubject: me });
+
+    expect(list.items).toHaveLength(49);
+    expect(list.hasMore).toBe(false);
+  });
+
+  it.each([
+    ['fewer hits than returned Groups', 1, 2],
+    ['more hits than requested', 52, 0],
+    ['a negative hit count', -1, 0],
+    ['a fractional hit count', 1.5, 1],
+  ])(
+    'fails the whole list when the read port reports %s',
+    async (_, indexHitCount, groupCount) => {
+      const { service } = setup(read(many(groupCount), indexHitCount));
+
+      await expectUnavailable(service.listMyGroups({ actorSubject: me }));
+    },
+  );
 
   it('fails the whole list when the read port is unavailable', async () => {
     const { service } = setup({ kind: 'Unavailable' });

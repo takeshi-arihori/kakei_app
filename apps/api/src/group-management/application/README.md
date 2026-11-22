@@ -55,15 +55,15 @@ caller-only missと専用lease内の再照合、コードLock待機後の再照�
 
 [Group一覧ADR](../../../../../docs/adr/group-create-and-my-group-list-contract.md)の論点2〜4を、`use-cases/list-my-groups.ts`の`MyGroupQueryService.listMyGroups`が実装する。入力は信頼済みActorだけで、結果は表示属性なしの要約（`groupId`、`lifecycle`、`myRole`、`activeParticipantCount`、`createdAt`、`joinedAt`、`deleteEligibleAt`）を作成の新しい順（同時刻は`groupId`昇順）に最大50件と`hasMore`で返す。
 
-- `my-group-list-read-port.ts`の`MyGroupListReadPort.readCandidates`へ51件を要求する。Portは1 Transactionで索引のhitを`groupId`昇順に固定版で読み、版を確かめた`Group`を返す。障害は`Unavailable`にし、一部だけは返さない。
+- `my-group-list-read-port.ts`の`MyGroupListReadPort.readCandidates`へ51件を要求する。Portは1 Transactionで索引のhitを`groupId`昇順に固定版で読み、版を確かめた`Group`と索引のhit数を返す。Lock後に自分の索引行が消えていたGroupは、退出等との競合として復号せずに除く（#306 2A）。障害は`Unavailable`にし、一部だけは返さない。
 - 索引のhitは認可の根拠にしない。ApplicationがArchived以外は自分のActive Participant、ArchivedはownerAtArchiveだけを許す述語で再認可し、否の候補は除いて`MyGroupListIntegrityAlertPort`へ`groupId`だけを通知する。Leftの旧Participantは対象にせず、再参加は新しいParticipantで判定する。
 - `createdAt`は`joinOrder = 1`の参加者の`joinedAt`から導出する。
-- `hasMore`は除外前の候補が51件あるかで決める。除外が起きた場合も、続きがある可能性を隠さない。
-- Portの`Unavailable`・例外、要求件数の超過、`groupId`の重複、`joinOrder = 1`の参加者がないGroup、通知の失敗は、一覧全体を`MyGroupListApplicationError('UNAVAILABLE')`にする。
+- `hasMore`は索引のhit数が51件あるかで決める（#306 2A）。Portが競合で除いた候補と、再認可で除外した候補も数え、続きがある可能性を隠さない。
+- Portの`Unavailable`・例外、hit数の不整合（要求件数の超過、返したGroup数より少ない、整数でない）、`groupId`の重複、`joinOrder = 1`の参加者がないGroup、通知の失敗は、一覧全体を`MyGroupListApplicationError('UNAVAILABLE')`にする。
 
-索引のKeyは[Actor単位のGroup索引ADR](../../../../../docs/adr/group-actor-membership-index.md)（#306）に従い、`group-policy-digest.ts`の`actorMembershipIndexDigestInput`とContext単位の`GroupActorMembershipIndexKeyPort`で作る。GroupIdを入力に含めず、Group DEK・Group単位HMAC・locator・Audit鍵と共有しない。書込は#309のState Writer、読取は#310。
+索引のKeyは[Actor単位のGroup索引ADR](../../../../../docs/adr/group-actor-membership-index.md)（#306）に従い、`group-policy-digest.ts`の`actorMembershipIndexDigestInput`とContext単位の`GroupActorMembershipIndexKeyPort`で作る。GroupIdを入力に含めず、Group DEK・Group単位HMAC・locator・Audit鍵と共有しない。書込は#309のState Writer、読取は#310の[`PostgresMyGroupListReader`](../infrastructure/postgres/README.md#310-自分のgroup一覧の読取)。
 
-`list-my-groups.spec.ts`はfake Portで対象・写像・並び・上限・除外と通知・障害を検証する。fakeの成功はPostgreSQLのLock、復号、索引の存在非開示の証明ではなく、#310で実PG検証する。GraphQL公開は#312で、Security auditは書かない（ADR論点4）。
+`list-my-groups.spec.ts`はfake Portで対象・写像・並び・上限・除外と通知・障害を検証する。fakeの成功はPostgreSQLのLock、復号、索引の存在非開示の証明ではなく、#310の`test/my-group-list-reader.integration.spec.ts`で実PG検証する。GraphQL公開は#312で、Security auditは書かない（ADR論点4）。
 
 ## #312 公開Transportからの入力組立
 
