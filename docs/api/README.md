@@ -16,7 +16,7 @@ OpenAPIはGraphQL業務TypeやFieldを再定義しません。業務契約の確
 
 3業務Contextの4層、shared、共通GraphQLと`app.ts`／`main.ts`の責務・実在Path・予定Pathは、[Backend配置ガイド](../engineering/backend.md#context別4層と共通入口の実装状況)を参照します。Context固有Resolver／入出力変換は`src/<context>/presentation/graphql`、SDL読込・生成型・Resolver集約の共通入口は`src/presentation/graphql`に配置します。
 
-現在の公開GraphQL Operationは`Query.apiStatus`のみです。内部Domain／Use Case／Adapterの実装と、公開経路への接続・機能完成を区別します。確認基準CommitとContext別の未実装／未接続、未決Decisionは配置ガイドを参照してください。
+現在の公開GraphQL Operationは`Query.apiStatus`、`Query.myGroups`、`Mutation.createGroup`です。後の2つは認証付きで、Group ManagementのUse Caseを注入したCompositionだけで実行でき、現行の通常main・開発Compositionでは`SERVICE_UNAVAILABLE`で封鎖されます（注入は#314）。内部Domain／Use Case／Adapterの実装と、公開経路への接続・機能完成を区別します。確認基準CommitとContext別の未実装／未接続、未決Decisionは配置ガイドを参照してください。
 
 Context／Layer／共有基盤の配置・責務やwiring、公開Operationを変更するTaskは、同じ差分で配置ガイドの実装状況・基準Commitと本入口の参照も同期します。公開契約の更新は下記のSDL／Operation catalog更新Ruleに従います。
 
@@ -61,7 +61,7 @@ pnpm check
 
 `api-docs:check`は専用validator testを実行した後、OpenAPIとREADMEの公開Method集合、GraphQL SDLとOperation catalogの完全一致、entryの必須項目とRepository参照、固定Image、read-only mount、Request送信と外部Validatorの無効化を検査します。
 
-Knowledge State: `GET /health`と`POST /graphql`は現行公開契約。各Contextの業務OperationとProduction認証Provider/Deploymentは別Task/Gateです。認証HTTP Errorと共有Rateは本Taskの契約です。
+Knowledge State: `GET /health`と`POST /graphql`は現行公開契約。Group Managementの`createGroup`・`myGroups`以外の業務OperationとProduction認証Provider/Deploymentは別Task/Gateです。認証HTTP Errorと共有Rateは本Taskの契約です。
 
 関連Task: [#93](https://github.com/takeshi-arihori/kakei_app/issues/93)、[#142](https://github.com/takeshi-arihori/kakei_app/issues/142)
 

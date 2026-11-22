@@ -18,9 +18,58 @@ export type ApiStatus = {
   status: Scalars['String']['output'];
 };
 
+export type CreateGroupInput = {
+  operationId: Scalars['ID']['input'];
+};
+
+export type CreateGroupResult = {
+  __typename?: 'CreateGroupResult';
+  groupId: Scalars['ID']['output'];
+};
+
+export enum GroupLifecycle {
+  Active = 'ACTIVE',
+  Archived = 'ARCHIVED',
+  Canceling = 'CANCELING',
+  Closing = 'CLOSING'
+}
+
+export enum GroupRole {
+  Owner = 'OWNER',
+  Participant = 'PARTICIPANT'
+}
+
+export type Mutation = {
+  __typename?: 'Mutation';
+  createGroup: CreateGroupResult;
+};
+
+
+export type MutationCreateGroupArgs = {
+  input: CreateGroupInput;
+};
+
+export type MyGroupList = {
+  __typename?: 'MyGroupList';
+  hasMore: Scalars['Boolean']['output'];
+  items: Array<MyGroupSummary>;
+};
+
+export type MyGroupSummary = {
+  __typename?: 'MyGroupSummary';
+  activeParticipantCount: Scalars['Int']['output'];
+  createdAt: Scalars['String']['output'];
+  deleteEligibleAt?: Maybe<Scalars['String']['output']>;
+  groupId: Scalars['ID']['output'];
+  joinedAt: Scalars['String']['output'];
+  lifecycle: GroupLifecycle;
+  myRole: GroupRole;
+};
+
 export type Query = {
   __typename?: 'Query';
   apiStatus: ApiStatus;
+  myGroups: MyGroupList;
 };
 
 export type ApiStatusQueryVariables = Exact<{ [key: string]: never; }>;
