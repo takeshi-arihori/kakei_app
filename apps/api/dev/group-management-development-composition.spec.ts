@@ -23,7 +23,7 @@ class RefusingClient extends EventEmitter {
   }
 }
 
-/** 共有認証と同じ43文字の形式（末尾は6bitの下位4bitが0）。 */
+/** 共有認証と同じ43文字の形式（32 byteのbase64url。最後の6 bitのうち下位2 bitが0）。 */
 const secret = () => {
   const bytes = randomBytes(32);
   return bytes.toString('base64url');
