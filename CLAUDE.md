@@ -37,7 +37,7 @@ pnpmモノレポ（`apps/web`=Next.js 16／React 19、`apps/api`=Hono＋GraphQL 
 APIは3つのBounded Context（`group-management`、`expense-recording`、`settlement`）と`shared`、Transport共通の`presentation/`で構成する。
 
 - 4層必須: `Presentation -> Application -> Domain <- Infrastructure`。DomainはHono／GraphQL／pg／Cloud SDKをImportしない。未利用Layerの空Directoryは作らない。
-- 現状: Group Managementはdomain／application／infrastructure(postgres)／presentation(graphql)。Expense Recording・Settlementは**Domainのみ**。Context固有のGraphQL PresentationはGroup Managementの`createGroup`・`myGroups`だけ（#312）。Use Caseは`createApp`の`groupManagement`へ注入し、通常main・開発Compositionでは未注入（層ごとの状況表は`docs/engineering/backend.md`）。
+- 現状: Group Managementはdomain／application／infrastructure(postgres)／presentation(graphql)。Expense Recording・Settlementは**Domainのみ**。Context固有のGraphQL PresentationはGroup Managementの`createGroup`・`myGroups`だけ（#312）。Use Caseは`createApp`の`groupManagement`へ注入する。注入するのは開発Composition（`dev/`、#314）だけで、通常mainは未注入（層ごとの状況表は`docs/engineering/backend.md`）。
 - `src/shared/*`は技術契約・Port・暗号／認証Adapter。`pg`本体を参照できるのは`shared/infrastructure/authentication/postgres/`だけ。Context横断Importや、複数Contextで使うだけを理由にした独立Package化は不可。
 - 依存方向は`apps/api/src/architecture-dependencies.spec.ts`が機械検査する。Import追加後はこのTestを確認する。
 - GraphQL業務契約の正本は`apps/api/schema.graphql`、HTTP transportは`docs/api/openapi.yaml`。
