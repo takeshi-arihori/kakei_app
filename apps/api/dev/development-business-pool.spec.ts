@@ -71,6 +71,7 @@ describe('開発用業務Poolの分離と接続待機', () => {
       expect(business.pool.options).toMatchObject({
         max: businessPoolSettings.max,
         connectionTimeoutMillis: businessPoolSettings.connectionTimeoutMillis,
+        query_timeout: businessPoolSettings.queryTimeoutMillis,
         application_name: 'kakei-group-disposable-development',
         lock_timeout: businessPoolSettings.lockTimeoutMillis,
         statement_timeout: businessPoolSettings.statementTimeoutMillis,
@@ -153,13 +154,22 @@ describe('開発用業務Poolの分離と接続待機', () => {
     }
   });
 
-  it('end後は取得できず、lease外の取得失敗は例外として呼出し元へ返すだけにする', async () => {
+  it('end後はlease外でも内でも取得を拒否し、lease内ならrollbackする', async () => {
     const business = createDevelopmentBusinessPool({
       databaseUrl: 'postgresql://user@127.0.0.1:5432/synthetic_auth_dev',
-      client: fakeClient({ fail: true }),
+      client: fakeClient({ fail: false }),
     });
-    await expect(business.pool.connect()).rejects.toThrow();
+    const { service, commits } = fakeService();
+    const guarded = business.guard(service);
+    // end前は同じFake Clientで取得できる。以後の拒否はPool終了だけが原因になる。
+    (await business.pool.connect()).release();
     await business.end();
     await expect(business.pool.connect()).rejects.toThrow();
+    expect(
+      await run(guarded, async () => {
+        await business.pool.query('SELECT 1').catch(() => undefined);
+      }),
+    ).toEqual({ status: 'unavailable' });
+    expect(commits).toEqual(['rollback']);
   });
 });

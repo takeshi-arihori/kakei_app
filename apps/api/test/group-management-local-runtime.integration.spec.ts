@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { Client } from 'pg';
+import { Client, Pool } from 'pg';
 import {
   afterAll,
   afterEach,
@@ -20,6 +20,29 @@ import {
 } from '../dev/authentication-development-runtime.js';
 import { createAuthenticationDevelopmentServer } from '../dev/authentication-development-server.js';
 import { businessPoolSettings } from '../dev/development-business-pool.js';
+import type { GroupManagementDevelopmentKeys } from '../dev/group-management-development-keys.js';
+
+// 開発Runtimeが生成したGroup鍵を観測する。Provider自体は実物のまま使う。
+const created = vi.hoisted(() => ({
+  groupKeys: [] as GroupManagementDevelopmentKeys[],
+}));
+vi.mock(
+  '../dev/group-management-development-keys.js',
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import('../dev/group-management-development-keys.js')
+      >();
+    return {
+      ...actual,
+      createGroupManagementDevelopmentKeys: () => {
+        const keys = actual.createGroupManagementDevelopmentKeys();
+        created.groupKeys.push(keys);
+        return keys;
+      },
+    };
+  },
+);
 
 const url =
   process.env.TEST_DATABASE_URL ??
@@ -222,6 +245,32 @@ describe('開発用CompositionのGroup Managementと業務GraphQL（#314）', ()
       actor,
     );
   const code = (body: GraphQLBody) => body.errors?.[0]?.extensions?.code;
+  /** 破棄済みのGroup鍵は索引・locator・DEKのどれも返さない。 */
+  const expectGroupKeysDisposed = async (
+    keys: GroupManagementDevelopmentKeys,
+  ) => {
+    const input = new Uint8Array([3, 1, 4]);
+    await expect(
+      keys.membershipIndexKeys.currentDigest({
+        purpose: 'group-actor-membership-index/v1',
+        canonicalInput: input,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      keys.locatorKeys.candidateDigests({
+        purpose: 'group-operation-locator/v2',
+        canonicalInput: input,
+      }),
+    ).rejects.toThrow();
+    expect(
+      (
+        await keys.recordKeys.allocateForSeal({
+          contextName: 'group-management',
+          groupId: randomUUID(),
+        })
+      ).status,
+    ).toBe('key-lost');
+  };
 
   it('Migrationは認証5〜7とGM 0001〜0004・0012だけを適用し、再実行で差分がない', async () => {
     await migrateAuthenticationDevelopmentDatabase(env());
@@ -411,6 +460,7 @@ describe('開発用CompositionのGroup Managementと業務GraphQL（#314）', ()
   it('lease喪失後は業務GraphQLもSERVICE_UNAVAILABLEになり、closeで両Poolの接続を閉じる', async () => {
     const lost = vi.fn();
     const runtime = await openAuthenticationDevelopmentRuntime(env(), lost);
+    const groupKeys = created.groupKeys.at(-1)!;
     const { server, base } = await listen(runtime);
     mockGoogle();
     try {
@@ -419,6 +469,14 @@ describe('開発用CompositionのGroup Managementと業務GraphQL（#314）', ()
         (await createGroup(base, owner, randomUUID())).body.errors,
       ).toBeUndefined();
       expect(await connections(businessApplication)).toBeGreaterThan(0);
+      expect(
+        (
+          await groupKeys.membershipIndexKeys.candidateDigests({
+            purpose: 'group-actor-membership-index/v1',
+            canonicalInput: new Uint8Array([1]),
+          })
+        ).length,
+      ).toBe(1);
       const pid = (
         await observer.query<{ pid: number }>(
           'SELECT pid FROM pg_stat_activity WHERE datname=$1 AND application_name=$2',
@@ -428,6 +486,8 @@ describe('開発用CompositionのGroup Managementと業務GraphQL（#314）', ()
       expect(pid).toHaveLength(1);
       await observer.query('SELECT pg_terminate_backend($1)', [pid[0].pid]);
       await vi.waitFor(() => expect(lost).toHaveBeenCalledTimes(1));
+      // lease喪失の時点でGroup鍵も破棄済み（closeを待たない）。
+      await expectGroupKeysDisposed(groupKeys);
       const before = await count('group_aggregate_record');
       expect(code((await myGroups(base, owner)).body)).toBe(
         'SERVICE_UNAVAILABLE',
@@ -448,5 +508,42 @@ describe('開発用CompositionのGroup Managementと業務GraphQL（#314）', ()
     await expect(
       openAuthenticationDevelopmentRuntime(env(), vi.fn()),
     ).rejects.toThrow('開発認証を起動できません');
+  });
+
+  it('closeは受付停止→Group鍵の破棄→認証Pool・業務Poolのendの順に行う', async () => {
+    const runtime = await openAuthenticationDevelopmentRuntime(env(), vi.fn());
+    const groupKeys = created.groupKeys.at(-1)!;
+    const dispose = vi.spyOn(groupKeys, 'dispose');
+    const end = vi.spyOn(Pool.prototype, 'end');
+    await runtime.close();
+    // 認証Poolと業務Poolを1回ずつend。どちらもGroup鍵の破棄より後に呼ぶ。
+    expect(
+      end.mock.contexts
+        .map((pool) => (pool as Pool).options.application_name)
+        .sort(),
+    ).toEqual(['kakei-auth-disposable-development', businessApplication]);
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(Math.min(...end.mock.invocationCallOrder)).toBeGreaterThan(
+      dispose.mock.invocationCallOrder[0],
+    );
+    await expectGroupKeysDisposed(groupKeys);
+    // 受付停止後は認証HTTPも業務GraphQLも処理しない。
+    expect(
+      (
+        await runtime.authentication(
+          new Request('http://localhost:3000/auth/session', {
+            headers: { 'X-Kakei-Request': '1' },
+          }),
+          '127.0.0.1',
+        )
+      ).status,
+    ).toBe(503);
+    expect(
+      await runtime.graphql.service.withAuthenticatedActor(
+        'x'.repeat(43),
+        'activity',
+        () => Promise.reject(new Error('業務を実行しない')),
+      ),
+    ).toEqual({ status: 'unavailable' });
   });
 });
