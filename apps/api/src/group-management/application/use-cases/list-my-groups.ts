@@ -135,7 +135,8 @@ const newestFirst = (left: MyGroupSummary, right: MyGroupSummary): number => {
 
 /**
  * 自分のGroup一覧のQuery Use Case（#308）。読取Portが固定版で返した候補を
- * 現在状態で再認可し、否となった候補は除外して通知する。障害と契約違反は
+ * 現在状態で再認可し、否となった候補は除外して通知する。`hasMore`は索引のhit数で
+ * 決め、競合で除かれた候補も数える（#306 2A）。障害と契約違反は
  * 一部だけ返さず一覧全体を`UNAVAILABLE`にする。
  */
 export class MyGroupQueryService {
@@ -165,9 +166,14 @@ export class MyGroupQueryService {
       throw unavailable('The Group list read port is unavailable');
     }
     const candidates = result.groups;
-    if (candidates.length > candidateLimit) {
+    const { indexHitCount } = result;
+    if (
+      !Number.isSafeInteger(indexHitCount) ||
+      indexHitCount > candidateLimit ||
+      candidates.length > indexHitCount
+    ) {
       throw unavailable(
-        'The read port returned more candidates than requested',
+        'The read port returned an inconsistent candidate count',
       );
     }
     const groupIds = new Set(candidates.map(({ id }) => id.value));
@@ -194,7 +200,7 @@ export class MyGroupQueryService {
       items: Object.freeze(
         summaries.sort(newestFirst).slice(0, MY_GROUP_LIST_LIMIT),
       ),
-      hasMore: candidates.length > MY_GROUP_LIST_LIMIT,
+      hasMore: indexHitCount > MY_GROUP_LIST_LIMIT,
     });
   }
 }
