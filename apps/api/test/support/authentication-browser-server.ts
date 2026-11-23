@@ -116,7 +116,9 @@ try {
   runtime = await openAuthenticationDevelopmentRuntime(env, () => {
     void stop();
   });
-  api = createAuthenticationDevelopmentServer(runtime.authentication);
+  api = createAuthenticationDevelopmentServer({
+    authentication: runtime.authentication,
+  });
   await new Promise<void>((resolve, reject) => {
     api!.once('error', reject);
     api!.listen(3001, '127.0.0.1', resolve);

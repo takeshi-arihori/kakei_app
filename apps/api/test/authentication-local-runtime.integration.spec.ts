@@ -220,9 +220,9 @@ describe('専用開発DBの実起動とprocess lease', () => {
   }, 20_000);
   it('実NodeでBody送信が停止しても5秒期限で固定400を返し、Cookieと認証Recordを変えない', async () => {
     const runtime = await openAuthenticationDevelopmentRuntime(env(), vi.fn());
-    const server = createAuthenticationDevelopmentServer(
-      runtime.authentication,
-    );
+    const server = createAuthenticationDevelopmentServer({
+      authentication: runtime.authentication,
+    });
     const snapshot = async () => {
       const tables = (
         await database!.query<{ table_name: string }>(
@@ -292,9 +292,11 @@ describe('専用開発DBの実起動とprocess lease', () => {
   it('実Node接続から4操作を実Storeへ通し、Forwardedではなく接続Peerの共有Rateを消費する', async () => {
     const runtime = await openAuthenticationDevelopmentRuntime(env(), vi.fn());
     const peers = new Set<string | null>();
-    const server = createAuthenticationDevelopmentServer((request, peer) => {
-      peers.add(peer);
-      return runtime.authentication(request, peer);
+    const server = createAuthenticationDevelopmentServer({
+      authentication: (request, peer) => {
+        peers.add(peer);
+        return runtime.authentication(request, peer);
+      },
     });
     const verifier = vi
       .spyOn(GoogleIdTokenVerifier.prototype, 'verify')
