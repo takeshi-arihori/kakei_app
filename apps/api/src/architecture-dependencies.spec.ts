@@ -1037,6 +1037,35 @@ describe('API architecture dependencies', () => {
     ).toBe(true);
     expect(production.has(groupKeys)).toBe(false);
   });
+  it('業務PoolとGroup Managementの開発組立はdevだけに置き、Production入口から到達させない（#314）', () => {
+    const modules = [
+      '../dev/development-business-pool.ts',
+      '../dev/group-management-development-composition.ts',
+    ].map(fixturePath);
+    for (const target of modules) {
+      for (const source of [
+        'app.ts',
+        'main.ts',
+        'recipient-invitation-runtime.ts',
+        'presentation/graphql/graphql-entry.ts',
+      ])
+        expect(
+          validateDependency(fixturePath(source), '../dev/local.js', target),
+        ).not.toBeNull();
+      expect(
+        validateDependency(
+          target,
+          './local.js',
+          fixturePath('../test/support/recipient-invitation-fixture.ts'),
+        ),
+      ).not.toBeNull();
+    }
+    const production = reachableModules(
+      ['app.ts', 'main.ts', 'recipient-invitation-runtime.ts'].map(fixturePath),
+    );
+    expect(production.has(fixturePath('app.ts'))).toBe(true);
+    for (const target of modules) expect(production.has(target)).toBe(false);
+  });
   it('IPの標準解析はHTTP共有Rate Adapterの正確なPathだけで許可する', () => {
     expect(
       validateDependency(

@@ -1,5 +1,8 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
-import type { GroupOperationLocatorKeyPort } from '../src/group-management/application/group-access-policy.js';
+import type {
+  GroupActorMembershipIndexKeyPort,
+  GroupOperationLocatorKeyPort,
+} from '../src/group-management/application/group-access-policy.js';
 import {
   importPurposeSeparatedDigest,
   type DigestPurpose,
@@ -20,6 +23,8 @@ export interface GroupManagementDevelopmentKeys {
   readonly policyDigests: PurposeSeparatedDigestPort;
   /** Context単位のoperation locator。現行世代だけを返す。 */
   readonly locatorKeys: GroupOperationLocatorKeyPort;
+  /** Context単位のActor単位Group索引（#306）。locatorとも独立した鍵で、現行世代だけを返す。 */
+  readonly membershipIndexKeys: GroupActorMembershipIndexKeyPort;
   /** 以後の利用を拒否し、所有する鍵Materialを消去する。 */
   dispose(): void;
 }
@@ -31,6 +36,8 @@ const allowedDigestPurposes: readonly DigestPurpose[] = [
   'group-operation-fingerprint/v1',
 ];
 const locatorPurpose = 'group-operation-locator/v2';
+/** #306承認・2026-11-21 Owner判断で加えた、Group単位HMACの許可Listとは別のContext単位用途。 */
+const membershipIndexPurpose = 'group-actor-membership-index/v1';
 const canonicalUuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 /** Codecが`seal-threshold`でRotationを要求する値。到達後は封印しない。 */
@@ -83,6 +90,7 @@ export const createGroupManagementDevelopmentKeys =
       allowedDigestPurposes.map((purpose) => [purpose, generate()]),
     );
     const locatorKey = generate();
+    const membershipIndexKey = generate();
 
     const recordKeys: ProtectedRecordKeyPort = {
       async allocateForSeal(input) {
@@ -163,40 +171,57 @@ export const createGroupManagementDevelopmentKeys =
       },
     };
 
-    const locatorDigest = (input: {
-      purpose: string;
-      canonicalInput: Uint8Array;
-    }) => {
-      const canonicalInput = requireCanonicalInput(input.canonicalInput);
-      if (input.purpose !== locatorPurpose || !active) return unavailable();
+    /** Context単位の用途鍵1つで、現行世代だけを返すPortを作る。旧世代を保持しない。 */
+    const contextScopedKeys = (purpose: string, key: Buffer) => {
+      const digest = (input: {
+        purpose: string;
+        canonicalInput: Uint8Array;
+      }) => {
+        const canonicalInput = requireCanonicalInput(input.canonicalInput);
+        if (input.purpose !== purpose || !active) return unavailable();
+        return {
+          digest: importPurposeSeparatedDigest(
+            createHmac('sha256', key).update(canonicalInput).digest(),
+          ),
+          digestKeyVersion: keyVersion,
+        };
+      };
       return {
-        digest: importPurposeSeparatedDigest(
-          createHmac('sha256', locatorKey).update(canonicalInput).digest(),
-        ),
-        digestKeyVersion: keyVersion,
+        async currentDigest(input: {
+          purpose: string;
+          canonicalInput: Uint8Array;
+        }) {
+          const value = digest(input);
+          await Promise.resolve();
+          // await中にdisposeされた場合は、計算済みの値も返さない。
+          if (!active) return unavailable();
+          return value;
+        },
+        async candidateDigests(input: {
+          purpose: string;
+          canonicalInput: Uint8Array;
+        }) {
+          // 旧世代を保持しないので、候補は現行世代だけになる。
+          const value = digest(input);
+          await Promise.resolve();
+          if (!active) return unavailable();
+          return [value];
+        },
       };
     };
-    const locatorKeys: GroupOperationLocatorKeyPort = {
-      async currentDigest(input) {
-        const value = locatorDigest(input);
-        await Promise.resolve();
-        if (!active) return unavailable();
-        return value;
-      },
-      async candidateDigests(input) {
-        // 旧世代を保持しないので、候補は現行世代だけになる。
-        const value = locatorDigest(input);
-        await Promise.resolve();
-        if (!active) return unavailable();
-        return [value];
-      },
-    };
+    const locatorKeys: GroupOperationLocatorKeyPort = contextScopedKeys(
+      locatorPurpose,
+      locatorKey,
+    );
+    const membershipIndexKeys: GroupActorMembershipIndexKeyPort =
+      contextScopedKeys(membershipIndexPurpose, membershipIndexKey);
 
     return {
       keyVersion,
       recordKeys,
       policyDigests,
       locatorKeys,
+      membershipIndexKeys,
       dispose() {
         active = false;
         for (const bytes of material) bytes.fill(0);

@@ -17,7 +17,7 @@ try {
     await runtime.close();
     throw new Error();
   }
-  const server = createAuthenticationDevelopmentServer(runtime.authentication);
+  const server = createAuthenticationDevelopmentServer(runtime);
   let stopping = false;
   stop = () => {
     if (stopping) return;

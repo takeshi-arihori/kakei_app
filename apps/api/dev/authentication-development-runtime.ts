@@ -15,14 +15,45 @@ import {
   createAuthenticationHttp,
   type AuthenticationHttpHandler,
 } from '../src/presentation/http/authentication/authentication-http.js';
+import type { GroupManagementGraphQLUseCases } from '../src/group-management/presentation/graphql/group-management-resolvers.js';
+import type { GraphQLAuthenticationService } from '../src/presentation/graphql/authenticated-operation.js';
+import type { GraphQLAuthenticationCapability } from '../src/presentation/graphql/graphql-request-identity.js';
 import { readAuthenticationDevelopmentConfig } from './authentication-development-config.js';
 import { createAuthenticationDevelopmentKeys } from './authentication-development-keys.js';
+import { createDevelopmentBusinessPool } from './development-business-pool.js';
+import { createGroupManagementDevelopmentUseCases } from './group-management-development-composition.js';
+import { createGroupManagementDevelopmentKeys } from './group-management-development-keys.js';
+
+/**
+ * 起動時に空であることを確かめるGroup Managementの業務表（Migration 0001〜0004・0012）。
+ * 鍵状態の`group_operation_locator_key_state`は未初期化であることを別に確かめる。
+ * Migrationへ業務表を加えたら、ここへも加える（Integration Testが一致を検査する）。
+ */
+export const groupManagementDevelopmentTables = Object.freeze([
+  'group_aggregate_record',
+  'group_participant_record',
+  'group_invitation_record',
+  'group_membership_history_record',
+  'group_invitation_history_record',
+  'group_operation_result_record',
+  'group_actor_access_index',
+  'group_operation_locator',
+  'group_operation_locator_v2',
+  'group_close_history_record',
+  'group_close_intent_registry',
+  'group_management_deletion_receipt_record',
+  'group_actor_membership_index',
+] as const);
 
 /** 単一process leaseと使い捨て鍵の有効期間を持つ開発専用Runtime。 */
 export interface AuthenticationDevelopmentRuntime {
   /** lease喪失後は保存やSDKへ進めず503を返す。 */
   readonly authentication: AuthenticationHttpHandler;
-  /** HTTP停止後に呼び、鍵・Timer・lease・Poolを解放する。 */
+  /** 業務GraphQLの本人性能力。lease喪失後は認証leaseを開かず`SERVICE_UNAVAILABLE`にする。 */
+  readonly graphql: GraphQLAuthenticationCapability;
+  /** 業務Poolと使い捨てGroup鍵へ接続したGroup ManagementのUse Case。 */
+  readonly groupManagement: GroupManagementGraphQLUseCases;
+  /** HTTP停止後に呼び、鍵・Timer・lease・両Poolを解放する。 */
   close(): Promise<void>;
 }
 
@@ -48,7 +79,12 @@ export const openAuthenticationDevelopmentRuntime = async (
   pool.on('error', () => {
     /* Poolの待機接続障害は各操作で汎用失敗とする。値を記録しない。 */
   });
+  // 認証leaseを保持したまま業務接続を待つので、Poolを分けて枯渇によるdeadlockを避ける。
+  const business = createDevelopmentBusinessPool({
+    databaseUrl: config.databaseUrl,
+  });
   const keys = createAuthenticationDevelopmentKeys();
+  const groupKeys = createGroupManagementDevelopmentKeys();
   let active = false,
     closed = false,
     lost = false;
@@ -60,6 +96,7 @@ export const openAuthenticationDevelopmentRuntime = async (
     lost = true;
     active = false;
     keys.dispose();
+    groupKeys.dispose();
     if (timer) clearInterval(timer);
     if (cleanupTimer) clearInterval(cleanupTimer);
     try {
@@ -71,13 +108,15 @@ export const openAuthenticationDevelopmentRuntime = async (
   const close = async () => {
     if (closed) return;
     closed = true;
+    // 受付停止→鍵破棄→両Poolのendの順にする（#307 Decision 3）。
     active = false;
     keys.dispose();
+    groupKeys.dispose();
     if (timer) clearInterval(timer);
     if (cleanupTimer) clearInterval(cleanupTimer);
     guard?.release(true);
     guard = undefined;
-    await pool.end();
+    await Promise.all([pool.end(), business.end()]);
   };
   try {
     guard = await pool.connect();
@@ -171,6 +210,29 @@ export const openAuthenticationDevelopmentRuntime = async (
       "UPDATE authentication.key_state SET status='active',epoch=$1 WHERE state_id=1",
       [keys.epoch],
     );
+    // Groupも同じguard Transactionで初期化する。新しいprocessの鍵で以前の状態を引き継がない。
+    await guard.query(
+      'LOCK TABLE group_operation_locator_key_state IN ACCESS EXCLUSIVE MODE',
+    );
+    const locatorState = (
+      await guard.query<{ id: number; current_key_version: string | null }>(
+        'SELECT id,current_key_version FROM group_operation_locator_key_state FOR UPDATE',
+      )
+    ).rows;
+    if (
+      locatorState.length !== 1 ||
+      locatorState[0].id !== 1 ||
+      locatorState[0].current_key_version !== null
+    )
+      throw new Error();
+    for (const table of groupManagementDevelopmentTables) {
+      if ((await guard.query(`SELECT 1 FROM ${table} LIMIT 1`)).rows.length)
+        throw new Error();
+    }
+    await guard.query(
+      'UPDATE group_operation_locator_key_state SET current_key_version=$1,updated_at=now() WHERE id=1',
+      [groupKeys.keyVersion],
+    );
     await guard.query('COMMIT');
     const rate = createPostgresAuthenticationHttpRate({
       pool,
@@ -190,10 +252,11 @@ export const openAuthenticationDevelopmentRuntime = async (
       createAuthenticationEntropy(),
       { now: Date.now },
     );
+    const security = createAuthenticationHttpSecurity();
     const handler = createAuthenticationHttp({
       service,
       rate,
-      security: createAuthenticationHttpSecurity(),
+      security,
       origin: config.origin,
       profile: 'local-development',
       clock: { now: Date.now },
@@ -254,12 +317,39 @@ export const openAuthenticationDevelopmentRuntime = async (
           },
         },
       );
+    // lease喪失後は認証leaseを開かず、喪失前に開いたOperationの結果も返さない。
+    const leaseGuarded: GraphQLAuthenticationService = {
+      withAuthenticatedActor: async (secret, usage, callback) => {
+        if (!active) return { status: 'unavailable' };
+        const result = await service.withAuthenticatedActor(
+          secret,
+          usage,
+          callback,
+        );
+        return active ? result : { status: 'unavailable' };
+      },
+    };
+    const groupManagement = createGroupManagementDevelopmentUseCases({
+      pool: business.pool,
+      keys: groupKeys,
+      onIntegrityAlert: ({ groupId }) => {
+        // 運用者が対象Groupを特定するRandom UUIDだけを出す。Actor・本文・鍵は出さない。
+        console.error('GROUP_LIST_INTEGRITY_ALERT', groupId);
+      },
+    });
     return {
       authentication: async (request, peer) => {
         if (!active) return unavailable();
         const response = await handler(request, peer);
         return active ? response : unavailable();
       },
+      graphql: {
+        origin: config.origin,
+        profile: 'local-development',
+        service: business.guard(leaseGuarded),
+        security,
+      },
+      groupManagement,
       close,
     };
   } catch {

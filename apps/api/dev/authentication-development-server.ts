@@ -1,7 +1,7 @@
 import { createServer, type ServerResponse, type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { getRequestListener } from '@hono/node-server';
-import { createApp } from '../src/app.js';
+import { createApp, type CreateAppOptions } from '../src/app.js';
 import type { AuthenticationHttpHandler } from '../src/presentation/http/authentication/authentication-http.js';
 
 const errorBody = (status: number) =>
@@ -28,13 +28,23 @@ const reject = (outgoing: ServerResponse, status: number) => {
 
 /**
  * Header切詰め/重複解釈の前に認証のTransport上限を強制する開発専用Server。
- * @param authentication 必須能力を組立済みの認証Handler。
+ * @param capabilities 組立済みの認証Handlerと、業務GraphQLの本人性能力・Group Management。
+ *   業務能力を省くと、`createApp`が業務fieldを`SERVICE_UNAVAILABLE`で封鎖する。
  * @returns 未listenのServer。呼出し元が固定loopbackでのみlistenする。
  */
 export const createAuthenticationDevelopmentServer = (
-  authentication: AuthenticationHttpHandler,
+  capabilities: Readonly<
+    { authentication: AuthenticationHttpHandler } & Pick<
+      CreateAppOptions,
+      'graphql' | 'groupManagement'
+    >
+  >,
 ): Server => {
-  const app = createApp({ authentication });
+  const app = createApp({
+    authentication: capabilities.authentication,
+    graphql: capabilities.graphql,
+    groupManagement: capabilities.groupManagement,
+  });
   const listener = getRequestListener(app.fetch, {
     overrideGlobalObjects: false,
     hostname: 'localhost',

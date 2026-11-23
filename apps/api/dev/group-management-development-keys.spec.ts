@@ -187,6 +187,8 @@ describe('開発用Group鍵Providerの許可Listとprocess境界', () => {
 
     for (const purpose of [
       'group-operation-locator/v2',
+      // Context単位の索引鍵はGroup単位HMACの許可Listへ入れない（#306 §1）。
+      'group-actor-membership-index/v1',
       'gm-recipient-code-request/v1',
       'settlement-index/v1',
     ])
@@ -231,6 +233,102 @@ describe('開発用Group鍵Providerの許可Listとprocess境界', () => {
     } as unknown as typeof locatorInput;
     await expect(keys.locatorKeys.currentDigest(wrong)).rejects.toThrow();
     await expect(keys.locatorKeys.candidateDigests(wrong)).rejects.toThrow();
+  });
+
+  it('Actor単位Group索引の鍵は専用用途だけを受け、現行世代1件を返し、他用途・別Provider生成とMaterialを共有しない', async () => {
+    const keys = createGroupManagementDevelopmentKeys();
+    const membershipInput = {
+      purpose: 'group-actor-membership-index/v1' as const,
+      canonicalInput: input,
+    };
+    const current =
+      await keys.membershipIndexKeys.currentDigest(membershipInput);
+    const candidates =
+      await keys.membershipIndexKeys.candidateDigests(membershipInput);
+    expect(current.digestKeyVersion).toBe(keys.keyVersion);
+    expect(current.digest.length).toBe(32);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].digestKeyVersion).toBe(keys.keyVersion);
+    expect(hex(candidates[0].digest)).toBe(hex(current.digest));
+    expect(
+      hex(
+        (await keys.membershipIndexKeys.currentDigest(membershipInput)).digest,
+      ),
+    ).toBe(hex(current.digest));
+
+    // 同じ入力でも、locator・Group単位HMACとは別の鍵で計算される。
+    const locator = await keys.locatorKeys.currentDigest({
+      purpose: 'group-operation-locator/v2',
+      canonicalInput: input,
+    });
+    expect(hex(locator.digest)).not.toBe(hex(current.digest));
+    for (const purpose of allowedPurposes)
+      expect(
+        hex(
+          (
+            await keys.policyDigests.digest({
+              purpose,
+              groupId,
+              canonicalInput: input,
+            })
+          ).digest,
+        ),
+      ).not.toBe(hex(current.digest));
+    const other = createGroupManagementDevelopmentKeys();
+    expect(
+      hex(
+        (await other.membershipIndexKeys.currentDigest(membershipInput)).digest,
+      ),
+    ).not.toBe(hex(current.digest));
+
+    for (const purpose of [
+      'group-operation-locator/v2',
+      'group-actor-access-index/v1',
+      'group-membership-index/v1',
+    ]) {
+      const wrong = {
+        purpose,
+        canonicalInput: input,
+      } as unknown as typeof membershipInput;
+      await expect(
+        keys.membershipIndexKeys.currentDigest(wrong),
+      ).rejects.toThrow();
+      await expect(
+        keys.membershipIndexKeys.candidateDigests(wrong),
+      ).rejects.toThrow();
+    }
+    await expect(
+      keys.locatorKeys.currentDigest({
+        ...membershipInput,
+      } as unknown as Parameters<typeof keys.locatorKeys.currentDigest>[0]),
+    ).rejects.toThrow();
+    const empty = { ...membershipInput, canonicalInput: new Uint8Array() };
+    await expect(
+      keys.membershipIndexKeys.currentDigest(empty),
+    ).rejects.toThrow();
+    await expect(
+      keys.membershipIndexKeys.candidateDigests(empty),
+    ).rejects.toThrow();
+  });
+
+  it('索引鍵の完了前・後にdisposeされた場合は、計算済みの値も返さず以後も拒否する', async () => {
+    const keys = createGroupManagementDevelopmentKeys();
+    const membershipInput = {
+      purpose: 'group-actor-membership-index/v1' as const,
+      canonicalInput: input,
+    };
+    const pending = [
+      keys.membershipIndexKeys.currentDigest(membershipInput),
+      keys.membershipIndexKeys.candidateDigests(membershipInput),
+    ];
+    keys.dispose();
+    for (const value of pending) await expect(value).rejects.toThrow();
+    await expect(
+      keys.membershipIndexKeys.currentDigest(membershipInput),
+    ).rejects.toThrow();
+    await expect(
+      keys.membershipIndexKeys.candidateDigests(membershipInput),
+    ).rejects.toThrow();
   });
 
   it('Rotation要求は対象Groupの封印を止めて必ず失敗し、Codecの封印もfail-closedになる', async () => {

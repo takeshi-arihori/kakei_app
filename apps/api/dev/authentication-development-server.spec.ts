@@ -11,7 +11,9 @@ const start = async () => {
       }),
     ),
   );
-  const server = createAuthenticationDevelopmentServer(handler);
+  const server = createAuthenticationDevelopmentServer({
+    authentication: handler,
+  });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
