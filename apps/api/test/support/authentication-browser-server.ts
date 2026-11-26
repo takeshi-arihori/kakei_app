@@ -116,9 +116,8 @@ try {
   runtime = await openAuthenticationDevelopmentRuntime(env, () => {
     void stop();
   });
-  api = createAuthenticationDevelopmentServer({
-    authentication: runtime.authentication,
-  });
+  // 開発入口（dev/main.ts）と同じく、認証に加えて業務GraphQLの本人性とGroup Managementを接続する。
+  api = createAuthenticationDevelopmentServer(runtime);
   await new Promise<void>((resolve, reject) => {
     api!.once('error', reject);
     api!.listen(3001, '127.0.0.1', resolve);

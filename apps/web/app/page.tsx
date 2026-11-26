@@ -34,6 +34,7 @@ export default function Home() {
       <p className="scope-note">1〜4人のグループに対応。アプリ内で送金は行いません。</p>
       <p className="availability-note">利用開始の準備を進めています。</p>
       <Link className="home-link" href="/login">ログインへ進む</Link>
+      <Link className="home-link" href="/groups">自分のグループを見る</Link>
     </>
   );
 }
