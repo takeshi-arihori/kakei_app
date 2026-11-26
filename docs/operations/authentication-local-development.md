@@ -48,4 +48,4 @@ lease接続の切断またはProbe失敗時はHTTP受付と業務GraphQLを停�
 
 Webの`.env.local`にAPIと同じ公開Client IDを設定し、Owner管理のGoogle Web Clientへ`http://localhost:3000`（Google推奨の`http://localhost`も）をAuthorized JavaScript Originとして登録します。Client Secretは使用しません。Webを起動して`http://localhost:3000/login`を開き、「Googleログインを準備」→公式Google button→ログイン中→再読込→ログアウトを確認します。Google画面を閉じた後は「ログインを中止」から再開始できます。
 
-認証E2Eは`pnpm --filter @kakei/web test:auth:e2e`。固定Portを使用するため、通常の開発API/Webは先に止めます。専用Test fixtureは試験所有DBをcleanupしますが、通常devの終了/再起動に自動resetはありません。合成画面/実SDK署名の結果と、実Google本人操作の結果は[UI契約](../security/google-authentication-ui.md)に従い別記録にします。
+認証E2Eは`pnpm --filter @kakei/web test:auth:e2e`。同じ専用fixtureが業務GraphQLの本人性とGroup Managementも接続し、`/groups`の作成・一覧（#315）を実PostgreSQL 17で検証する。固定Portを使用するため、通常の開発API/Webは先に止めます。専用Test fixtureは試験所有DBをcleanupしますが、通常devの終了/再起動に自動resetはありません。合成画面/実SDK署名の結果と、実Google本人操作の結果は[UI契約](../security/google-authentication-ui.md)に従い別記録にします。

@@ -47,6 +47,7 @@ Knowledge Stateは次の3値だけを使う。
 - Schema: [`apps/api/schema.graphql`](../../apps/api/schema.graphql)
 - Implementation: [`group-management-resolvers.ts`](../../apps/api/src/group-management/presentation/graphql/group-management-resolvers.ts)、[`group-graphql-mapping.ts`](../../apps/api/src/group-management/presentation/graphql/group-graphql-mapping.ts)、[`use-case-inputs.ts`](../../apps/api/src/group-management/application/use-case-inputs.ts)。Use Caseは`createApp`の`groupManagement`へ注入する（開発Compositionへの注入は#314）
 - Test: [`group-management-graphql.spec.ts`](../../apps/api/src/group-management/presentation/graphql/group-management-graphql.spec.ts)（Fakeの認証能力とUse Case）、[`app.spec.ts`](../../apps/api/src/app.spec.ts)。実DBでの作成と再送は#314
+- Web Client（#315）: BrowserのClient Componentが同一Originの`/graphql`（[`app/graphql/route.ts`](../../apps/web/app/graphql/route.ts)、developmentだけ固定loopbackへ転送）へ送る。CSRF Tokenは`/auth/session`から得る。操作IDの保持と再送は[`group-creation-controller.ts`](../../apps/web/src/features/groups/group-creation-controller.ts)、送信は[`create-group-client.ts`](../../apps/web/src/features/groups/graphql/create-group-client.ts)。Server Actionsは使わない
 
 ## Query.myGroups
 
@@ -64,6 +65,7 @@ Knowledge Stateは次の3値だけを使う。
 - Schema: [`apps/api/schema.graphql`](../../apps/api/schema.graphql)
 - Implementation: [`group-management-resolvers.ts`](../../apps/api/src/group-management/presentation/graphql/group-management-resolvers.ts)、[`group-graphql-mapping.ts`](../../apps/api/src/group-management/presentation/graphql/group-graphql-mapping.ts)、[`list-my-groups.ts`](../../apps/api/src/group-management/application/use-cases/list-my-groups.ts)。PostgreSQLの読取Adapterは#310、開発Compositionへの注入は#314
 - Test: [`group-management-graphql.spec.ts`](../../apps/api/src/group-management/presentation/graphql/group-management-graphql.spec.ts)、[`list-my-groups.spec.ts`](../../apps/api/src/group-management/application/use-cases/list-my-groups.spec.ts)、[`app.spec.ts`](../../apps/api/src/app.spec.ts)。実DBでの一覧は#310・#314
+- Web Client（#315）: `/groups`のServer Componentが[`my-groups-server.ts`](../../apps/web/src/features/groups/graphql/my-groups-server.ts)（`server-only`）からServer間で送る。開発Session Cookie 1つだけを転送し、`X-Kakei-Request: 1`を付け、Originを付けず、no-store。development以外ではAPIへ接続しない
 
 ## 入口制限
 

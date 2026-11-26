@@ -123,6 +123,8 @@ CIは `pnpm check` のBuild後、Chromiumを `playwright install --with-deps chr
 
 入口の検証は目的・日本語・Keyboard Focus・320px／Desktop・200%のCSS zoom／文字拡大・Contrast・Reduced Motion・不明Routeからの復帰を対象にする。Chromiumの検証結果から全BrowserやWCAG全適合を主張しない。NativeブラウザZoom、Screen Reader実機、Firefox／WebKitは別Evidenceが必要。機能接続後の主要業務journeyは各Sliceで追加する。
 
+業務journeyはTest所有のAPI fixture（実SDK署名検証・実PostgreSQL 17・使い捨て鍵）が必要なため、`pnpm --filter @kakei/web test:auth:e2e`（localhost:3000のdev Server）で検証する。Group作成・一覧（#315）がこれに当たる。Production Buildの`test:e2e`では、業務Routeが開発APIへ接続しないことを確認する。Web Unit TestのVitestは、`server-only`をNext.jsのServer側と同じ空Moduleへ解決する（`apps/web/vitest.config.mts`）。
+
 開発依存 `@playwright/test` は1.63.0に固定する。公式の[導入手順](https://playwright.dev/docs/intro)、[Release Notes](https://playwright.dev/docs/release-notes)、[Apache-2.0 License](https://github.com/microsoft/playwright/blob/main/LICENSE)、[Security Advisories](https://github.com/microsoft/playwright/security/advisories)を2026-10-01に確認。公開Advisory一覧に掲載なし。Production依存への追加は行わず、LockfileのNext optional peer解決とPlaywright自身だけを更新する。
 
 ## 完了条件
