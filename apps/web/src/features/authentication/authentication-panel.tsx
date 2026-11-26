@@ -1,4 +1,5 @@
 "use client";
+import Link from 'next/link';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createAuthenticationClient } from './authentication-client';
 import { AuthenticationController } from './authentication-controller';
@@ -47,6 +48,7 @@ export function AuthenticationPanel(props: Readonly<{
     {snapshot.phase==='anonymous' && <button type="button" onClick={()=>{if(requiresGoogleReload())restart();else void controller.begin();}}>Googleログインを準備</button>}
     {showGoogle && <div className="google-button" ref={button} aria-label="Googleログイン"/>}
     {['preparing','google','waiting'].includes(snapshot.phase) && <button type="button" className="secondary" onClick={()=>controller.cancel()}>ログインを中止</button>}
+    {snapshot.phase==='authenticated' && <Link className="home-link" href="/groups">自分のグループを見る</Link>}
     {snapshot.phase==='authenticated' && <button type="button" onClick={()=>void controller.logout().then(()=>{if(controller.getSnapshot().message==='ログアウトしました。')disableGoogleAutoSelect();})}>ログアウト</button>}
     {snapshot.phase==='restart' && <button type="button" onClick={restart}>ログインをやり直す</button>}
     {snapshot.phase==='error' && <div className="auth-actions"><button type="button" disabled={cooling} onClick={()=>void controller.refresh()}>状態を確認する</button><button type="button" className="secondary" disabled={cooling} onClick={restart}>ログインをやり直す</button></div>}

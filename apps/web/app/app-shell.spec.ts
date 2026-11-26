@@ -17,6 +17,8 @@ describe('共有割り勘の入口と共通外枠', () => {
     expect(html).not.toMatch(/<button|<input/);
     expect(html).toContain('href="/login"');
     expect(html).toContain('ログインへ進む');
+    expect(html).toContain('href="/groups"');
+    expect(html).toContain('自分のグループを見る');
   });
 
   it('日本語の外枠がRoute内容を単一の本文へ配置する', () => {

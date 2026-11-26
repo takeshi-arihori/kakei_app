@@ -149,12 +149,22 @@ main:focus-visible {
 
 .auth-title { margin: 0; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.35; }
 .auth-intro { color: var(--muted); max-width: 40rem; }
-.auth-card { max-width: 38rem; padding: clamp(1rem, 4vw, 2rem); margin-top: 2rem; border: 1px solid var(--line); border-radius: 1.2rem; background: white; }
-.auth-card h2 { margin-top: 0; font-size: 1.4rem; }
-.auth-card button { min-height: 44px; padding: .7rem 1rem; margin: .5rem .5rem .5rem 0; border: 2px solid var(--accent); border-radius: .6rem; background: var(--accent); color: white; font: inherit; font-weight: 700; cursor: pointer; }
+.auth-card, .group-create { max-width: 38rem; padding: clamp(1rem, 4vw, 2rem); margin-top: 2rem; border: 1px solid var(--line); border-radius: 1.2rem; background: white; }
+.auth-card h2, .group-create h2 { margin-top: 0; font-size: 1.4rem; }
+.auth-card button, .group-create button { min-height: 44px; padding: .7rem 1rem; margin: .5rem .5rem .5rem 0; border: 2px solid var(--accent); border-radius: .6rem; background: var(--accent); color: white; font: inherit; font-weight: 700; cursor: pointer; }
 .auth-card button.secondary { color: var(--accent); background: white; }
-.auth-card button:disabled { opacity: .6; cursor: wait; }
-.auth-card button:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+.auth-card button:disabled, .group-create button:disabled { opacity: .6; cursor: wait; }
+.auth-card button:focus-visible, .group-create button:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
 .auth-note { margin-top: 1.5rem; font-size: .9rem; color: var(--muted); }
 .google-button { min-height: 44px; max-width: 100%; overflow-x: auto; margin: 1rem 0; zoom: 1.1; }
 .auth-actions { display: flex; flex-wrap: wrap; }
+
+.group-list { margin-top: 2.5rem; }
+.group-list h2 { font-size: 1.4rem; }
+.group-list > p { color: var(--muted); }
+.group-list ol { display: grid; gap: 1rem; margin: 0; padding: 0; list-style: none; }
+.group-item { min-width: 0; padding: clamp(1rem, 4vw, 1.6rem); border: 1px solid var(--line); border-radius: 1.2rem; background: white; }
+.group-item h3 { margin: 0 0 .8rem; font-size: 1.15rem; }
+.group-item dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .6rem 1.5rem; margin: 0; }
+.group-item dt { color: var(--muted); font-size: .9rem; }
+.group-item dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
