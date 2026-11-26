@@ -7,8 +7,9 @@ test('入口で目的と利用開始前の状態を確認できる', async ({ pa
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('支出から精算まで、グループで。');
   await expect(page.getByRole('list', { name: '共有割り勘の流れ' }).getByRole('listitem')).toHaveCount(3);
   await expect(page.getByText('利用開始の準備を進めています。')).toBeVisible();
-  await expect(page.getByRole('link')).toHaveCount(3);
+  await expect(page.getByRole('link')).toHaveCount(4);
   await expect(page.getByRole('link', {name:'ログインへ進む'})).toHaveAttribute('href','/login');
+  await expect(page.getByRole('link', {name:'自分のグループを見る'})).toHaveAttribute('href','/groups');
   await expect(page.getByRole('button')).toHaveCount(0);
 });
 
