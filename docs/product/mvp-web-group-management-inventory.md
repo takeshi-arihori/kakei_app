@@ -27,7 +27,7 @@ Group、Active Membership、Owner Role、Invitation、Close Intent、Archive情�
 | [Group終了 ADR #73](../adr/group-close-consistency-and-retention-boundary.md) | OwnerがClose Intentを開始。Closing／Canceling、fence／Receipt、同じIntentでの再試行、取消競合、Archive、owner-at-archive、読み取り専用、1暦年のRetention境界。 |
 | [現行業務モデル](current-model.md) | Group・Membership・CSV・Retentionの利用者向けConfirmed Ruleの統合正本。特にGroup Role／Invitation、Group終了、CSV Exportの各節。 |
 | [未確定・未移行Gate](design-gates.md) | 本番本人性、配送、Context間認可、Persistence・Retention運用、Production wiringのGate。 |
-| [API設計書](../api/README.md)／[GraphQL Operation Trace](../api/graphql-contracts.md) | 現行実装済み公開GraphQL Operationは疎通確認用Shared APIの`Query.apiStatus`だけ。Group Management等の業務Operationは未実装として扱う。 |
+| [API設計書](../api/README.md)／[GraphQL Operation Trace](../api/graphql-contracts.md) | 公開GraphQL Operationは疎通確認用Shared APIの`Query.apiStatus`と、Group Managementの`Mutation.createGroup`・`Query.myGroups`（#312、[Group一覧ADR](../adr/group-create-and-my-group-list-contract.md)）。その他の業務Operationは未実装として扱う。 |
 | [Frontend Rule](../engineering/frontend.md) | 表示・入力と認可／業務Ruleの責務境界、Server Stateと画面state、Loading／Error／Conflict、Accessibilityの確認軸。 |
 | [Coding Rule](../engineering/coding-standards.md) | Domain Ruleの正本、認可・Group scope、Error境界、Context間依存方向。 |
 | [Testing Rule](../engineering/testing.md) | 文書変更に対する構造・リンク・参照整合性の検証方針。 |
@@ -38,8 +38,8 @@ Group、Active Membership、Owner Role、Invitation、Close Intent、Archive情�
 
 | Capability | Operation／State | 業務Rule／操作主体 | Data Owner／Authorization Source／境界 | Proposed境界分類 | Knowledge State／Gate／State・failure observation | Follow-up |
 | --- | --- | --- | --- | --- | --- | --- |
-| Group Management | Group作成 | 本人がGroupを作り、作成者を最初のParticipantかつ唯一のOwnerとする。Active人数は1〜4人。 | Group Management。内部は信頼済みActor本人として作成する（#35／#36）。 | 独立screen（Proposed）。既存Groupを持たない利用者にも作成入力の入口が必要なため。入力項目・既定名・成功後の遷移は決めない。 | RuleはConfirmed。画面と本番本人性／MutationはGate。 結果不明・競合時の回復は§5.1のConfirmed契約を参照。 | §7のNavigation／screen review、およびAPI Gate後のGroup作成・選択slice。 |
-| Group Management | Group選択 | 1人が複数Groupを作成・参加できる。選択対象のMembership／Actor単位のGroup一覧Queryは公開契約に存在しない。 | Group ManagementがMembershipを所有。非在籍者にはGroupの存在を漏らさない（#36／#55）。 | 独立screen（Proposed）。複数Groupから操作対象のscopeを選ぶ入口が必要なため。検索・並び順・選択後の遷移は決めない。 | 複数Group所属はConfirmed。検索・並び順・空状態・公開Read APIはOpen Question／Gate。 | §7のNavigation／screen review、およびGroup一覧Read contract。 |
+| Group Management | Group作成 | 本人がGroupを作り、作成者を最初のParticipantかつ唯一のOwnerとする。Active人数は1〜4人。 | Group Management。内部は信頼済みActor本人として作成する（#35／#36）。 | `/groups`の一覧画面の中の操作（[Group一覧ADR](../adr/group-create-and-my-group-list-contract.md) §5でConfirmed、#315で実装）。入力項目はなく、成功後は同じ画面の一覧を取り直す。作成専用Routeは作らない。 | RuleはConfirmed。開発用同一Origin構成での画面とMutationは#315でConfirmed。本番本人性はGate。 結果不明・競合時の回復は§5.1のConfirmed契約を参照。 | 本番本人性のProduction Gate。 |
+| Group Management | Group選択 | 1人が複数Groupを作成・参加できる。Actor単位の自分のGroup一覧は`Query.myGroups`（#312）で公開契約になった。画面は`/groups`（#315）。 | Group ManagementがMembershipを所有。非在籍者にはGroupの存在を漏らさない（#36／#55）。 | `/groups`（Server Componentで一覧を取得、未ログインは`/login`へ）。行はLinkにせず、`/groups/[groupId]`はGroup概要用に予約する。検索・選択後の遷移は決めない。 | 複数Group所属はConfirmed。公開Read API・並び順（作成の新しい順）・最大50件・空状態の応答は[Group一覧ADR](../adr/group-create-and-my-group-list-contract.md)と#312でConfirmed。画面は#315でConfirmed。検索はOpen Question。 | Group概要（`/groups/[groupId]`）のslice。 |
 | Group Management | Group概要 | Group名等の表示属性・概要項目は初回境界で必須化されていない。Active／Closing／Canceling／ArchivedのLifecycleは業務上区別される。 | Group ManagementのGroup state。参照時に認可済みGroup scopeが必要。 | 既存screen内state transition（Proposed）。選択中GroupのLifecycleを同じscopeで観測するため。概要項目、表示順は決めない。 | LifecycleはConfirmed。概要内容・公開Read APIはOpen Question／Gate。 | §7のNavigation／screen review、およびGroup一覧Read contract。 |
 | Group Management | Active Participant／Membership表示 | 参加中人数は1〜4人。Ownerは1人。Leave後も過去Membershipを削除しない。再参加は新Participant IDで別履歴となる。 | Group ManagementがMembership／Owner Roleを所有。閲覧を許すActorと履歴範囲は#55のAccess Policyに従う。 | 既存screen内state transition（Proposed）。選択中Groupの概要と同じscopeで在籍・Roleを確認するため。全履歴・個人情報の表示範囲は未決。 | 件数・Role・履歴RuleはConfirmed。表示属性と履歴の範囲はOpen Question。 | §7のNavigation／screen review、およびMembership・Owner操作slice。 |
 | Group Management | Invitation作成 | 現在OwnerがActive Groupで招待を作る。4人なら拒否。3人以下でもInvitationは人数枠を予約しない。 | Group Management。current Ownerを内部で再認可（#35／#36／#52）。 | dialog／補助flow（Proposed）。選択中Groupで招待先入力を伴う操作を行うため。招待先の入力UIは未定。 | RuleはConfirmed。宛先解決、本人性、配送、公開Mutation／ErrorはGate。 結果不明・競合時の回復は§5.1のConfirmed契約を参照。 | §7のInvitation lifecycle slice。 |
@@ -72,7 +72,7 @@ Group、Active Membership、Owner Role、Invitation、Close Intent、Archive情�
 
 ## 5. 認可・エラー・API Gate
 
-- [API契約正本](../api/README.md)と[Operation Trace](../api/graphql-contracts.md)で確認できる実装済み公開GraphQL Operationは疎通確認用Shared APIの`Query.apiStatus`のみであり、業務Operationではない。Group ManagementのQuery／Mutationは未実装であり、この文書から追加・推定しない。
+- [API契約正本](../api/README.md)と[Operation Trace](../api/graphql-contracts.md)で確認できる実装済み公開GraphQL Operationは疎通確認用Shared APIの`Query.apiStatus`と、Group Managementの`Mutation.createGroup`・`Query.myGroups`（#312）である。それ以外のGroup ManagementのQuery／Mutationは未実装であり、この文書から追加・推定しない。
 - #36の信頼済みActorSubjectは内部Application契約であり、利用者入力のrole、participant ID、subjectを信頼済み本人性へ昇格させない。本番Authentication Provider、Session、Token、本人とInvitation宛先の照合が未決のため、Group画面の実操作は公開接続Gateを持つ。
 - #36／#55に従い、非在籍者や他Group IDの参照からGroupの存在が漏れない。公開応答の`UnavailableToActor`変換、NotFound／Forbiddenの扱い、認証切れ、Rate limit、公開Error codeは未決。UIが独自文言をConfirmed扱いしない。
 - Current Owner／Active Participantの許可範囲はサーバー側の固定Group versionと保存条件で検証される。権限変更と競合した画面表示や操作は、Server結果を正本とし、Client側状態だけで成功を表示しない。

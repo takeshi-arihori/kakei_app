@@ -73,7 +73,8 @@ export const executeApiStatus = async (
   try {
     response = await fetchImpl(endpoint, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      // APIは全GraphQL RequestにこのHeaderを要求する（preflightなしのCross-site送信を拒否）。
+      headers: { 'content-type': 'application/json', 'x-kakei-request': '1' },
       body: JSON.stringify({ query: API_STATUS_DOCUMENT }),
     });
   } catch (cause) {

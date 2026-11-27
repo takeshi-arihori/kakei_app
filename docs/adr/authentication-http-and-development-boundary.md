@@ -5,6 +5,7 @@
 - Decision Owner: Project Owner
 - Related: [Task #218](https://github.com/takeshi-arihori/kakei_app/issues/218)、[Epic #202](https://github.com/takeshi-arihori/kakei_app/issues/202)
 - Supplements: [認証Lifecycle ADR](google-login-actor-session.md)、[A2保存ADR](authentication-protected-storage.md)
+- Supplemented by: [使い捨て開発CompositionへのGroup Managementと開発用Group鍵の追加](development-composition-group-management.md)（#307、開発用Compositionの対象をGroup Managementへ広げる）
 - 詳細契約: [HTTP契約](../security/authentication-http-boundary.md)
 
 ## Context

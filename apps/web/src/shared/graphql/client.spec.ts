@@ -4,6 +4,7 @@ import {
   ApiGraphQLError,
   ApiTransportError,
   executeApiStatus,
+  type FetchLike,
 } from './client.js';
 
 describe('GraphQL API client', () => {
@@ -14,6 +15,19 @@ describe('GraphQL API client', () => {
 
     await expect(executeApiStatus('/graphql', fetch)).resolves.toEqual({
       status: 'ok',
+    });
+  });
+
+  it('APIが要求するX-Kakei-RequestとJSONのPOSTで送る', async () => {
+    const fetch = vi.fn<FetchLike>(async () =>
+      Response.json({ data: { apiStatus: { status: 'ok' } } }),
+    );
+
+    await executeApiStatus('/graphql', fetch);
+
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-kakei-request': '1' },
     });
   });
 

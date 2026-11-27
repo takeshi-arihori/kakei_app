@@ -183,6 +183,12 @@ const validateProductionModuleLocation = (path: string): string | null => {
   return null;
 };
 
+/** Context Presentationが参照できる共通GraphQLの契約（認証能力の型と公開Error）。 */
+const sharedGraphQLContracts: readonly string[] = [
+  'presentation/graphql/authenticated-operation.ts',
+  'presentation/graphql/public-graphql-error.ts',
+];
+
 const validateDependency = (
   sourcePath: string,
   specifier: string,
@@ -270,10 +276,15 @@ const validateDependency = (
       : 'shared infrastructure may depend only on shared infrastructure or shared application';
   }
   if (source.kind === 'shared-presentation') {
+    // 本人性・CSRFは共通GraphQLへ集約し、認証Application（型・Port）だけを参照させる。
     return target.kind === 'shared-presentation' ||
-      (target.kind === 'context' && target.layer === 'presentation')
+      (target.kind === 'context' && target.layer === 'presentation') ||
+      (target.kind === 'shared-application' &&
+        relativeToSource(resolvedPath).startsWith(
+          'shared/application/authentication/',
+        ))
       ? null
-      : 'shared GraphQL composition may depend only on shared or context presentation';
+      : 'shared GraphQL may depend only on shared/context presentation or authentication application';
   }
 
   if (source.kind === 'authentication-http') {
@@ -305,7 +316,9 @@ const validateDependency = (
       : `${source.context} application has an inward dependency violation`;
   }
   if (source.layer === 'presentation') {
-    return (target.kind === 'shared-presentation' && target.generated) ||
+    return (target.kind === 'shared-presentation' &&
+      (target.generated ||
+        sharedGraphQLContracts.includes(relativeToSource(resolvedPath)))) ||
       (target.kind === 'context' &&
         ['presentation', 'application'].includes(target.layer))
       ? null
@@ -913,6 +926,46 @@ describe('API architecture dependencies', () => {
       ),
     ).not.toBeNull();
   });
+  it('共通GraphQLは認証Applicationだけに依存し、Context Presentationは共通の認証型・公開Errorだけを使う', () => {
+    const endpoint = fixturePath('presentation/graphql/graphql-entry.ts');
+    for (const target of [
+      'shared/application/authentication/google-authentication-service.ts',
+      'shared/application/authentication/authentication-http-ports.ts',
+    ])
+      expect(
+        validateDependency(endpoint, './local.js', fixturePath(target)),
+      ).toBeNull();
+    for (const target of [
+      'shared/infrastructure/authentication/authentication-http-security.ts',
+      'shared/application/purpose-separated-digest.ts',
+      'presentation/http/authentication/authentication-http-input.ts',
+      'group-management/application/group-command-service.ts',
+    ])
+      expect(
+        validateDependency(endpoint, './local.js', fixturePath(target)),
+      ).not.toBeNull();
+
+    const resolver = fixturePath(
+      'group-management/presentation/graphql/resolvers.ts',
+    );
+    for (const target of [
+      'presentation/graphql/authenticated-operation.ts',
+      'presentation/graphql/public-graphql-error.ts',
+      'presentation/graphql/generated/resolvers.ts',
+    ])
+      expect(
+        validateDependency(resolver, './local.js', fixturePath(target)),
+      ).toBeNull();
+    for (const target of [
+      'presentation/graphql/graphql-entry.ts',
+      'shared/application/authentication/google-authentication-service.ts',
+      'shared/application/authentication/authentication-ports.ts',
+      'presentation/http/authentication/authentication-http.ts',
+    ])
+      expect(
+        validateDependency(resolver, './local.js', fixturePath(target)),
+      ).not.toBeNull();
+  });
   it('開発入口は実Adapterを組めるがProductionとTest-only Providerの境界を守る', () => {
     const dev = fixturePath('../dev/authentication-development-runtime.ts');
     expect(
@@ -941,6 +994,77 @@ describe('API architecture dependencies', () => {
       expect(
         validateDependency(fixturePath(source), '../dev/local.js', dev),
       ).not.toBeNull();
+  });
+  it('開発用Group鍵はdevだけに置き、Production入口から到達させずTest-only fixtureを参照させない', () => {
+    const groupKeys = fixturePath(
+      '../dev/group-management-development-keys.ts',
+    );
+    expect(
+      validateDependency(
+        groupKeys,
+        './local.js',
+        fixturePath(
+          'group-management/infrastructure/postgres/group-repository.ts',
+        ),
+      ),
+    ).toBeNull();
+    expect(
+      validateDependency(
+        groupKeys,
+        './local.js',
+        fixturePath('../test/support/recipient-invitation-fixture.ts'),
+      ),
+    ).not.toBeNull();
+    for (const source of [
+      'app.ts',
+      'main.ts',
+      'recipient-invitation-runtime.ts',
+      'group-management/infrastructure/postgres/group-repository.ts',
+    ])
+      expect(
+        validateDependency(fixturePath(source), '../dev/local.js', groupKeys),
+      ).not.toBeNull();
+    const production = reachableModules(
+      ['app.ts', 'main.ts', 'recipient-invitation-runtime.ts'].map(fixturePath),
+    );
+    // 探索が入口の外へ届かなければ、次の検査は何も証明しない。
+    expect(
+      production.has(
+        fixturePath(
+          'group-management/application/use-cases/registered-recipient-invitation-service.ts',
+        ),
+      ),
+    ).toBe(true);
+    expect(production.has(groupKeys)).toBe(false);
+  });
+  it('業務PoolとGroup Managementの開発組立はdevだけに置き、Production入口から到達させない（#314）', () => {
+    const modules = [
+      '../dev/development-business-pool.ts',
+      '../dev/group-management-development-composition.ts',
+    ].map(fixturePath);
+    for (const target of modules) {
+      for (const source of [
+        'app.ts',
+        'main.ts',
+        'recipient-invitation-runtime.ts',
+        'presentation/graphql/graphql-entry.ts',
+      ])
+        expect(
+          validateDependency(fixturePath(source), '../dev/local.js', target),
+        ).not.toBeNull();
+      expect(
+        validateDependency(
+          target,
+          './local.js',
+          fixturePath('../test/support/recipient-invitation-fixture.ts'),
+        ),
+      ).not.toBeNull();
+    }
+    const production = reachableModules(
+      ['app.ts', 'main.ts', 'recipient-invitation-runtime.ts'].map(fixturePath),
+    );
+    expect(production.has(fixturePath('app.ts'))).toBe(true);
+    for (const target of modules) expect(production.has(target)).toBe(false);
   });
   it('IPの標準解析はHTTP共有Rate Adapterの正確なPathだけで許可する', () => {
     expect(

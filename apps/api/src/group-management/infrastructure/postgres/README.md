@@ -7,7 +7,23 @@
 - [PostgresGroupCommitKernel](group-commit-kernel.ts)が既存locator key-state、CloseIntent登録、State Writer、保護operation、共通locatorを所有する。PoolやTransaction制御を持たない。
 - [PostgresGroupRepository](group-repository.ts)はstandaloneのBEGIN/COMMIT/rollback/releaseと、Unique敗者の全rollback後の成功照会を所有する。COMMIT送信後の障害は接続を破棄し、確定失敗とせず同operationで照合する。
 - [State Writer](group-state-writer.ts)と[Preparer](group-record-preparer.ts)はoperation形式に依存せず、既存CAS/Policy版/現在行/追記履歴/在籍索引を共用する。
+- #309: 同じState Writerが、[Actor単位のGroup索引](../../../../../../docs/adr/group-actor-membership-index.md)`group_actor_membership_index`も既存の在籍索引と同じActor集合・同じTransactionで置き換える。digestはContext単位の`GroupActorMembershipIndexKeyPort.currentDigest`（現行鍵版だけ）で作り、GroupIdを入力に含めない。鍵の失敗・不正値は保存全体を`Unavailable`にする。読取は下の#310の節。
 - [共通Reader](group-read-repository.ts)はActor/opの全Command・全Group共通namespaceを読む。[operation codec](group-operation-record.ts)は旧payloadVersion1をbyte不変で使い、新payloadVersion2だけを追加する。Envelope/AAD/schemaVersionは既存形式を維持する。新旧actionの衝突は両側でMismatchにし、新actionを文字列fingerprintへ偽装しない。
+
+## #310 自分のGroup一覧の読取
+
+[`PostgresMyGroupListReader`](my-group-list-reader.ts)が[Group一覧ADR](../../../../../../docs/adr/group-create-and-my-group-list-contract.md)論点4と[Actor単位のGroup索引ADR](../../../../../../docs/adr/group-actor-membership-index.md)§2に従い、Applicationの`MyGroupListReadPort`を実装する。業務Poolの接続を自分で取得し、1 TransactionのBEGIN／COMMIT／ROLLBACK／releaseを所有する。認証Poolやleaseは扱わず、業務Transactionをleaseの内側で開閉するのは呼出し側（[業務GraphQLの認証境界ADR](../../../../../../docs/adr/business-graphql-authentication-boundary.md)）である。
+
+1. 件数上限（1〜51）を検証し、鍵Portの`candidateDigests`で現行＋Retiredの全候補digestを得る。候補0件・空digest・不正／重複した鍵版は照会せずに失敗する。鍵Providerの待機中は接続を取らない。
+2. 全候補のOR条件で`group_actor_membership_index`を引き、`group_aggregate_record.created_at`の新しい順（同時刻は`group_id`昇順）に最大`limit`件のGroupIdを得る。1つのGroupが複数の鍵版でhitする不整合は失敗にする。全候補missならGroup行を読まず、Group鍵の取得も復号もしない。
+3. hitしたGroupをCommandの`FOR UPDATE`と同じGroupId昇順に`FOR SHARE`する。Lock待ちの間に削除されたGroupは除く。
+4. Lock後に自分の索引行が残っているかを同じ候補digestで再確認する。消えていればLeave等との正常な競合として、復号せず、Alertもせずに除く。
+5. 残ったGroupだけを既存の[共通Reader](group-read-repository.ts)で復号し、固定した`aggregate_version`／`access_policy_version`と一致することを確かめる。
+6. commitし、Groupと索引のhit数（競合で除いた件数を含む）を返す。
+
+索引行が残っているのに再認可で否になるGroupは返す。再認可と除外はApplicationが行い、[通知Adapter](../my-group-list-integrity-alert.ts)が固定の種別と`groupId`だけをCompositionの通知先へ渡す。鍵Port・接続・SQL・Lock・復号・版の不一致は一覧全体を`Unavailable`にしてrollbackし、rollbackにも失敗した接続はPoolへ戻さず破棄する。Lock timeout等のTransaction設定と、開発用鍵Providerの用途追加は#314のCompositionが持つ。Security auditは書かない（Group一覧ADR論点4）。
+
+`test/my-group-list-reader.integration.spec.ts`は実PostgreSQLで、miss時の復号0、他Actorの非開示、並び・上限・Retired鍵版、2接続でのLock後の競合除外（Leave・削除）とcommit後の版、索引の不整合時のApplicationでの除外と通知、hit数による`hasMore`、各障害の全体失敗とLock解放を検証する。`my-group-list-reader.spec.ts`はrollback失敗時の接続破棄を検証する。
 
 ## 認証Scopeへの参加
 

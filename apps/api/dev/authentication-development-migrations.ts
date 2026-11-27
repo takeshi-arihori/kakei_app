@@ -4,7 +4,25 @@ import { applySqlMigrations } from '../src/group-management/infrastructure/postg
 import { readAuthenticationDevelopmentConfig } from './authentication-development-config.js';
 
 /**
- * Operatorの明示操作で専用開発DBに認証Migrationだけを追加する。resetは行わない。
+ * 使い捨て開発DBへ適用するMigration（#307 Decision 2）。GMの0010（招待enlist）と、
+ * 認証8・9・11（招待コード）は使わない表と鍵状態を置くことになるので含めない。
+ */
+const developmentMigrationFiles = Object.freeze([
+  { directory: 'group-management', name: '0001_group_management_storage' },
+  { directory: 'group-management', name: '0002_group_locator_v2' },
+  { directory: 'group-management', name: '0003_close_intent_registry' },
+  { directory: 'group-management', name: '0004_group_management_retention' },
+  { directory: 'authentication', name: '0005_authentication_schema' },
+  { directory: 'authentication', name: '0006_authentication_inventory' },
+  { directory: 'authentication', name: '0007_authentication_http_rate' },
+  {
+    directory: 'group-management',
+    name: '0012_group_actor_membership_index',
+  },
+]);
+
+/**
+ * Operatorの明示操作で専用開発DBに認証とGroup ManagementのMigrationを追加する。resetは行わない。
  * @param env 専用loopback DB/Client設定。通常DB_URLからfallbackしない。
  * @throws 接続/所有名/PG17/稼働lease/Checksum/DDL障害では固定文言で拒否する。
  */
@@ -43,18 +61,13 @@ export const migrateAuthenticationDevelopmentDatabase = async (
       ).rows[0]?.acquired !== true
     )
       throw new Error();
-    const names = [
-      '0005_authentication_schema',
-      '0006_authentication_inventory',
-      '0007_authentication_http_rate',
-    ];
     const migrations = await Promise.all(
-      names.map(async (name, index) => ({
-        version: index + 5,
-        name: name.slice(5).replaceAll('_', '-'),
+      developmentMigrationFiles.map(async (file) => ({
+        version: Number(file.name.slice(0, 4)),
+        name: file.name.slice(5).replaceAll('_', '-'),
         sql: await readFile(
           new URL(
-            '../migrations/authentication/' + name + '.sql',
+            '../migrations/' + file.directory + '/' + file.name + '.sql',
             import.meta.url,
           ),
           'utf8',

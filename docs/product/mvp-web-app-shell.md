@@ -11,7 +11,7 @@
 ## 入口と共通外枠
 
 - 入口は、支出を記録 → みんなで内容を確認 → 支払い・受け取りまで確認、という流れを説明する。
-- 「利用開始の準備を進めています。」を表示する。未接続のログイン・Group作成・業務リンク、架空のGroup一覧・残高・成功状態は置かない。
+- 「利用開始の準備を進めています。」を表示する。未接続の業務リンク、架空のGroup一覧・残高・成功状態は置かない。接続済みの導線として`/login`と`/groups`（#315、自分のグループ）へのLinkを置く。`/groups`はProductionでは取得できない案内を表示する。
 - RootLayoutがHeader、最初のSkip link、単一のMain、Route内容のslotを持つ。Page／Loading／NotFoundはMainを重ねない。
 - Headerのアプリ名はホームへ戻る導線。Skip linkはTabで可視化し、Enterで本文へFocusを移す。Focus outlineと44px相当のTargetを維持する。
 - 日本語の文書言語とMetadataを使用する。多言語化の方式は確定しない。OSの日本語System fontを利用し、外部Font取得は行わない。

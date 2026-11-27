@@ -40,6 +40,10 @@ import {
   applySqlMigrations,
   type SqlMigration,
 } from '../src/group-management/infrastructure/postgres/sql-migration.js';
+import {
+  createTestGroupActorMembershipIndexKeys,
+  groupActorMembershipIndexMigration,
+} from './support/group-actor-membership-index.js';
 
 const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
@@ -128,7 +132,11 @@ describe('PostgreSQL Group state writer', () => {
     await client.query(`CREATE SCHEMA ${schemaName}`);
     await client.query(`SET search_path TO ${schemaName}`);
     await secondClient.query(`SET search_path TO ${schemaName}`);
-    await applySqlMigrations(client, [await migration(1), await migration(2)]);
+    await applySqlMigrations(client, [
+      await migration(1),
+      await migration(2),
+      await groupActorMembershipIndexMigration(),
+    ]);
     nonceCounter = 0;
     codec = createProtectedRecordCodec({
       keyPort: {
@@ -161,6 +169,7 @@ describe('PostgreSQL Group state writer', () => {
     writer = new PostgresGroupStateWriter({
       codec,
       accessIndexDigests: digestPort,
+      membershipIndexKeys: createTestGroupActorMembershipIndexKeys(),
       now: () => new Date('2026-09-23T02:00:00.000Z'),
       nextRecordId: () => {
         recordId += 1;
